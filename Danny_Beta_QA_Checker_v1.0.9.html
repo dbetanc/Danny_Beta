@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Danny Beta QA Checker v1.0.6b</title>
+  <title>Danny Beta QA Checker v1.0.9</title>
   <style>
     :root {
       --success:#16a34a;
@@ -569,7 +569,7 @@
   </div>
 
   <h1>
-    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.0.6b</span>
+    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.0.9</span>
   </h1>
   <p>Drop your Pro Tools exported text file (.txt / .markers.txt).</p>
 
@@ -877,6 +877,7 @@
         if (nameIdx === -1) return {err:"No NAME column."};
 
         const trackIdx = cols.findIndex(c => /TRACK\s*NAME/i.test(c));
+        const unitsIdx = cols.findIndex(c=>/\bUNITS\b/i.test(c));
 
         const data = [];
         for (let i = header + 1; i < lines.length; i++) {
@@ -887,6 +888,7 @@
             data.push({
               name: c[nameIdx],
               track: trackIdx !== -1 ? (c[trackIdx] || '') : '',
+              units: unitsIdx !== -1 ? (c[unitsIdx] || '') : '',
               line: i + 1
             });
           }
@@ -906,7 +908,7 @@
 
       // UPDATED markers: require at least one non-scene marker between scenes,
       // last scene can be final marker, plus all previous line/lout rules.
-      // v1.0.6b: Enforce that line/lout markers can only live on specific edit tracks.
+      // v1.0.9: Enforce that line/lout markers can only live on specific edit tracks.
       function validateMarkers(markers, sessionInfo, trackNames){
         const errors = [];
         let open = null;
@@ -935,7 +937,16 @@
           const markerTrackName = m.track || '';
           const markerTrackIndex = getTrackIndexByName(markerTrackName);
 
-          if (!['line','lout','scene'].includes(m.token)) {
+          
+          // Units check
+          if (m.units && m.units.toLowerCase() === 'ticks') {
+            if (m.token === 'scene') {
+              errors.push(`Scene marker '${fullName}' created in Bars/Beats — must be Absolute Time. Remove and create it again in Absolute Time (Not Bars).`);
+            } else {
+              errors.push(`UNITS = Ticks — Change the track resolution to Samples (Not Ticks)`);
+            }
+          }
+if (!['line','lout','scene'].includes(m.token)) {
             errors.push(`Unexpected marker '${fullName}'`);
             if (lastScene) lastScene.sawNonScene = true;
             continue;
@@ -1082,112 +1093,109 @@
           return {pass:true, errors};
         }
 
-        // SINGLECHARACTER: Talent 1_{speaker1}_{date}_{script}_xx.wav
+        // Helpers (use same folder check as existing code)
+        const isInAudioFiles = loc => /[:\\\/ ]Audio Files:?$/i.test(loc||'');
+
+        // SINGLECHARACTER
         if (sessionInfo.type === 'single') {
           const date = sessionInfo.dateFromTrack || (tracks[0]?.match(/_(\d{4})_/)?.[1] || '');
-
           const scriptBase = sessionInfo.script;
           const scriptNoDash = scriptBase.replace(/-([bB]\d{3,4})$/, 'b$1');
-          const scriptVariants = scriptNoDash === scriptBase
-            ? [scriptBase]
-            : [scriptBase, scriptNoDash];
+          const scriptVariants = scriptNoDash === scriptBase ? [scriptBase] : [scriptBase, scriptNoDash];
 
           rows.forEach(r => {
             if (!isInAudioFiles(r.location)) return;
-
-            const file = (r.file || '').trim();
-            if (!file) return;
-
+            const file = (r.file||'').trim(); if (!file) return;
             const base = stripExt(file);
 
-            let anyValid = false;
-            const expectedBase = `Talent 1_${sessionInfo.speaker1}_${date}_${scriptBase}`;
+            // Optional prefix for single
+            let hadPrefix = false;
+            let rest = base;
+            if (rest.startsWith('Talent 1_')) {
+              hadPrefix = true;
+              rest = rest.substring('Talent 1_'.length);
+            } else if (rest.startsWith('Left_Talent 1_') || rest.startsWith('Right_Talent 2_')) {
+              // Invalid prefixes for SINGLE
+              const expectedBase = `Talent 1_${sessionInfo.speaker1}_${date}_${scriptBase}`;
+              errors.push({ file, base, expectedBase });
+              return;
+            }
 
-            scriptVariants.forEach(scr => {
-              if (anyValid) return;
-              const candidate = `Talent 1_${sessionInfo.speaker1}_${date}_${scr}`;
-              if (
-                base === candidate ||
-                base.startsWith(candidate + '_') ||
-                base.startsWith(candidate + '-')
-              ) {
-                anyValid = true;
+            let anyValid = false;
+            let expectedBase = `Talent 1_${sessionInfo.speaker1}_${date}_${scriptBase}`;
+
+            for (const scr of scriptVariants) {
+              const expectedNoPrefix = `${sessionInfo.speaker1}_${date}_${scr}`;
+              const expectedWith     = `Talent 1_${expectedNoPrefix}`;
+
+              if (hadPrefix) {
+                if (base === expectedWith || base.startsWith(expectedWith + '_') || base.startsWith(expectedWith + '-')) { anyValid = true; break; }
+              } else {
+                if (rest === expectedNoPrefix || rest.startsWith(expectedNoPrefix + '_') || rest.startsWith(expectedNoPrefix + '-')) { anyValid = true; break; }
               }
-            });
+            }
 
             if (!anyValid) {
-              errors.push({
-                file,
-                base,
-                expectedBase
-              });
+              errors.push({ file, base, expectedBase });
             }
           });
 
-          return {pass:errors.length === 0, errors};
+          return {pass:errors.length===0, errors};
         }
 
-        // DUALCHARACTER: original Left/Right Talent logic
+        // DUALCHARACTER
         const date1 = tracks[0]?.match(/_(\d{4})_/)?.[1] || '';
         const date2 = tracks[1]?.match(/_(\d{4})_/)?.[1] || '';
-
         const scriptBase = sessionInfo.script;
         const scriptNoDash = scriptBase.replace(/-([bB]\d{2,4})$/, '$1');
-        const scriptVariants = scriptNoDash === scriptBase
-          ? [scriptBase]
-          : [scriptBase, scriptNoDash];
+        const scriptVariants = scriptNoDash === scriptBase ? [scriptBase] : [scriptBase, scriptNoDash];
 
         rows.forEach(r => {
           if (!isInAudioFiles(r.location)) return;
-
-          const file = (r.file || '').trim();
-          if (!file) return;
-
+          const file = (r.file||'').trim(); if (!file) return;
           const base = stripExt(file);
 
-          const isLeft = base.startsWith('Left_Talent 1_');
-          const isRight = base.startsWith('Right_Talent 2_');
+          // Optional prefixes
+          let prefix = null;
+          let rest = base;
+          if (rest.startsWith('Left_Talent 1_')) { prefix='left';  rest = rest.substring('Left_Talent 1_'.length); }
+          else if (rest.startsWith('Right_Talent 2_')) { prefix='right'; rest = rest.substring('Right_Talent 2_'.length); }
+          else if (rest.startsWith('Talent 1_')) {
+            // Invalid for dual
+            const expectedBase = `Left_Talent 1_${sessionInfo.speaker1}_${date1}_${scriptBase}  OR  Right_Talent 2_${sessionInfo.speaker2}_${date2}_${scriptBase}`;
+            errors.push({ file, base, expectedBase });
+            return;
+          }
 
           let anyValid = false;
-          let expectedBase;
+          let expectedBase = `Left_Talent 1_${sessionInfo.speaker1}_${date1}_${scriptBase}  OR  Right_Talent 2_${sessionInfo.speaker2}_${date2}_${scriptBase}`;
 
-          if (isLeft || isRight) {
-            scriptVariants.forEach(scr => {
-              if (anyValid) return;
-              const candidate = isLeft
-                ? `Left_Talent 1_${sessionInfo.speaker1}_${date1}_${scr}`
-                : `Right_Talent 2_${sessionInfo.speaker2}_${date2}_${scr}`;
+          for (const scr of scriptVariants) {
+            const leftNoPrefix  = `${sessionInfo.speaker1}_${date1}_${scr}`;
+            const rightNoPrefix = `${sessionInfo.speaker2}_${date2}_${scr}`;
+            const leftWith      = `Left_Talent 1_${leftNoPrefix}`;
+            const rightWith     = `Right_Talent 2_${rightNoPrefix}`;
 
-              if (
-                base === candidate ||
-                base.startsWith(candidate + '_') ||
-                base.startsWith(candidate + '-')
-              ) {
-                anyValid = true;
+            if (prefix === 'left') {
+              if (base === leftWith || base.startsWith(leftWith + '_') || base.startsWith(leftWith + '-')) { anyValid = true; break; }
+            } else if (prefix === 'right') {
+              if (base === rightWith || base.startsWith(rightWith + '_') || base.startsWith(rightWith + '-')) { anyValid = true; break; }
+            } else {
+              // No prefix: must match either side using strict underscore-separated core
+              if (rest === leftNoPrefix || rest.startsWith(leftNoPrefix + '_') || rest.startsWith(leftNoPrefix + '-') ||
+                  rest === rightNoPrefix || rest.startsWith(rightNoPrefix + '_') || rest.startsWith(rightNoPrefix + '-')) {
+                anyValid = true; break;
               }
-            });
-
-            expectedBase = isLeft
-              ? `Left_Talent 1_${sessionInfo.speaker1}_${date1}_${scriptBase}`
-              : `Right_Talent 2_${sessionInfo.speaker2}_${date2}_${scriptBase}`;
-          } else {
-            anyValid = false;
-            expectedBase = `Left_Talent 1_${sessionInfo.speaker1}_${date1}_${scriptBase}  OR  Right_Talent 2_${sessionInfo.speaker2}_${date2}_${scriptBase}`;
+            }
           }
 
           if (!anyValid) {
-            errors.push({
-              file,
-              base,
-              expectedBase
-            });
+            errors.push({ file, base, expectedBase });
           }
         });
 
-        return {pass:errors.length === 0, errors};
-      }
-
-      function renderMarkersReport(errors){
+        return {pass:errors.length===0, errors};
+      }function renderMarkersReport(errors){
         let html = `<div class="section"><h2>Markers</h2>`;
         if (!errors.length) {
           html += `<div class="badge ok">PASSED</div>`;
@@ -1362,7 +1370,23 @@
           return;
         }
 
-        const tracks = parseTracks(lines);
+        
+        // Strict Speaker ID validation (A): exactly 10 letters + 4 digits
+        (function(){
+          try {
+            const singleRe = /^([a-z]{10})(\d{4})_/;
+            const dualRe   = /^([a-z]{10})-([a-z]{10})(\d{4})_t1lt2r-/;
+            if (!(singleRe.test(sessionName) || dualRe.test(sessionName))) {
+              sessionDisplay.className = "session-name bad";
+              const msg = "SESSION NAME: Speaker ID must be 10 lowercase letters followed by 4 digits (e.g., enxxstnnnn0001).";
+              sessionError.innerHTML = (sessionError.innerHTML ? sessionError.innerHTML + "<br>" : "") + msg;
+              sessionError.style.display = "block";
+              output.innerHTML = "";
+              return;
+            }
+          } catch(e) { /* fail-safe */ }
+        })();
+const tracks = parseTracks(lines);
         const expectedList = validateTracks(tracks, sessionInfo);
         const tracksPass = expectedList.every(e => e === null);
 
@@ -1374,11 +1398,7 @@
         const markerErrors = parsedMarkers.err
           ? [parsedMarkers.err]
           : validateMarkers(
-              parsedMarkers.data.map(d => ({
-                ...extractMarker(d.name),
-                line: d.line,
-                track: d.track
-              })),
+              parsedMarkers.data.map(d => ({ ...extractMarker(d.name), line: d.line, track: d.track, units: d.units })),
               sessionInfo,
               tracks
             );
