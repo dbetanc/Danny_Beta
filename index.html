@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Danny Beta QA Checker v1.1.0</title>
+  <title>Danny Beta QA Checker v1.1.1</title>
   <style>
     :root {
       --success:#16a34a;
@@ -569,7 +569,7 @@
   </div>
 
   <h1>
-    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.0</span>
+    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.1</span>
   </h1>
   <p>Drop your Pro Tools exported text file (.txt / .markers.txt).</p>
 
@@ -967,8 +967,8 @@ if (!['line','lout','scene'].includes(m.token)) {
           if (m.token === 'scene') {
             sceneCount++;
 
-            if (!/^scene\d+$/.test(fullName) || /[A-Z]/.test(fullName) || /\s/.test(fullName)) {
-              errors.push(`Invalid scene marker '${fullName}'`);
+            if (!/^scene\d{2}$/.test(fullName)) {
+              errors.push(`Invalid scene marker '${fullName}' — must be scene01, scene02, scene03, etc.`);
             }
 
             if (lastScene && !lastScene.sawNonScene) {
