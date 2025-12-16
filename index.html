@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Danny Beta QA Checker v1.1.3</title>
+  <title>Danny Beta QA Checker v1.1.4</title>
   <style>
     :root {
       --success:#16a34a;
@@ -569,7 +569,7 @@
   </div>
 
   <h1>
-    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.3</span>
+    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.4</span>
   </h1>
   <p>Drop your Pro Tools exported text file (.txt / .markers.txt).</p>
 
@@ -609,7 +609,7 @@
       const normHeader = ln => String(ln || '').replace(/\s+/g,'').toUpperCase();
 
       const VALID_SESSION_REGEX = /^(?:[a-z]+-[a-z]+\d{4}_(t1lt2r|t2lt1r)-[a-z0-9-]+|[a-z]+\d{4,5}_[a-z0-9-]+)$/i;
-      const SINGLE_SESSION_REGEX = /^([a-z]+)(\d{4,5})_([a-z0-9-]+)$/i;
+      const SINGLE_SESSION_REGEX = /^([a-z]{9,10})(\d{4,5})_([a-z0-9-]+)$/i;
 
       function highlightSessionName(name){
         if (VALID_SESSION_REGEX.test(name)) return esc(name);
@@ -665,7 +665,7 @@
 
       function parseSessionInfo(sessionName, tracks){
         // Dualcharacter session: {speaker1}-{speaker2}{code}_(t1lt2r|t2lt1r)-{script}
-        const dualMatch = sessionName.match(/^([a-z]+)-([a-z]+)(\d{4})_(t1lt2r|t2lt1r)-([a-z0-9-]+)$/i);
+        const dualMatch = sessionName.match(/^([a-z]{9,10})-([a-z]{9,10})(\d{4})_(t1lt2r|t2lt1r)-([a-z0-9-]+)$/i);
         if (dualMatch) {
           return {
             type: 'dual',
@@ -678,8 +678,8 @@
         }
 
         // Singlecharacter session: {speaker1_id}{audio_file_id}_{script_name}
-        // e.g. enauksjeve0002_singlecharacter003
-        const singleMatch = sessionName.match(/^([a-z]+)(\d{4,5})_([a-z0-9-]+)$/i);
+        // e.g. enauksjeve0002_singlecharacter003 or engblycli0001_singlecharacter001
+        const singleMatch = sessionName.match(/^([a-z]{9,10})(\d{4,5})_([a-z0-9-]+)$/i);
         if (singleMatch && /singlecharacter/i.test(singleMatch[3])) {
           const speaker1 = singleMatch[1];
           const fileId = singleMatch[2];
@@ -1384,18 +1384,39 @@ if (!['line','lout','scene'].includes(m.token)) {
         }
 
         
-        // Strict Speaker ID validation (A): exactly 10 letters + 4 digits
+        // Strict Speaker ID validation: 9 or 10 letters + 4 digits
         (function(){
           try {
-            const singleRe = /^([a-z]{10})(\d{4})_/;
-            const dualRe   = /^([a-z]{10})-([a-z]{10})(\d{4})_(t1lt2r|t2lt1r)-/;
-            if (!(singleRe.test(sessionName) || dualRe.test(sessionName))) {
+            const singleRe = /^([a-z]{9,10})(\d{4})_/;
+            const dualRe   = /^([a-z]{9,10})-([a-z]{9,10})(\d{4})_(t1lt2r|t2lt1r)-/;
+            
+            const singleMatch = sessionName.match(singleRe);
+            const dualMatch = sessionName.match(dualRe);
+            
+            if (!singleMatch && !dualMatch) {
               sessionDisplay.className = "session-name bad";
-              const msg = "SESSION NAME: Speaker ID must be 10 lowercase letters followed by 4 digits (e.g., enxxstnnnn0001).";
+              const msg = "SESSION NAME: Speaker ID must be 9-10 lowercase letters followed by 4 digits (e.g., engblycli0001 or enxxstnnnn0001).";
               sessionError.innerHTML = (sessionError.innerHTML ? sessionError.innerHTML + "<br>" : "") + msg;
               sessionError.style.display = "block";
               output.innerHTML = "";
               return;
+            }
+            
+            // For dual character: first 6 characters of both speaker IDs must match
+            if (dualMatch) {
+              const speaker1 = dualMatch[1];
+              const speaker2 = dualMatch[2];
+              const prefix1 = speaker1.substring(0, 6);
+              const prefix2 = speaker2.substring(0, 6);
+              
+              if (prefix1 !== prefix2) {
+                sessionDisplay.className = "session-name bad";
+                const msg = `SESSION NAME: First 6 characters of both Speaker IDs must match (same language+location+studio). Found: '${prefix1}' and '${prefix2}'.`;
+                sessionError.innerHTML = (sessionError.innerHTML ? sessionError.innerHTML + "<br>" : "") + msg;
+                sessionError.style.display = "block";
+                output.innerHTML = "";
+                return;
+              }
             }
           } catch(e) { /* fail-safe */ }
         })();
