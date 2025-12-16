@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Danny Beta QA Checker v1.1.2</title>
+  <title>Danny Beta QA Checker v1.1.3</title>
   <style>
     :root {
       --success:#16a34a;
@@ -569,7 +569,7 @@
   </div>
 
   <h1>
-    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.2</span>
+    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.3</span>
   </h1>
   <p>Drop your Pro Tools exported text file (.txt / .markers.txt).</p>
 
@@ -969,6 +969,14 @@ if (!['line','lout','scene'].includes(m.token)) {
 
             if (!/^scene\d{2}$/.test(fullName)) {
               errors.push(`Invalid scene marker '${fullName}' — must be scene01, scene02, scene03, etc.`);
+            }
+
+            // Check sequential order
+            if (m.num !== null) {
+              const expectedSceneNum = sceneCount;
+              if (m.num !== expectedSceneNum) {
+                errors.push(`Scene markers out of order: '${fullName}' should be scene${String(expectedSceneNum).padStart(2, '0')}`);
+              }
             }
 
             if (lastScene && !lastScene.sawNonScene) {
