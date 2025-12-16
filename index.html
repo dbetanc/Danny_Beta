@@ -1127,13 +1127,13 @@ if (!['line','lout','scene'].includes(m.token)) {
               rest = rest.substring('Talent 1_'.length);
             } else if (rest.startsWith('Left_Talent 1_') || rest.startsWith('Right_Talent 2_')) {
               // Invalid prefixes for SINGLE
-              const expectedBase = `Talent 1_${sessionInfo.speaker1}_${date}_${scriptBase}`;
+              const expectedBase = `${sessionInfo.speaker1}_${date}_${scriptBase}`;
               errors.push({ file, base, expectedBase });
               return;
             }
 
             let anyValid = false;
-            let expectedBase = `Talent 1_${sessionInfo.speaker1}_${date}_${scriptBase}`;
+            let expectedBase = `${sessionInfo.speaker1}_${date}_${scriptBase}`;
 
             for (const scr of scriptVariants) {
               const expectedNoPrefix = `${sessionInfo.speaker1}_${date}_${scr}`;
@@ -1174,13 +1174,13 @@ if (!['line','lout','scene'].includes(m.token)) {
           else if (rest.startsWith(sessionInfo.mode==='t2lt1r' ? 'Right_Talent 1_' : 'Right_Talent 2_')) { prefix='right'; rest = rest.substring((sessionInfo.mode==='t2lt1r' ? 'Right_Talent 1_' : 'Right_Talent 2_').length); }
           else if (rest.startsWith('Talent 1_')) {
             // Invalid for dual
-            const expectedBase = `Left_Talent 1_${sessionInfo.speaker1}_${date1}_${scriptBase}  OR  Right_Talent 2_${sessionInfo.speaker2}_${date2}_${scriptBase}`;
+            const expectedBase = `${sessionInfo.speaker1}_${date1}_${scriptBase} OR ${sessionInfo.speaker2}_${date2}_${scriptBase}`;
             errors.push({ file, base, expectedBase });
             return;
           }
 
           let anyValid = false;
-          let expectedBase = `Left_Talent 1_${sessionInfo.speaker1}_${date1}_${scriptBase}  OR  Right_Talent 2_${sessionInfo.speaker2}_${date2}_${scriptBase}`;
+          let expectedBase = `${sessionInfo.speaker1}_${date1}_${scriptBase} OR ${sessionInfo.speaker2}_${date2}_${scriptBase}`;
 
           for (const scr of scriptVariants) {
             const leftNoPrefix  = `${sessionInfo.speaker1}_${date1}_${scr}`;
