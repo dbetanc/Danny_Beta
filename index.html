@@ -1311,14 +1311,14 @@ if (!['line','lout','scene'].includes(m.token)) {
         let animationFrame;
         function draw() {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
-          confetti.forEach((c, i) => {
+
+          // Update positions and draw confetti
+          confetti.forEach(c => {
             c.tiltAngle += c.tiltAngleIncrement;
             c.y += c.d;
             c.tilt = Math.sin(c.tiltAngle) * 15;
 
-            if (c.y > canvas.height) {
-              confetti.splice(i, 1);
-            } else {
+            if (c.y <= canvas.height) {
               ctx.beginPath();
               ctx.lineWidth = c.r;
               ctx.strokeStyle = c.color;
@@ -1327,6 +1327,10 @@ if (!['line','lout','scene'].includes(m.token)) {
               ctx.stroke();
             }
           });
+
+          // Remove off-screen confetti after iteration
+          confetti = confetti.filter(c => c.y <= canvas.height);
+
           if (confetti.length) {
             animationFrame = requestAnimationFrame(draw);
           } else {
