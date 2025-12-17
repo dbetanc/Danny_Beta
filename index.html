@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Danny Beta QA Checker v1.1.4</title>
+  <title>Danny Beta QA Checker v1.1.5</title>
   <style>
     :root {
       --success:#16a34a;
@@ -66,62 +66,125 @@
       font-size:15px;
       color:#555;
       text-align:center;
-      max-width:780px;
+      max-width:600px;
     }
 
-    /* LEFT SIDEBAR REQUIREMENTS */
-    .sidebar {
-      position:absolute;
-      left:40px;
-      top:140px;
-      width:260px;
-      background:#f8fafc;
-      border:1px solid #e2e8f0;
-      padding:18px 20px;
+    /* COLLAPSIBLE REQUIREMENTS ACCORDION */
+    .requirements-wrapper {
+      display:flex;
+      justify-content:center;
+      width:100%;
+      margin:20px 0 24px;
+    }
+
+    .requirements-accordion {
+      width:auto;
+      max-width:600px;
+    }
+
+    .requirements-header {
+      background:#fefce8;
+      border:2px solid #fde047;
       border-radius:12px;
-      font-size:14px;
-      line-height:1.4;
-      box-shadow:0 4px 12px rgba(15,23,42,0.06);
-    }
-
-    .sidebar h3 {
-      margin-top:0;
-      font-size:15px;
-      font-weight:700;
-      color:#1e3a8a;
-    }
-
-    .sidebar ul {
-      margin:8px 0 12px;
-      padding-left:20px;
-    }
-
-    .sidebar li {
-      margin-bottom:5px;
-    }
-
-    .sidebar .disclaimer {
-      margin-top:12px;
-      padding-top:10px;
-      border-top:1px solid #e2e8f0;
+      padding:8px 12px;
+      cursor:pointer;
+      user-select:none;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
+      transition:all 0.2s ease;
+      box-shadow:0 2px 8px rgba(250,204,21,0.15);
       font-size:13px;
-      font-weight:600;
-      color:#b91c1c;
+      font-weight:700;
+      color:#854d0e;
+      white-space:nowrap;
     }
 
-    @media (max-width:900px) {
-      .sidebar {
-        position:relative;
-        left:0;
-        top:0;
-        width:100%;
-        margin-bottom:20px;
-      }
+    .requirements-header:hover {
+      background:#fef9c3;
+      border-color:#facc15;
+    }
+
+    .requirements-header.active {
+      border-bottom-left-radius:0;
+      border-bottom-right-radius:0;
+      border-bottom-color:transparent;
+    }
+
+    .requirements-header .icon {
+      font-size:15px;
+    }
+
+    .requirements-chevron {
+      font-size:12px;
+      color:#a16207;
+      transition:transform 0.2s ease;
+      margin-left:4px;
+    }
+
+    .requirements-chevron.open {
+      transform:rotate(180deg);
+    }
+
+    .requirements-content {
+      max-height:0;
+      overflow:hidden;
+      transition:max-height 0.3s ease;
+      background:#fefce8;
+      border:2px solid #fde047;
+      border-top:none;
+      border-bottom-left-radius:12px;
+      border-bottom-right-radius:12px;
+    }
+
+    .requirements-content.open {
+      max-height:500px;
+    }
+
+    .requirements-inner {
+      padding:14px 18px 16px;
+    }
+
+    .requirements-inner ul {
+      margin:0 0 12px;
+      padding-left:18px;
+      list-style:none;
+    }
+
+    .requirements-inner li {
+      margin-bottom:5px;
+      font-size:12px;
+      color:#713f12;
+      line-height:1.4;
+    }
+
+    .requirements-inner li::before {
+      content:"✓";
+      color:#16a34a;
+      font-weight:900;
+      margin-right:6px;
+    }
+
+    .requirements-inner .disclaimer {
+      background:#fef2f2;
+      border:1px solid #fca5a5;
+      border-radius:8px;
+      padding:8px 10px;
+      font-size:11px;
+      font-weight:600;
+      color:#991b1b;
+      line-height:1.3;
+    }
+
+    .requirements-inner .disclaimer::before {
+      content:"⚠️ ";
+      margin-right:4px;
     }
 
     .drop {
       width:100%;
-      max-width:900px;
+      max-width:600px;
       height:140px;
       border:4px solid #3b82f6;
       border-radius:16px;
@@ -164,16 +227,18 @@
     }
 
     .session-name {
-      margin:24px 0 16px;
+      margin:24px auto 16px;
       font-family:monospace;
-      font-size:20px !important;
+      font-size:18px !important;
       font-weight:900 !important;
       padding:16px 20px;
       border-radius:12px;
       border:2px solid #0ea5e9;
-      max-width:900px;
-      width:100%;
-      word-break:break-all;
+      max-width:100%;
+      width:auto;
+      min-width:300px;
+      display:inline-block;
+      word-break:break-word;
       text-align:center;
       box-shadow:0 4px 12px rgba(0,0,0,0.08);
       animation:fadeInUp .25s ease-out;
@@ -213,7 +278,7 @@
       font-size:14px;
       color:#444;
       text-align:center;
-      max-width:900px;
+      max-width:600px;
     }
 
     .section {
@@ -221,7 +286,7 @@
       border-radius:10px;
       padding:20px;
       margin-top:24px;
-      max-width:900px;
+      max-width:600px;
       width:100%;
       background:#fafafa;
       animation:fadeInUp .25s ease-out;
@@ -328,13 +393,106 @@
     }
 
     .should-be {
-      margin-left:44px;
-      margin-top:2px;
+      margin-left:0;
+      margin-top:8px;
       margin-bottom:6px;
-      font-size:16px;
+      font-size:14px;
       color:var(--bad-text);
       font-style:normal;
-      font-weight:500;
+      font-weight:600;
+      text-align:center;
+    }
+
+    .should-be-container {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin:6px auto;
+      width:fit-content;
+      max-width:100%;
+    }
+
+    .should-be-box {
+      background:#f8fafc;
+      padding:10px 14px;
+      border-radius:8px;
+      border:1px solid #e2e8f0;
+      display:flex;
+      align-items:center;
+    }
+
+    .should-be code {
+      font-family:monospace;
+      font-size:13px;
+      background:transparent;
+      padding:0;
+      color:#0ea5e9;
+      font-weight:700;
+      white-space:nowrap;
+    }
+
+    .copy-btn {
+      background:transparent;
+      color:#0ea5e9;
+      border:none;
+      padding:6px;
+      border-radius:4px;
+      cursor:pointer;
+      transition:all 0.2s ease;
+      flex-shrink:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      width:20px;
+      height:20px;
+    }
+
+    .copy-btn::before {
+      content:"";
+      position:absolute;
+      width:11px;
+      height:11px;
+      border:2px solid currentColor;
+      border-radius:2px;
+      top:3px;
+      left:3px;
+      background:white;
+    }
+
+    .copy-btn::after {
+      content:"";
+      position:absolute;
+      width:11px;
+      height:11px;
+      border:2px solid currentColor;
+      border-radius:2px;
+      bottom:3px;
+      right:3px;
+      background:transparent;
+    }
+
+    .copy-btn:hover {
+      background:#e0f2fe;
+      color:#0284c7;
+    }
+
+    .copy-btn:active {
+      transform:scale(0.9);
+    }
+
+    .copy-btn.copied {
+      color:#16a34a;
+    }
+
+    .copy-btn.copied::before,
+    .copy-btn.copied::after {
+      display:none;
+    }
+
+    .copy-btn.copied-check {
+      font-size:16px;
+      font-weight:900;
     }
 
     /* PARTY MODE — ON TOP */
@@ -427,19 +585,39 @@
         color:#9ca3af;
       }
 
-      .sidebar {
-        background:#0f172a;
-        border-color:#1e293b;
-        box-shadow:0 8px 22px rgba(15,23,42,0.85);
+      .requirements-header {
+        background:#422006;
+        border-color:#713f12;
+        box-shadow:0 4px 16px rgba(15,23,42,0.85);
+        color:#fef08a;
       }
 
-      .sidebar h3 {
-        color:#bfdbfe;
+      .requirements-header:hover {
+        background:#52290a;
+        border-color:#854d0e;
       }
 
-      .sidebar .disclaimer {
-        border-top-color:#1e293b;
-        color:#fecaca;
+      .requirements-chevron {
+        color:#fde047;
+      }
+
+      .requirements-content {
+        background:#422006;
+        border-color:#713f12;
+      }
+
+      .requirements-inner li {
+        color:#fef3c7;
+      }
+
+      .requirements-inner li::before {
+        color:#34d399;
+      }
+
+      .requirements-inner .disclaimer {
+        background:#1e1b1b;
+        border-color:#7f1d1d;
+        color:#fca5a5;
       }
 
       .drop {
@@ -534,6 +712,32 @@
         color:#fecaca;
       }
 
+      .should-be-box {
+        background:#1e293b;
+        border-color:#334155;
+      }
+
+      .should-be code {
+        color:#38bdf8;
+      }
+
+      .copy-btn {
+        color:#38bdf8;
+      }
+
+      .copy-btn::before {
+        background:#0f172a;
+      }
+
+      .copy-btn:hover {
+        background:#1e3a52;
+        color:#7dd3fc;
+      }
+
+      .copy-btn.copied {
+        color:#34d399;
+      }
+
       #party .congrats {
         color:#4ade80;
       }
@@ -549,29 +753,33 @@
   </style>
 </head>
 <body>
-  <div class="sidebar">
-    <h3>⚠️Requirements</h3>
-    <ul>
-      <li>Export Session Info as Text.</li><li>Include: </li>
-
-      ✅ File List<br> 
-
-      ✅ Markers<br>
-
-     ✅  Track EDLs.<br>
-  </ul>
-
-
-    <div class="disclaimer">
-      ⚠️ This is not the official Mochi QA Checker.<br>
-      You still have to zip your session and upload the Dropbox URL to the Mochi QA Checker.
-    </div>
-  </div>
-
   <h1>
-    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.4</span>
+    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.5</span>
   </h1>
   <p>Drop your Pro Tools exported text file (.txt / .markers.txt).</p>
+
+  <div class="requirements-wrapper">
+    <div class="requirements-accordion">
+      <div class="requirements-header" id="requirementsToggle">
+        <span class="icon">⚠️</span>
+        <span>Requirements (click to expand)</span>
+        <span class="requirements-chevron" id="requirementsChevron">▼</span>
+      </div>
+      <div class="requirements-content" id="requirementsContent">
+        <div class="requirements-inner">
+          <ul>
+            <li>Export <strong>Session Info as Text</strong> from Pro Tools</li>
+            <li>Include: <strong>File List</strong></li>
+            <li>Include: <strong>Markers Listing</strong></li>
+            <li>Include: <strong>Track EDLs</strong></li>
+          </ul>
+          <div class="disclaimer">
+            This is not the official Mochi QA Checker. You still need to zip your session and upload the Dropbox URL to the Mochi QA Checker.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div id="droparea" class="drop">
     Drop file here
@@ -604,6 +812,53 @@
       const sessionText = document.getElementById('sessionText');
       const sessionError = document.getElementById('sessionError');
       const confettiCanvas = document.getElementById('confetti');
+
+      // Accordion toggle
+      const requirementsToggle = document.getElementById('requirementsToggle');
+      const requirementsContent = document.getElementById('requirementsContent');
+      const requirementsChevron = document.getElementById('requirementsChevron');
+
+      requirementsToggle.addEventListener('click', () => {
+        const isOpen = requirementsContent.classList.contains('open');
+        
+        if (isOpen) {
+          requirementsContent.classList.remove('open');
+          requirementsChevron.classList.remove('open');
+          requirementsToggle.classList.remove('active');
+        } else {
+          requirementsContent.classList.add('open');
+          requirementsChevron.classList.add('open');
+          requirementsToggle.classList.add('active');
+        }
+      });
+
+      // Copy to clipboard function
+      window.copyToClipboard = function(textElementId, buttonId) {
+        const textElement = document.getElementById(textElementId);
+        const button = document.getElementById(buttonId);
+        
+        if (textElement && button) {
+          const text = textElement.textContent;
+          
+          navigator.clipboard.writeText(text).then(() => {
+            button.classList.add('copied');
+            button.classList.add('copied-check');
+            button.textContent = '✓';
+            
+            setTimeout(() => {
+              button.classList.remove('copied');
+              button.classList.remove('copied-check');
+              button.textContent = '';
+            }, 1500);
+          }).catch(err => {
+            console.error('Failed to copy:', err);
+            button.textContent = '✗';
+            setTimeout(() => {
+              button.textContent = '';
+            }, 1500);
+          });
+        }
+      };
 
       const esc = s => String(s || '').replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
       const normHeader = ln => String(ln || '').replace(/\s+/g,'').toUpperCase();
@@ -846,7 +1101,15 @@
             </div>`;
 
           if (isBad) {
-            html += `<div class="should-be">Should Be: <code>${esc(expected)}</code></div>`;
+            const copyId = `copy-track-${i}`;
+            html += `
+              <div class="should-be">Should Be:</div>
+              <div class="should-be-container">
+                <div class="should-be-box">
+                  <code id="text-${copyId}">${esc(expected)}</code>
+                </div>
+                <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
+              </div>`;
           }
         });
 
@@ -1237,11 +1500,18 @@ if (!['line','lout','scene'].includes(m.token)) {
         } else {
           html += `<div class="badge fail">FAIL — ${errors.length} issue${errors.length > 1 ? 's' : ''}</div>`;
           html += `<div class="error-list">`;
-          errors.forEach(err => {
+          errors.forEach((err, idx) => {
+            const copyId = `copy-audio-${idx}`;
             html += `<div class="error-item">
               <div><strong>File:</strong> ${esc(err.file)}</div>
               <div>Prefix: ${highlightTrackName(err.base, err.expectedBase)}</div>
-              <div class="should-be">Should Start With: <code>${esc(err.expectedBase)}</code></div>
+              <div class="should-be">Should Start With:</div>
+              <div class="should-be-container">
+                <div class="should-be-box">
+                  <code id="text-${copyId}">${esc(err.expectedBase)}</code>
+                </div>
+                <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
+              </div>
             </div>`;
           });
           html += `</div>`;
