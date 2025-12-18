@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Danny Beta QA Checker v1.1.6</title>
+  <title>Danny Beta QA Checker v1.1.7</title>
   <style>
     :root {
       --success:#16a34a;
@@ -107,16 +107,16 @@
       max-width:600px;
     }
 
-    /* COLLAPSIBLE REQUIREMENTS ACCORDION */
+    /* REQUIREMENTS WRAPPER */
     .requirements-wrapper {
       display:flex;
       justify-content:center;
       width:100%;
-      margin:20px 0 24px;
+      margin:12px 0 16px;
     }
 
     .requirements-accordion {
-      width:auto;
+      width:100%;
       max-width:600px;
     }
 
@@ -223,10 +223,10 @@
     .drop {
       width:100%;
       max-width:600px;
-      height:140px;
+      height:100px;
       border:4px solid #3b82f6;
       border-radius:16px;
-      padding:20px;
+      padding:16px;
       text-align:center;
       font-weight:800;
       font-size:18px;
@@ -239,7 +239,7 @@
       align-items:center;
       justify-content:center;
       flex-direction:column;
-      gap:8px;
+      gap:6px;
       color:#1e40af;
       box-shadow:0 4px 16px rgba(15,23,42,0.08);
     }
@@ -264,21 +264,20 @@
     }
 
     .session-name {
-      margin:24px auto 16px;
+      margin:16px auto 12px;
       font-family:monospace;
       font-size:18px !important;
       font-weight:900 !important;
-      padding:16px 20px;
+      padding:14px 18px;
       border-radius:12px;
       border:2px solid #0ea5e9;
-      max-width:100%;
-      width:auto;
-      min-width:300px;
-      display:inline-block;
-      word-break:break-word;
+      width:fit-content;
+      max-width:90vw;
+      white-space:nowrap;
       text-align:center;
       box-shadow:0 4px 12px rgba(0,0,0,0.08);
       animation:fadeInUp .25s ease-out;
+      box-sizing:border-box;
     }
 
     .session-name.good {
@@ -297,12 +296,7 @@
       color:#FFD700 !important;
       font-weight:bold !important;
       background:#991b1b !important;
-      padding:0 3px !important;
-      border-radius:3px !important;
-      margin:0 !important;
-      display:inline-block !important;
-      line-height:1 !important;
-      vertical-align:baseline !important;
+      border-radius:2px !important;
     }
 
     .error-box {
@@ -321,10 +315,10 @@
     .section {
       border:1px solid var(--border);
       border-radius:10px;
-      padding:20px;
-      margin-top:24px;
-      max-width:600px;
+      padding:16px;
+      margin-top:12px;
       width:100%;
+      max-width:600px;
       background:#fafafa;
       animation:fadeInUp .25s ease-out;
     }
@@ -397,8 +391,8 @@
 
     .track-box {
       border-radius:6px;
-      padding:10px 14px;
-      margin-bottom:8px;
+      padding:8px 12px;
+      margin-bottom:6px;
       font-weight:600;
       display:flex;
       align-items:center;
@@ -406,7 +400,15 @@
       border:1px solid var(--good-border);
       background:var(--good-bg);
       color:var(--good-text);
-      font-size:16px;
+      font-size:14px;
+      word-break:break-all;
+    }
+
+    .tracks-list {
+      display:flex;
+      flex-direction:column;
+      align-items:stretch;
+      width:100%;
     }
 
     .track-box.bad {
@@ -431,20 +433,28 @@
 
     .should-be {
       margin-left:0;
-      margin-top:8px;
-      margin-bottom:6px;
-      font-size:14px;
+      margin-top:6px;
+      margin-bottom:4px;
+      font-size:13px;
       color:var(--bad-text);
       font-style:normal;
       font-weight:600;
       text-align:center;
     }
 
+    .should-be-wrapper {
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      margin-bottom:8px;
+    }
+
     .should-be-container {
       display:flex;
       align-items:center;
       gap:10px;
-      margin:6px auto;
+      margin:4px auto;
       width:fit-content;
       max-width:100%;
     }
@@ -880,9 +890,8 @@
   </div>
 
   <h1>
-    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.6</span>
+    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.7</span>
   </h1>
-  <p>Drop your Pro Tools exported text file (.txt / .markers.txt).</p>
 
   <div class="requirements-wrapper">
     <div class="requirements-accordion">
@@ -1029,46 +1038,78 @@
 
       function highlightSessionName(name){
         if (VALID_SESSION_REGEX.test(name)) return esc(name);
-        let html = '';
+        
+        // Build an array of {char, isIllegal} then group consecutive illegals
+        const chars = [];
         const parts = name.split('');
         let i = 0;
 
-        while (i < parts.length && /[a-z]/i.test(parts[i])) html += esc(parts[i++]);
+        while (i < parts.length && /[a-z]/i.test(parts[i])) {
+          chars.push({char: parts[i++], isIllegal: false});
+        }
 
-        if (i < parts.length && parts[i] === '-') html += esc(parts[i++]);
-        else if (i < parts.length) html += `<span class="illegal">${esc(parts[i++])}</span>`;
+        if (i < parts.length && parts[i] === '-') {
+          chars.push({char: parts[i++], isIllegal: false});
+        } else if (i < parts.length) {
+          chars.push({char: parts[i++], isIllegal: true});
+        }
 
-        while (i < parts.length && /[a-z]/i.test(parts[i])) html += esc(parts[i++]);
+        while (i < parts.length && /[a-z]/i.test(parts[i])) {
+          chars.push({char: parts[i++], isIllegal: false});
+        }
 
         let digits = 0;
         while (i < parts.length && /\d/.test(parts[i]) && digits < 4) {
-          html += esc(parts[i++]);
+          chars.push({char: parts[i++], isIllegal: false});
           digits++;
         }
         while (digits < 4 && i < parts.length) {
-          html += `<span class="illegal">${esc(parts[i++])}</span>`;
+          chars.push({char: parts[i++], isIllegal: true});
           digits++;
         }
 
-        if (i < parts.length && parts[i] === '_') html += esc(parts[i++]);
-        else if (i < parts.length) html += `<span class="illegal">${esc(parts[i++] || '_')}</span>`;
+        if (i < parts.length && parts[i] === '_') {
+          chars.push({char: parts[i++], isIllegal: false});
+        } else if (i < parts.length) {
+          chars.push({char: parts[i++] || '_', isIllegal: true});
+        }
 
         const token = /_t2lt1r-/i.test(name) ? 't2lt1r' : 't1lt2r';
         for (let j = 0; j < token.length; j++) {
           if (i < parts.length && parts[i].toLowerCase() === token[j]) {
-            html += esc(parts[i++]);
+            chars.push({char: parts[i++], isIllegal: false});
           } else {
-            html += `<span class="illegal">${esc(parts[i++] || token[j])}</span>`;
+            chars.push({char: parts[i++] || token[j], isIllegal: true});
           }
         }
 
-        if (i < parts.length && parts[i] === '-') html += esc(parts[i++]);
-        else if (i < parts.length) html += `<span class="illegal">${esc(parts[i++] || '-')}</span>`;
+        if (i < parts.length && parts[i] === '-') {
+          chars.push({char: parts[i++], isIllegal: false});
+        } else if (i < parts.length) {
+          chars.push({char: parts[i++] || '-', isIllegal: true});
+        }
 
         while (i < parts.length) {
           const c = parts[i];
-          html += /[a-z0-9-]/.test(c) ? esc(c) : `<span class="illegal">${esc(c)}</span>`;
+          chars.push({char: c, isIllegal: !/[a-z0-9-]/i.test(c)});
           i++;
+        }
+
+        // Now group consecutive chars with same isIllegal status
+        let html = '';
+        let j = 0;
+        while (j < chars.length) {
+          const isIllegal = chars[j].isIllegal;
+          let group = '';
+          while (j < chars.length && chars[j].isIllegal === isIllegal) {
+            group += chars[j].char;
+            j++;
+          }
+          if (isIllegal) {
+            html += `<span class="illegal">${esc(group)}</span>`;
+          } else {
+            html += esc(group);
+          }
         }
         return html;
       }
@@ -1164,7 +1205,7 @@
           const idx = found.indexOf(wrongPart);
           if (idx !== -1) {
             return esc(found.substring(0, idx)) +
-              wrongPart.split('').map(c => `<span class="illegal">${esc(c)}</span>`).join('') +
+              `<span class="illegal">${esc(wrongPart)}</span>` +
               esc(found.substring(idx + wrongPart.length));
           }
         }
@@ -1177,12 +1218,16 @@
           const longer = found.length > expected.length ? found : expected;
           const shorterLen = minLen;
           return esc(longer.substring(0, shorterLen)) +
-            longer.substring(shorterLen).split('').map(c => `<span class="illegal">${esc(c)}</span>`).join('');
+            `<span class="illegal">${esc(longer.substring(shorterLen))}</span>`;
         }
 
+        // Find where they start matching again (if at all)
+        let j = i + 1;
+        while (j < found.length && j < expected.length && found[j] !== expected[j]) j++;
+        
         return esc(found.substring(0, i)) +
-          `<span class="illegal">${esc(found[i])}</span>` +
-          esc(found.substring(i + 1));
+          `<span class="illegal">${esc(found.substring(i, j))}</span>` +
+          esc(found.substring(j));
       }
 
       function validateTracks(tracks, sessionInfo){
@@ -1264,12 +1309,14 @@
           if (isBad) {
             const copyId = `copy-track-${i}`;
             html += `
-              <div class="should-be">Should Be:</div>
-              <div class="should-be-container">
-                <div class="should-be-box">
-                  <code id="text-${copyId}">${esc(expected)}</code>
+              <div class="should-be-wrapper">
+                <div class="should-be">Should Be:</div>
+                <div class="should-be-container">
+                  <div class="should-be-box">
+                    <code id="text-${copyId}">${esc(expected)}</code>
+                  </div>
+                  <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
                 </div>
-                <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
               </div>`;
           }
         });
@@ -1802,7 +1849,16 @@ if (!['line','lout','scene'].includes(m.token)) {
 
         if (!isValid) {
           const corrected = suggestCorrectedSessionName(sessionName);
-          sessionError.innerHTML = `<strong>INVALID SESSION FORMAT.</strong><br>Should be: <code>${esc(corrected)}</code>`;
+          const copyId = 'copy-session-name';
+          sessionError.innerHTML = `
+            <strong>INVALID SESSION FORMAT.</strong>
+            <div class="should-be" style="margin-top:12px;">Should Be:</div>
+            <div class="should-be-container">
+              <div class="should-be-box">
+                <code id="text-${copyId}">${esc(corrected)}</code>
+              </div>
+              <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
+            </div>`;
           sessionError.style.display = 'block';
           output.innerHTML = '';
           return;
