@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Danny Beta QA Checker v1.1.5</title>
+  <title>Danny Beta QA Checker v1.1.6</title>
   <style>
     :root {
       --success:#16a34a;
@@ -545,13 +545,23 @@
       font-weight:900;
       color:#16a34a;
       margin:0 0 16px;
-      animation:bounce 1.2s infinite;
+      animation:bounce 1.2s infinite, rainbow 2s linear infinite;
       letter-spacing:1px;
+      background:linear-gradient(90deg, #ff0000, #ff8000, #ffff00, #00ff00, #00ffff, #0080ff, #8000ff, #ff0080, #ff0000);
+      background-size:200% auto;
+      -webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;
+      background-clip:text;
+    }
+
+    @keyframes rainbow {
+      0% { background-position:0% center; }
+      100% { background-position:200% center; }
     }
 
     #party .perfect {
       font-size:30px;
-      color:#ca8a04;
+      color:#2563eb;
       font-weight:700;
       margin-bottom:12px;
     }
@@ -775,12 +785,8 @@
         color:#34d399;
       }
 
-      #party .congrats {
-        color:#4ade80;
-      }
-
       #party .perfect {
-        color:#facc15;
+        color:#60a5fa;
       }
 
       #party .sparkle {
@@ -825,8 +831,7 @@
     body.dark-mode .copy-btn::before { background:#0f172a; }
     body.dark-mode .copy-btn:hover { background:#1e3a52; color:#7dd3fc; }
     body.dark-mode .copy-btn.copied { color:#34d399; }
-    body.dark-mode #party .congrats { color:#4ade80; }
-    body.dark-mode #party .perfect { color:#facc15; }
+    body.dark-mode #party .perfect { color:#60a5fa; }
     body.dark-mode #party .sparkle { color:#f9a8d4; }
 
     /* Light mode override (when system is dark but user picks light) */
@@ -865,8 +870,7 @@
     body.light-mode .copy-btn::before { background:#fff; }
     body.light-mode .copy-btn:hover { background:#e0f2fe; color:#0284c7; }
     body.light-mode .copy-btn.copied { color:#16a34a; }
-    body.light-mode #party .congrats { color:#16a34a; }
-    body.light-mode #party .perfect { color:#ca8a04; }
+    body.light-mode #party .perfect { color:#2563eb; }
   </style>
 </head>
 <body>
@@ -876,7 +880,7 @@
   </div>
 
   <h1>
-    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.5</span>
+    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.6</span>
   </h1>
   <p>Drop your Pro Tools exported text file (.txt / .markers.txt).</p>
 
