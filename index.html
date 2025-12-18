@@ -20,6 +20,44 @@
       font-family:"SF Pro Display",Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     }
 
+    /* Dark/Light Mode Toggle */
+    .mode-toggle {
+      position:fixed;
+      top:20px;
+      right:20px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      background:#f1f5f9;
+      padding:8px 12px;
+      border-radius:20px;
+      cursor:pointer;
+      z-index:1000;
+      border:1px solid #e2e8f0;
+      font-size:13px;
+      font-weight:600;
+      color:#475569;
+      transition:all 0.2s ease;
+    }
+
+    .mode-toggle:hover {
+      background:#e2e8f0;
+    }
+
+    .mode-toggle .icon {
+      font-size:16px;
+    }
+
+    body.dark-mode .mode-toggle {
+      background:#334155;
+      border-color:#475569;
+      color:#e2e8f0;
+    }
+
+    body.dark-mode .mode-toggle:hover {
+      background:#475569;
+    }
+
     body {
       background:#fff;
       color:var(--text);
@@ -94,7 +132,6 @@
       justify-content:center;
       gap:6px;
       transition:all 0.2s ease;
-      box-shadow:0 2px 8px rgba(250,204,21,0.15);
       font-size:13px;
       font-weight:700;
       color:#854d0e;
@@ -130,9 +167,9 @@
     .requirements-content {
       max-height:0;
       overflow:hidden;
-      transition:max-height 0.3s ease;
+      transition:max-height 0.3s ease, border-width 0.1s ease;
       background:#fefce8;
-      border:2px solid #fde047;
+      border:0px solid #fde047;
       border-top:none;
       border-bottom-left-radius:12px;
       border-bottom-right-radius:12px;
@@ -140,6 +177,7 @@
 
     .requirements-content.open {
       max-height:500px;
+      border-width:2px;
     }
 
     .requirements-inner {
@@ -208,22 +246,21 @@
 /* UNIFIED BLUE DROP ZONE (LIGHT + DARK MODE MATCH) */
 .drop,
 .drop.dragover {
-  background: #1d4ed8 !important;     /* Solid Blue */
-  border-color: #1d4ed8 !important;
+  background: #60a5fa !important;     /* Lighter Blue */
+  border-color: #3b82f6 !important;
   color: #ffffff !important;
   box-shadow: none !important;
 }
 
     .drop.dragover {
-      background:#dbeafe;
-      border-color:#2563eb;
-      box-shadow:0 0 20px rgba(59,130,246,0.3);
+      background:#93c5fd !important;
+      border-color:#2563eb !important;
     }
 
     .drop small {
       font-weight:600;
       font-size:14px;
-      color:#64748b;
+      color:#e0f2fe;
     }
 
     .session-name {
@@ -750,9 +787,94 @@
         color:#f9a8d4;
       }
     }
+
+    /* Manual dark-mode class for toggle */
+    body.dark-mode {
+      background:#020617;
+      color:#e5e7eb;
+    }
+    body.dark-mode h1 { color:#93c5fd; }
+    body.dark-mode h1 .version { background:#0f172a; color:#cbd5f5; border:1px solid #1e293b; }
+    body.dark-mode p { color:#9ca3af; }
+    body.dark-mode .requirements-header { background:#422006; border-color:#713f12; color:#fef08a; }
+    body.dark-mode .requirements-header:hover { background:#52290a; border-color:#854d0e; }
+    body.dark-mode .requirements-chevron { color:#fde047; }
+    body.dark-mode .requirements-content { background:#422006; border-color:#713f12; }
+    body.dark-mode .requirements-inner li { color:#fef3c7; }
+    body.dark-mode .requirements-inner li::before { color:#34d399; }
+    body.dark-mode .requirements-inner .disclaimer { background:#1e1b1b; border-color:#7f1d1d; color:#fca5a5; }
+    body.dark-mode .session-name { background:#1e293b; border-color:#0ea5e9; color:#e5e7eb; }
+    body.dark-mode .session-name.good { background:rgba(22,163,74,0.08); border-color:#22c55e; color:#bbf7d0; }
+    body.dark-mode .session-name.bad { background:rgba(220,38,38,0.08); border-color:#f87171; color:#fecaca; }
+    body.dark-mode .error-box { background:#1e293b; border-color:#1f2937; color:#e5e7eb; }
+    body.dark-mode .section { background:#1e293b; border-color:#334155; }
+    body.dark-mode .section h2 { border-bottom-color:#1f2937; }
+    body.dark-mode .note { color:#9ca3af; }
+    body.dark-mode .badge.ok { background:rgba(22,163,74,0.12); border-color:#22c55e; color:#bbf7d0; }
+    body.dark-mode .badge.fail { background:rgba(220,38,38,0.12); border-color:#ef4444; color:#fca5a5; }
+    body.dark-mode .error-list { border-left-color:#374151; }
+    body.dark-mode .error-item { background:rgba(127,29,29,0.3); border-left-color:#f97373; color:#fecaca; }
+    body.dark-mode .track-box { background:rgba(22,163,74,0.16); border-color:#22c55e; color:#bbf7d0; }
+    body.dark-mode .track-box.bad { background:rgba(127,29,29,0.35); border-color:#f97373; color:#fecaca; }
+    body.dark-mode .track-num { background:#16a34a; }
+    body.dark-mode .track-box.bad .track-num { background:#dc2626; }
+    body.dark-mode .should-be { color:#fecaca; }
+    body.dark-mode .should-be-box { background:#1e293b; border-color:#334155; }
+    body.dark-mode .should-be code { color:#38bdf8; }
+    body.dark-mode .copy-btn { color:#38bdf8; }
+    body.dark-mode .copy-btn::before { background:#0f172a; }
+    body.dark-mode .copy-btn:hover { background:#1e3a52; color:#7dd3fc; }
+    body.dark-mode .copy-btn.copied { color:#34d399; }
+    body.dark-mode #party .congrats { color:#4ade80; }
+    body.dark-mode #party .perfect { color:#facc15; }
+    body.dark-mode #party .sparkle { color:#f9a8d4; }
+
+    /* Light mode override (when system is dark but user picks light) */
+    body.light-mode {
+      background:#fff;
+      color:#222;
+    }
+    body.light-mode h1 { color:#1e40af; }
+    body.light-mode h1 .version { background:#f1f5f9; color:#64748b; border:none; }
+    body.light-mode p { color:#555; }
+    body.light-mode .requirements-header { background:#fefce8; border-color:#fde047; color:#854d0e; }
+    body.light-mode .requirements-header:hover { background:#fef9c3; border-color:#facc15; }
+    body.light-mode .requirements-chevron { color:#a16207; }
+    body.light-mode .requirements-content { background:#fefce8; border-color:#fde047; }
+    body.light-mode .requirements-inner li { color:#713f12; }
+    body.light-mode .requirements-inner li::before { color:#16a34a; }
+    body.light-mode .requirements-inner .disclaimer { background:#fef2f2; border-color:#fca5a5; color:#991b1b; }
+    body.light-mode .session-name { background:#fff; border-color:#0ea5e9; color:#222; }
+    body.light-mode .session-name.good { background:#ecfdf5; border-color:#86efac; color:#166534; }
+    body.light-mode .session-name.bad { background:#fef2f2; border-color:#fca5a5; color:#991b1b; }
+    body.light-mode .error-box { background:#f4f4f4; border-color:#ddd; color:#444; }
+    body.light-mode .section { background:#fafafa; border-color:#e0e0e0; }
+    body.light-mode .section h2 { border-bottom-color:#ddd; }
+    body.light-mode .badge.ok { background:#ecfdf5; color:#16a34a; }
+    body.light-mode .badge.fail { background:#fef2f2; color:#d32f2f; }
+    body.light-mode .error-list { border-left-color:#fca5a5; }
+    body.light-mode .error-item { background:#fff5f5; border-left-color:#f87171; color:#991b1b; }
+    body.light-mode .track-box { background:#f0fdf4; border-color:#86efac; color:#166534; }
+    body.light-mode .track-box.bad { background:#fef2f2; border-color:#fca5a5; color:#991b1b; }
+    body.light-mode .track-num { background:#16a34a; color:#fff; }
+    body.light-mode .track-box.bad .track-num { background:#d32f2f; }
+    body.light-mode .should-be { color:#991b1b; }
+    body.light-mode .should-be-box { background:#f8fafc; border-color:#e2e8f0; }
+    body.light-mode .should-be code { color:#0ea5e9; }
+    body.light-mode .copy-btn { color:#0ea5e9; }
+    body.light-mode .copy-btn::before { background:#fff; }
+    body.light-mode .copy-btn:hover { background:#e0f2fe; color:#0284c7; }
+    body.light-mode .copy-btn.copied { color:#16a34a; }
+    body.light-mode #party .congrats { color:#16a34a; }
+    body.light-mode #party .perfect { color:#ca8a04; }
   </style>
 </head>
 <body>
+  <div class="mode-toggle" id="modeToggle">
+    <span class="icon" id="modeIcon">🌙</span>
+    <span id="modeText">Dark</span>
+  </div>
+
   <h1>
     Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.5</span>
   </h1>
@@ -782,7 +904,7 @@
   </div>
 
   <div id="droparea" class="drop">
-    Drop file here
+    Drop .txt file Here
     <small>or click to choose</small>
     <input id="fileinput" type="file" accept=".txt,.markers.txt"/>
   </div>
@@ -830,6 +952,41 @@
           requirementsChevron.classList.add('open');
           requirementsToggle.classList.add('active');
         }
+      });
+
+      // Dark/Light Mode Toggle
+      const modeToggle = document.getElementById('modeToggle');
+      const modeIcon = document.getElementById('modeIcon');
+      const modeText = document.getElementById('modeText');
+      
+      // Check system preference on load
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      let isDarkMode = prefersDark;
+      
+      function updateModeUI() {
+        if (isDarkMode) {
+          modeIcon.textContent = '☀️';
+          modeText.textContent = 'Light';
+        } else {
+          modeIcon.textContent = '🌙';
+          modeText.textContent = 'Dark';
+        }
+      }
+      
+      updateModeUI();
+      
+      modeToggle.addEventListener('click', () => {
+        isDarkMode = !isDarkMode;
+        
+        if (isDarkMode) {
+          document.body.classList.add('dark-mode');
+          document.body.classList.remove('light-mode');
+        } else {
+          document.body.classList.add('light-mode');
+          document.body.classList.remove('dark-mode');
+        }
+        
+        updateModeUI();
       });
 
       // Copy to clipboard function
