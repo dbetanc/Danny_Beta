@@ -1389,6 +1389,11 @@
         let prev = null;
         let sceneCount = 0;
         let lastScene = null; // {raw, sawNonScene:boolean}
+        
+        // For dual character: track alternation rule
+        let lastCompletedPairTrack = null; // Track of the last completed line-lout pair
+        let lastCompletedPairNum = null; // Number of the last completed line-lout pair
+        let sawSceneSinceLastPair = false; // Reset when scene marker appears
 
         // Allowed track indices (1-based) where line/lout markers may appear
         let allowedTrackIndices = [];
@@ -1457,6 +1462,9 @@ if (!['line','lout','scene'].includes(m.token)) {
             lastScene = { raw: fullName, sawNonScene: false };
 
             if (open) open.scene = true;
+            
+            // Scene marker resets track alternation requirement
+            sawSceneSinceLastPair = true;
 
             continue;
           }
@@ -1466,7 +1474,7 @@ if (!['line','lout','scene'].includes(m.token)) {
 
           if (m.token === 'line') {
             if (open) errors.push(`${open.raw} not closed`);
-            open = {raw:fullName, num:m.num, line:m.line, scene:false};
+            open = {raw:fullName, num:m.num, line:m.line, scene:false, track:markerTrackName, trackIndex:markerTrackIndex};
           } else if (m.token === 'lout') {
             if (!open) {
               errors.push(`${fullName} without matching line`);
@@ -1474,6 +1482,26 @@ if (!['line','lout','scene'].includes(m.token)) {
               if (open.num !== m.num) errors.push(`${open.raw} to ${fullName} mismatch`);
               if (open.scene) errors.push(`scene between ${open.raw} and ${fullName}`);
               if (prev !== null && m.num !== prev + 1) errors.push(`${fullName} not sequential`);
+              
+              // Check that line and lout are on the same track
+              if (open.track !== markerTrackName) {
+                errors.push(`line${String(open.num).padStart(4, '0')} and lout${String(m.num).padStart(4, '0')} must be on the same track`);
+              }
+              
+              // Dual character: check track alternation rule
+              if (sessionInfo && sessionInfo.type === 'dual') {
+                if (lastCompletedPairTrack !== null && !sawSceneSinceLastPair) {
+                  // Must be on different track than last pair
+                  if (open.trackIndex === lastCompletedPairTrack) {
+                    errors.push(`Consecutive same talent/channel markers: line${String(lastCompletedPairNum).padStart(4, '0')}, line${String(m.num).padStart(4, '0')}`);
+                  }
+                }
+                // Update last completed pair info
+                lastCompletedPairTrack = open.trackIndex;
+                lastCompletedPairNum = m.num;
+                sawSceneSinceLastPair = false;
+              }
+              
               prev = m.num;
               open = null;
             }
