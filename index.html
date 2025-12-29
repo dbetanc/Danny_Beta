@@ -2074,10 +2074,32 @@ if (!['line','lout','scene'].includes(m.token)) {
         }
 
 const tracks = parseTracks(lines);
+        const online = parseOnlineFiles(lines);
+        
+        // Check for missing required sections
+        const missingTrackListing = tracks.length === 0;
+        const missingOnlineFiles = online.err && online.err.includes("Couldn't find");
+        
+        if (missingTrackListing || missingOnlineFiles) {
+          sessionError.innerHTML = `
+            <strong>INCOMPLETE FILE EXPORT</strong><br><br>
+            This file is missing required sections:
+            <ul style="margin: 10px 0; padding-left: 20px; text-align: left;">
+              ${missingTrackListing ? '<li><strong>Track Listing</strong> - needed to validate track names</li>' : ''}
+              ${missingOnlineFiles ? '<li><strong>Online Files in Session</strong> - needed to validate audio file names</li>' : ''}
+            </ul>
+            <br>
+            Please re-export from Pro Tools with all required options.<br>
+            <strong>Click "Requirements" above for export instructions.</strong>
+          `;
+          sessionError.style.display = "block";
+          output.innerHTML = "";
+          return;
+        }
+        
         const expectedList = validateTracks(tracks, sessionInfo);
         const tracksPass = expectedList.every(e => e === null);
 
-        const online = parseOnlineFiles(lines);
         const audioCheck = online.err ? {pass:false, errors:[online.err]} : checkAudioFiles(sessionInfo, tracks, online.rows);
         const audioPass = !online.err && audioCheck.pass;
 
