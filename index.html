@@ -1168,6 +1168,17 @@
 
       function suggestCorrectedSessionName(name){
         return name
+          // Fix reversed order codes (R before L is wrong - L always first)
+          // t1rt2l should be t1lt2r (Turn 1 first, so t1l)
+          // t2rt1l should be t2lt1r (Turn 2 first, so t2l)
+          .replace(/t1rt2l/gi, 't1lt2r')
+          .replace(/t2rt1l/gi, 't2lt1r')
+          // Fix common typos in turn codes
+          .replace(/t1llt2r/gi, 't1lt2r')
+          .replace(/t2llt1r/gi, 't2lt1r')
+          .replace(/t1l2tr/gi, 't1lt2r')
+          .replace(/t2l1tr/gi, 't2lt1r')
+          // Fix separator issues
           .replace(/([a-z]+)-([a-z]+)(\d{4})-t1lt2r/i, '$1-$2$3_t1lt2r')
           .replace(/([a-z]+)-([a-z]+)(\d{4})-t2lt1r/i, '$1-$2$3_t2lt1r')
           .replace(/_t1lt2r_/i, '_t1lt2r-')
@@ -1444,12 +1455,24 @@
         let lastCompletedPairTrack = null; // Track of the last completed line-lout pair
         let lastCompletedPairNum = null; // Number of the last completed line-lout pair
         let sawSceneSinceLastPair = false; // Reset when scene marker appears
+        let isFirstPair = true; // Track if this is the first line-lout pair (for turn order validation)
 
         // Allowed track indices (1-based) where line/lout markers may appear
         let allowedTrackIndices = [];
+        // Expected first track based on t1lt2r/t2lt1r
+        let expectedFirstTrack = null;
+        
         if (sessionInfo && sessionInfo.type === 'dual') {
           // Dualcharacter: Tracks 3 & 4 (edit tracks)
           allowedTrackIndices = [3, 4];
+          
+          // t1lt2r = Turn 1 on Left (Track 3), Turn 2 on Right (Track 4)
+          // t2lt1r = Turn 2 on Left (Track 3), Turn 1 on Right (Track 4)
+          if (sessionInfo.mode === 't1lt2r') {
+            expectedFirstTrack = 3; // First turn should be on Left (Track 3)
+          } else if (sessionInfo.mode === 't2lt1r') {
+            expectedFirstTrack = 4; // First turn should be on Right (Track 4)
+          }
         } else if (sessionInfo && sessionInfo.type === 'single') {
           // Singlecharacter: Track 2 only (edit track)
           allowedTrackIndices = [2];
@@ -1536,6 +1559,19 @@ if (!['line','lout','scene'].includes(m.token)) {
               // Check that line and lout are on the same track
               if (open.track !== markerTrackName) {
                 errors.push(`line${String(open.num).padStart(4, '0')} and lout${String(m.num).padStart(4, '0')} must be on the same track`);
+              }
+              
+              // Dual character: check first turn track based on t1lt2r/t2lt1r
+              if (sessionInfo && sessionInfo.type === 'dual' && isFirstPair && expectedFirstTrack !== null) {
+                if (open.trackIndex !== expectedFirstTrack) {
+                  const actualTrack = open.trackIndex === 3 ? 'LEFT' : 'RIGHT';
+                  const correctCode = open.trackIndex === 3 ? 't1lt2r' : 't2lt1r';
+                  // Build corrected session name
+                  const currentMode = sessionInfo.mode;
+                  const correctedSessionName = sessionInfo.speaker1 + '-' + sessionInfo.speaker2 + sessionInfo.code + '_' + correctCode + '-' + sessionInfo.script;
+                  errors.push(`SESSION NAME orientation mismatch: 1st Turn is on ${actualTrack} TRACK, session name should be ${correctCode}. Should be: ${correctedSessionName}`);
+                }
+                isFirstPair = false;
               }
               
               // Dual character: check track alternation rule
@@ -1998,28 +2034,41 @@ if (!['line','lout','scene'].includes(m.token)) {
           });
           
           if (firstMarker && firstMarker.track) {
-            // Extract orientation from session name (t1lt2r or t2lt1r)
+            // Extract orientation from session name (t1lt2r or t2lt1r, or invalid variants)
             const sessionOrientation = /t2lt1r/i.test(sessionName) ? 't2lt1r' : 
                                        /t1lt2r/i.test(sessionName) ? 't1lt2r' : null;
             
-            if (sessionOrientation) {
-              const firstMarkerTrack = firstMarker.track;
-              let expectedOrientation = null;
-              
-              if (firstMarkerTrack.startsWith('Left_Talent 1') || firstMarkerTrack.toLowerCase().includes('left')) {
-                expectedOrientation = 't1lt2r';
-              } else if (firstMarkerTrack.startsWith('Right_Talent 2') || firstMarkerTrack.toLowerCase().includes('right')) {
-                expectedOrientation = 't2lt1r';
-              }
-              
-              if (expectedOrientation && sessionOrientation !== expectedOrientation) {
-                sessionDisplay.className = "session-name bad";
-                const msg = `SESSION NAME orientation mismatch: First marker (line0001) is on ${firstMarkerTrack.includes('Left') || firstMarkerTrack.includes('left') ? 'Left' : 'Right'} track, so session name should have ${expectedOrientation} (not ${sessionOrientation}).`;
-                sessionError.innerHTML = (sessionError.innerHTML ? sessionError.innerHTML + "<br>" : "") + msg;
-                sessionError.style.display = "block";
-                output.innerHTML = "";
-                return;
-              }
+            // Check for invalid orientation codes (R before L)
+            const invalidOrientation = /t1rt2l|t2rt1l/i.test(sessionName);
+            
+            const firstMarkerTrack = firstMarker.track;
+            let expectedOrientation = null;
+            
+            if (firstMarkerTrack.startsWith('Left_Talent 1') || firstMarkerTrack.toLowerCase().includes('left')) {
+              expectedOrientation = 't1lt2r';
+            } else if (firstMarkerTrack.startsWith('Right_Talent 2') || firstMarkerTrack.toLowerCase().includes('right')) {
+              expectedOrientation = 't2lt1r';
+            }
+            
+            // Handle invalid orientation codes OR mismatched valid codes
+            if (expectedOrientation && (invalidOrientation || (sessionOrientation && sessionOrientation !== expectedOrientation))) {
+              sessionDisplay.className = "session-name bad";
+              const actualTrack = firstMarkerTrack.includes('Left') || firstMarkerTrack.includes('left') ? 'LEFT' : 'RIGHT';
+              // Build corrected session name by replacing any orientation code pattern
+              const correctedSessionName = sessionName.replace(/t1lt2r|t2lt1r|t1rt2l|t2rt1l/i, expectedOrientation).toLowerCase();
+              sessionError.innerHTML = `
+                <strong>SESSION NAME orientation mismatch:</strong><br>
+                1st Turn is on ${actualTrack} TRACK, session name should be ${expectedOrientation}
+                <div class="should-be" style="margin-top:12px;">Should Be:</div>
+                <div class="should-be-container">
+                  <div class="should-be-box">
+                    <code id="text-copy-session-fix">${esc(correctedSessionName)}</code>
+                  </div>
+                  <button class="copy-btn" id="btn-copy-session-fix" onclick="copyToClipboard('text-copy-session-fix', 'btn-copy-session-fix')" title="Copy to clipboard"></button>
+                </div>`;
+              sessionError.style.display = "block";
+              output.innerHTML = "";
+              return;
             }
           }
         }
