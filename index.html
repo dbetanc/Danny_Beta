@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Danny Beta QA Checker v1.1.7</title>
+  <title>Danny Beta QA Checker v1.1.8</title>
   <style>
     :root {
       --success:#16a34a;
@@ -890,7 +890,7 @@
   </div>
 
   <h1>
-    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.7</span>
+    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.8</span>
   </h1>
 
   <div class="requirements-wrapper">
@@ -1210,6 +1210,54 @@
           }
         }
 
+        // Check for missing date code scenario
+        // Expected pattern: speakerID__script (double underscore = missing date)
+        // Or expected pattern: speakerID_XXXX_script where found is missing the XXXX
+        
+        // Case 1: Expected has double underscore (date is empty/missing)
+        if (expected.includes('__')) {
+          const expectedParts = expected.split('__');
+          if (expectedParts.length === 2) {
+            const speakerId = expectedParts[0];
+            // Check if found starts with speakerId + underscore (but missing date)
+            if (found.startsWith(speakerId + '_')) {
+              return esc(speakerId) + `<span class="illegal">_⚠️XXXX</span>` + esc(found.substring(speakerId.length));
+            }
+          }
+        }
+
+        // Case 2: Check for missing date code where expected has speakerIDXXXX_script
+        const foundParts = found.split('_');
+        const expectedParts = expected.split('_');
+        
+        if (foundParts.length >= 1 && expectedParts.length >= 1) {
+          const foundFirst = foundParts[0];
+          const expectedFirst = expectedParts[0];
+          
+          // Check if expected first part = speaker ID + 4 digits (has date code)
+          const dateMatch = expectedFirst.match(/^([a-z]{9,10})(\d{4})$/i);
+          if (dateMatch) {
+            const speakerId = dateMatch[1];
+            const dateCode = dateMatch[2];
+            
+            // If found starts with just the speaker ID (missing date)
+            if (foundFirst.toLowerCase() === speakerId.toLowerCase()) {
+              // Highlight by inserting marker where date should be
+              return esc(foundFirst) + `<span class="illegal">⚠️XXXX</span>` + esc(found.substring(foundFirst.length));
+            }
+            
+            // If found has speaker ID merged with something else (no underscore where expected)
+            if (foundFirst.toLowerCase().startsWith(speakerId.toLowerCase()) && foundFirst.length > speakerId.length) {
+              const afterSpeaker = foundFirst.substring(speakerId.length);
+              // Check if what follows is NOT 4 digits
+              if (!/^\d{4}$/.test(afterSpeaker)) {
+                return esc(speakerId) + `<span class="illegal">${esc(afterSpeaker)}</span>` + esc(found.substring(foundFirst.length));
+              }
+            }
+          }
+        }
+
+        // Default: character-by-character comparison
         let i = 0;
         const minLen = Math.min(found.length, expected.length);
         while (i < minLen && found[i] === expected[i]) i++;
@@ -1308,12 +1356,14 @@
 
           if (isBad) {
             const copyId = `copy-track-${i}`;
+            // Replace double underscore with _XXXX_ to show missing date placeholder
+            let displayExpected = expected.replace('__', '_XXXX_');
             html += `
               <div class="should-be-wrapper">
                 <div class="should-be">Should Be:</div>
                 <div class="should-be-container">
                   <div class="should-be-box">
-                    <code id="text-${copyId}">${esc(expected)}</code>
+                    <code id="text-${copyId}">${esc(displayExpected)}</code>
                   </div>
                   <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
                 </div>
@@ -1738,13 +1788,15 @@ if (!['line','lout','scene'].includes(m.token)) {
           html += `<div class="error-list">`;
           errors.forEach((err, idx) => {
             const copyId = `copy-audio-${idx}`;
+            // Replace double underscore with _XXXX_ to show missing date placeholder
+            let displayExpected = err.expectedBase.replace('__', '_XXXX_');
             html += `<div class="error-item">
               <div><strong>File:</strong> ${esc(err.file)}</div>
               <div>Prefix: ${highlightTrackName(err.base, err.expectedBase)}</div>
               <div class="should-be">Should Start With:</div>
               <div class="should-be-container">
                 <div class="should-be-box">
-                  <code id="text-${copyId}">${esc(err.expectedBase)}</code>
+                  <code id="text-${copyId}">${esc(displayExpected)}</code>
                 </div>
                 <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
               </div>
