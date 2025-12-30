@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Danny Beta QA Checker v1.1.8</title>
+  <title>Danny Beta QA Checker v1.1.9</title>
   <style>
     :root {
       --success:#16a34a;
@@ -363,6 +363,38 @@
       color:var(--success);
       background:#ecfdf5;
       border:1px solid #a7f3d0;
+    }
+
+    .expand-arrow {
+      font-size:10px;
+      transition:transform 0.2s ease;
+      margin-left:4px;
+    }
+
+    .badge.ok:hover .expand-arrow {
+      color:var(--success);
+    }
+
+    .passed-details {
+      margin-top:12px;
+      padding:10px;
+      background:#f0fdf4;
+      border:1px solid #a7f3d0;
+      border-radius:8px;
+      transition:all 0.2s ease;
+    }
+
+    .passed-details.hidden {
+      display:none;
+    }
+
+    .passed-details .track-box {
+      background:#fff;
+      border:1px solid #a7f3d0;
+      color:#166534;
+      white-space:nowrap;
+      overflow-x:auto;
+      font-size:13px;
     }
 
     .fail {
@@ -795,6 +827,17 @@
         color:#34d399;
       }
 
+      .passed-details {
+        background:rgba(22,163,74,0.15);
+        border-color:#22c55e;
+      }
+
+      .passed-details .track-box {
+        background:rgba(22,163,74,0.25);
+        border-color:#22c55e;
+        color:#bbf7d0;
+      }
+
       #party .perfect {
         color:#60a5fa;
       }
@@ -841,6 +884,8 @@
     body.dark-mode .copy-btn::before { background:#0f172a; }
     body.dark-mode .copy-btn:hover { background:#1e3a52; color:#7dd3fc; }
     body.dark-mode .copy-btn.copied { color:#34d399; }
+    body.dark-mode .passed-details { background:rgba(22,163,74,0.15); border-color:#22c55e; }
+    body.dark-mode .passed-details .track-box { background:rgba(22,163,74,0.25); border-color:#22c55e; color:#bbf7d0; }
     body.dark-mode #party .perfect { color:#60a5fa; }
     body.dark-mode #party .sparkle { color:#f9a8d4; }
 
@@ -890,7 +935,7 @@
   </div>
 
   <h1>
-    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.8</span>
+    Danny Beta <span>🍺 Home Brewed QA Checker ✅</span> <span class="version">v1.1.9</span>
   </h1>
 
   <div class="requirements-wrapper">
@@ -1027,6 +1072,17 @@
               button.textContent = '';
             }, 1500);
           });
+        }
+      };
+
+      window.togglePassedDetails = function(detailsId, badge) {
+        const details = document.getElementById(detailsId);
+        const arrow = badge.querySelector('.expand-arrow');
+        if (details) {
+          details.classList.toggle('hidden');
+          if (arrow) {
+            arrow.textContent = details.classList.contains('hidden') ? '▶' : '▼';
+          }
         }
       };
 
@@ -1404,9 +1460,17 @@
         const hasErrors = expectedList.some(e => e !== null);
         let html = `<div class="section"><h2>Tracks</h2>`;
 
-        // All tracks are correct → just show PASSED badge, no list
+        // All tracks are correct → show PASSED badge with collapsible details
         if (!hasErrors) {
-          html += `<div class="badge ok">PASSED</div></div>`;
+          const detailsId = 'tracks-details-' + Date.now();
+          html += `<div class="badge ok" style="cursor:pointer;" onclick="togglePassedDetails('${detailsId}', this)">
+            PASSED <span class="expand-arrow">▶</span>
+          </div>`;
+          html += `<div id="${detailsId}" class="passed-details hidden">`;
+          tracks.forEach((t, i) => {
+            html += `<div class="track-box"><div class="track-num">${i + 1}</div>${esc(t)}</div>`;
+          });
+          html += `</div></div>`;
           return html;
         }
 
@@ -1914,7 +1978,14 @@ if (!['line','lout','scene'].includes(m.token)) {
         }
 
         if (bounced.pass) {
-          html += `<div class="badge ok">PASSED</div>`;
+          const detailsId = 'bounces-details-' + Date.now();
+          html += `<div class="badge ok" style="cursor:pointer;" onclick="togglePassedDetails('${detailsId}', this)">
+            PASSED <span class="expand-arrow">▶</span>
+          </div>`;
+          html += `<div id="${detailsId}" class="passed-details hidden">`;
+          html += `<div class="track-box"><code>${esc(sessionName)}_edit.wav</code></div>`;
+          html += `<div class="track-box"><code>${esc(sessionName)}_mixed.wav</code></div>`;
+          html += `</div>`;
         } else {
           html += `
   <div class="note">
