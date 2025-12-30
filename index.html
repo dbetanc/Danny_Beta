@@ -1219,6 +1219,35 @@
       function highlightTrackName(found, expected){
         if (found === expected) return esc(found);
 
+        // Special case for _mixed tracks: find exactly what differs
+        if (expected.includes('_mixed') && found.includes('_mixed')) {
+          // Find common prefix
+          let prefixEnd = 0;
+          while (prefixEnd < found.length && prefixEnd < expected.length && found[prefixEnd] === expected[prefixEnd]) {
+            prefixEnd++;
+          }
+          
+          // Find common suffix (from the end)
+          let foundSuffixStart = found.length;
+          let expectedSuffixStart = expected.length;
+          while (foundSuffixStart > prefixEnd && expectedSuffixStart > prefixEnd && 
+                 found[foundSuffixStart - 1] === expected[expectedSuffixStart - 1]) {
+            foundSuffixStart--;
+            expectedSuffixStart--;
+          }
+          
+          // If we found matching prefix and suffix, highlight only the middle
+          if (prefixEnd > 0 || foundSuffixStart < found.length) {
+            const prefix = found.substring(0, prefixEnd);
+            const wrongPart = found.substring(prefixEnd, foundSuffixStart);
+            const suffix = found.substring(foundSuffixStart);
+            
+            if (wrongPart.length > 0) {
+              return esc(prefix) + `<span class="illegal">${esc(wrongPart)}</span>` + esc(suffix);
+            }
+          }
+        }
+
         if (!expected.includes('_mixed')) {
           const wrongPart = '_t1lt2r_';
           const idx = found.indexOf(wrongPart);
@@ -1276,10 +1305,25 @@
           }
         }
 
-        // Default: character-by-character comparison
+        // Default: character-by-character comparison with suffix matching
         let i = 0;
         const minLen = Math.min(found.length, expected.length);
         while (i < minLen && found[i] === expected[i]) i++;
+
+        // Also check for matching suffix
+        let foundSuffixStart = found.length;
+        let expectedSuffixStart = expected.length;
+        while (foundSuffixStart > i && expectedSuffixStart > i && 
+               found[foundSuffixStart - 1] === expected[expectedSuffixStart - 1]) {
+          foundSuffixStart--;
+          expectedSuffixStart--;
+        }
+
+        if (i < foundSuffixStart) {
+          return esc(found.substring(0, i)) +
+            `<span class="illegal">${esc(found.substring(i, foundSuffixStart))}</span>` +
+            esc(found.substring(foundSuffixStart));
+        }
 
         if (i === minLen) {
           const longer = found.length > expected.length ? found : expected;
