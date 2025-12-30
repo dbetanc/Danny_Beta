@@ -1931,6 +1931,103 @@ if (!['line','lout','scene'].includes(m.token)) {
         return html;
       }
 
+      function highlightAudioFileName(found, expectedBase){
+        // For dual character, expectedBase might contain " OR " - use first option for comparison
+        const expectedCore = expectedBase.split(' OR ')[0];
+        
+        // Check if found has a prefix (Left_Talent 1_, Right_Talent 2_, etc.)
+        let prefix = '';
+        let foundCore = found;
+        
+        const prefixPatterns = [
+          'Left_Talent 1_', 'Left_Talent 2_', 
+          'Right_Talent 1_', 'Right_Talent 2_',
+          'Talent 1_'
+        ];
+        
+        for (const p of prefixPatterns) {
+          if (found.startsWith(p)) {
+            prefix = p;
+            foundCore = found.substring(p.length);
+            break;
+          }
+        }
+        
+        // Now compare foundCore with expectedCore
+        if (foundCore === expectedCore) return esc(found);
+        if (foundCore.startsWith(expectedCore + '_') || foundCore.startsWith(expectedCore + '-')) return esc(found);
+        
+        // Find common prefix between foundCore and expectedCore
+        let commonEnd = 0;
+        while (commonEnd < foundCore.length && commonEnd < expectedCore.length && foundCore[commonEnd] === expectedCore[commonEnd]) {
+          commonEnd++;
+        }
+        
+        // Find common suffix (from the end)
+        let foundSuffixStart = foundCore.length;
+        let expectedSuffixStart = expectedCore.length;
+        while (foundSuffixStart > commonEnd && expectedSuffixStart > commonEnd && 
+               foundCore[foundSuffixStart - 1] === expectedCore[expectedSuffixStart - 1]) {
+          foundSuffixStart--;
+          expectedSuffixStart--;
+        }
+        
+        // If we found matching prefix and suffix, highlight only the middle
+        if (commonEnd > 0 && foundSuffixStart < foundCore.length) {
+          const goodStart = foundCore.substring(0, commonEnd);
+          const wrongPart = foundCore.substring(commonEnd, foundSuffixStart);
+          const goodEnd = foundCore.substring(foundSuffixStart);
+          
+          if (wrongPart.length > 0) {
+            return esc(prefix) + esc(goodStart) + `<span class="illegal">${esc(wrongPart)}</span>` + esc(goodEnd);
+          }
+        }
+        
+        // Fallback: highlight from first difference to end
+        if (commonEnd > 0) {
+          return esc(prefix) + esc(foundCore.substring(0, commonEnd)) + `<span class="illegal">${esc(foundCore.substring(commonEnd))}</span>`;
+        }
+        
+        // No common prefix - highlight entire core (keep prefix unhighlighted)
+        return esc(prefix) + `<span class="illegal">${esc(foundCore)}</span>`;
+      }
+      
+      function getCorrectedAudioFileName(found, expectedBase){
+        // For dual character, expectedBase might contain " OR " - use first option
+        const expectedCore = expectedBase.split(' OR ')[0];
+        
+        // Check if found has a prefix
+        let prefix = '';
+        let foundCore = found;
+        
+        const prefixPatterns = [
+          'Left_Talent 1_', 'Left_Talent 2_', 
+          'Right_Talent 1_', 'Right_Talent 2_',
+          'Talent 1_'
+        ];
+        
+        for (const p of prefixPatterns) {
+          if (found.startsWith(p)) {
+            prefix = p;
+            foundCore = found.substring(p.length);
+            break;
+          }
+        }
+        
+        // Extract suffix from found (the _01, _02, etc. or any other suffix after the script)
+        // The suffix is everything after where expectedCore would end
+        let suffix = '';
+        
+        // Try to find where the script part ends and suffix begins
+        // Look for _XX or -XX pattern at the end
+        const suffixMatch = foundCore.match(/[_-]\d+$/);
+        if (suffixMatch) {
+          suffix = suffixMatch[0];
+        }
+        
+        return prefix + expectedCore + suffix;
+      }
+
       function renderAudioFilesSection(online, audioCheck){
         let html = `<div class="section"><h2>Audio Files</h2>`;
 
@@ -1948,15 +2045,15 @@ if (!['line','lout','scene'].includes(m.token)) {
           html += `<div class="error-list">`;
           errors.forEach((err, idx) => {
             const copyId = `copy-audio-${idx}`;
-            // Replace double underscore with _XXXX_ to show missing date placeholder
-            let displayExpected = err.expectedBase.replace('__', '_XXXX_');
+            // Get the corrected filename (with prefix and suffix preserved)
+            const correctedName = getCorrectedAudioFileName(err.base, err.expectedBase);
             html += `<div class="error-item">
               <div><strong>File:</strong> ${esc(err.file)}</div>
-              <div>Prefix: ${highlightTrackName(err.base, err.expectedBase)}</div>
-              <div class="should-be">Should Start With:</div>
+              <div>Prefix: ${highlightAudioFileName(err.base, err.expectedBase)}</div>
+              <div class="should-be">Should Be:</div>
               <div class="should-be-container">
                 <div class="should-be-box">
-                  <code id="text-${copyId}">${esc(displayExpected)}</code>
+                  <code id="text-${copyId}">${esc(correctedName)}</code>
                 </div>
                 <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
               </div>
