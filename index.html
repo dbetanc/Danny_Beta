@@ -1124,10 +1124,18 @@
         // Dualcharacter session: {speaker1}-{speaker2}{code}_(t1lt2r|t2lt1r)-{script}
         const dualMatch = sessionName.match(/^([a-z]{9,10})-([a-z]{9,10})(\d{4})_(t1lt2r|t2lt1r)-([a-z0-9-]+)$/i);
         if (dualMatch) {
+          let speaker1 = dualMatch[1];
+          let speaker2 = dualMatch[2];
+          
+          // Always store speakers in alphabetical order (speaker1 < speaker2)
+          if (speaker1.toLowerCase() > speaker2.toLowerCase()) {
+            [speaker1, speaker2] = [speaker2, speaker1];
+          }
+          
           return {
             type: 'dual',
-            speaker1: dualMatch[1],
-            speaker2: dualMatch[2],
+            speaker1: speaker1,
+            speaker2: speaker2,
             code: dualMatch[3],
             mode: dualMatch[4].toLowerCase(),
             script: dualMatch[5]
@@ -1327,13 +1335,21 @@
         }
 
         // DUALCHARACTER: original 5-track logic
+        // speaker1 is always alphabetically first (Left), speaker2 is always alphabetically second (Right)
         const date1 = tracks[0]?.match(/_(\d{4})_/)?.[1] || '';
         const date2 = tracks[1]?.match(/_(\d{4})_/)?.[1] || '';
+        
+        // Determine Talent numbers based on turn order (mode)
+        // t1lt2r = Turn 1 on Left, so Left is Talent 1, Right is Talent 2
+        // t2lt1r = Turn 2 on Left (Turn 1 on Right), so Left is Talent 2, Right is Talent 1
+        const leftTalent = sessionInfo.mode === 't2lt1r' ? 'Left_Talent 2' : 'Left_Talent 1';
+        const rightTalent = sessionInfo.mode === 't2lt1r' ? 'Right_Talent 1' : 'Right_Talent 2';
+        
         const expected = [
           `${sessionInfo.speaker1}_${date1}_${sessionInfo.script}`,
           `${sessionInfo.speaker2}_${date2}_${sessionInfo.script}`,
-          `${sessionInfo.mode==='t2lt1r'?'Left_Talent 2':'Left_Talent 1'}_${sessionInfo.speaker1}_${date1}_${sessionInfo.script}`,
-          `${sessionInfo.mode==='t2lt1r'?'Right_Talent 1':'Right_Talent 2'}_${sessionInfo.speaker2}_${date2}_${sessionInfo.script}`,
+          `${leftTalent}_${sessionInfo.speaker1}_${date1}_${sessionInfo.script}`,
+          `${rightTalent}_${sessionInfo.speaker2}_${date2}_${sessionInfo.script}`,
           `${sessionInfo.speaker1}-${sessionInfo.speaker2}_${date1}_${sessionInfo.script}_mixed`
         ];
         return tracks.map((track, i) => expected[i] && track !== expected[i] ? expected[i] : null);
@@ -1988,6 +2004,7 @@ if (!['line','lout','scene'].includes(m.token)) {
 
         
         // Strict Speaker ID validation: 9 or 10 letters + 4 digits
+        let sessionNameHasError = false;
         (function(){
           try {
             const singleRe = /^([a-z]{9,10})(\d{4})_/;
@@ -2002,6 +2019,7 @@ if (!['line','lout','scene'].includes(m.token)) {
               sessionError.innerHTML = (sessionError.innerHTML ? sessionError.innerHTML + "<br>" : "") + msg;
               sessionError.style.display = "block";
               output.innerHTML = "";
+              sessionNameHasError = true;
               return;
             }
             
@@ -2018,11 +2036,37 @@ if (!['line','lout','scene'].includes(m.token)) {
                 sessionError.innerHTML = (sessionError.innerHTML ? sessionError.innerHTML + "<br>" : "") + msg;
                 sessionError.style.display = "block";
                 output.innerHTML = "";
+                sessionNameHasError = true;
+                return;
+              }
+              
+              // Speaker IDs must be in alphabetical order
+              if (speaker1.toLowerCase() > speaker2.toLowerCase()) {
+                sessionDisplay.className = "session-name bad";
+                const correctedSessionName = sessionName.replace(
+                  new RegExp(`^${speaker1}-${speaker2}`, 'i'),
+                  `${speaker2}-${speaker1}`
+                ).toLowerCase();
+                sessionError.innerHTML = `
+                  <strong>SESSION NAME: Speaker IDs must be in alphabetical order.</strong><br>
+                  '${speaker1}' should come after '${speaker2}'
+                  <div class="should-be" style="margin-top:12px;">Should Be:</div>
+                  <div class="should-be-container">
+                    <div class="should-be-box">
+                      <code id="text-copy-speaker-order">${esc(correctedSessionName)}</code>
+                    </div>
+                    <button class="copy-btn" id="btn-copy-speaker-order" onclick="copyToClipboard('text-copy-speaker-order', 'btn-copy-speaker-order')" title="Copy to clipboard"></button>
+                  </div>`;
+                sessionError.style.display = "block";
+                output.innerHTML = "";
+                sessionNameHasError = true;
                 return;
               }
             }
           } catch(e) { /* fail-safe */ }
         })();
+        
+        if (sessionNameHasError) return;
 
         // Check orientation matches first marker track
         const parsedMarkersForCheck = parseMarkersSection(lines);
