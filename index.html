@@ -2113,7 +2113,82 @@ if (!['line','lout','scene'].includes(m.token)) {
 
         const sessionInfo = parseSessionInfo(sessionName);
         if (!sessionInfo) {
-          output.innerHTML = `<div class="section"><div class="badge fail">Invalid SESSION NAME format</div></div>`;
+          // Show detailed breakdown of what's wrong with the speaker ID
+          sessionDisplay.className = "session-name bad";
+          
+          // Helper function to analyze a speaker ID
+          function analyzeSpeakerId(letters, label) {
+            const len = letters.length;
+            const lang = letters.substring(0, 2) || '??';
+            const loc = letters.substring(2, 4) || '??';
+            const studio = letters.substring(4, 6) || '??';
+            const initials = letters.substring(6) || '';
+            const initialsLen = initials.length;
+            
+            const langStatus = lang.length === 2 ? '✓' : '✗';
+            const locStatus = loc.length === 2 ? '✓' : '✗';
+            const studioStatus = studio.length === 2 ? '✓' : '✗';
+            const initialsNote = initialsLen < 3 ? `(${initialsLen} letters) ✗ Too short - should be 3-4 letters` : 
+                                 initialsLen > 4 ? `(${initialsLen} letters) ✗ Too long - should be 3-4 letters` : 
+                                 `(${initialsLen} letters) ✓`;
+            
+            const isValid = len >= 9 && len <= 10;
+            
+            return `
+              <div style="margin-top:12px; text-align:left; padding:12px; background:rgba(0,0,0,0.05); border-radius:8px;">
+                <strong>${label}:</strong> <code>${esc(letters)}</code> (${len} letters ✗ - should be 9-10)
+                <ul style="margin:8px 0 0 0; padding-left:20px; list-style:none;">
+                  <li>• <code style="background:#fef3c7; padding:2px 6px; border-radius:3px;">${esc(lang)}</code> - Language (2 letters) ${langStatus}</li>
+                  <li>• <code style="background:#fef3c7; padding:2px 6px; border-radius:3px;">${esc(loc)}</code> - Location (2 letters) ${locStatus}</li>
+                  <li>• <code style="background:#fef3c7; padding:2px 6px; border-radius:3px;">${esc(studio)}</code> - Studio (2 letters) ${studioStatus}</li>
+                  <li>• <code style="background:#fef3c7; padding:2px 6px; border-radius:3px;">${esc(initials || '??')}</code> - Talent initials ${initialsNote}</li>
+                </ul>
+              </div>`;
+          }
+          
+          // Helper to check if speaker ID length is valid
+          function isValidLength(letters) {
+            return letters.length >= 9 && letters.length <= 10;
+          }
+          
+          let breakdown = '';
+          let exampleText = '';
+          
+          // Try dual character format first: speaker1-speaker2XXXX_
+          const dualLooseMatch = sessionName.match(/^([a-z]+)-([a-z]+)(\d*)_/i);
+          if (dualLooseMatch) {
+            const speaker1 = dualLooseMatch[1];
+            const speaker2 = dualLooseMatch[2];
+            
+            // Only show breakdown for invalid speaker(s)
+            if (!isValidLength(speaker1)) {
+              breakdown += analyzeSpeakerId(speaker1, 'Speaker 1 (Left)');
+            }
+            if (!isValidLength(speaker2)) {
+              breakdown += analyzeSpeakerId(speaker2, 'Speaker 2 (Right)');
+            }
+            exampleText = 'Example: <code>engblycli-engblymjan0001_t1lt2r-dualcharacter001</code>';
+          } else {
+            // Try single character format: speakerXXXX_
+            const singleLooseMatch = sessionName.match(/^([a-z]+)(\d*)_/i);
+            if (singleLooseMatch) {
+              const letters = singleLooseMatch[1];
+              if (!isValidLength(letters)) {
+                breakdown = analyzeSpeakerId(letters, 'Speaker ID');
+              }
+              exampleText = 'Example: <code>engblycli0001_singlecharacter001</code>';
+            }
+          }
+          
+          sessionError.innerHTML = `
+            <strong>INVALID SESSION NAME FORMAT</strong><br>
+            Speaker ID must be 9-10 lowercase letters followed by 4 digits.
+            ${breakdown}
+            <div style="margin-top:12px; font-size:13px; color:#666;">
+              ${exampleText}
+            </div>`;
+          sessionError.style.display = "block";
+          output.innerHTML = "";
           return;
         }
 
@@ -2130,8 +2205,49 @@ if (!['line','lout','scene'].includes(m.token)) {
             
             if (!singleMatch && !dualMatch) {
               sessionDisplay.className = "session-name bad";
-              const msg = "SESSION NAME: Speaker ID must be 9-10 lowercase letters followed by 4 digits (e.g., engblycli0001 or enxxstnnnn0001).";
-              sessionError.innerHTML = (sessionError.innerHTML ? sessionError.innerHTML + "<br>" : "") + msg;
+              
+              // Try to extract and analyze what's there
+              const looseMatch = sessionName.match(/^([a-z]+)(\d*)_/i);
+              let breakdown = '';
+              
+              if (looseMatch) {
+                const letters = looseMatch[1];
+                const digits = looseMatch[2];
+                const len = letters.length;
+                
+                // Break down the speaker ID components
+                const lang = letters.substring(0, 2) || '??';
+                const loc = letters.substring(2, 4) || '??';
+                const studio = letters.substring(4, 6) || '??';
+                const initials = letters.substring(6) || '??';
+                const initialsLen = initials.length;
+                
+                const langStatus = lang.length === 2 ? '✓' : '✗';
+                const locStatus = loc.length === 2 ? '✓' : '✗';
+                const studioStatus = studio.length === 2 ? '✓' : '✗';
+                const initialsStatus = (initialsLen >= 3 && initialsLen <= 4) ? '✓' : '✗';
+                const initialsNote = initialsLen < 3 ? `(${initialsLen} letters) ✗ Too short` : 
+                                     initialsLen > 4 ? `(${initialsLen} letters) ✗ Should be 3-4 letters` : 
+                                     `(${initialsLen} letters) ✓`;
+                
+                breakdown = `
+                  <div style="margin-top:12px; text-align:left; padding:12px; background:rgba(0,0,0,0.05); border-radius:8px;">
+                    <strong>Speaker ID Breakdown:</strong> <code>${esc(letters)}</code> (${len} letters - should be 9-10)
+                    <ul style="margin:8px 0 0 0; padding-left:20px; list-style:none;">
+                      <li><code style="background:#fef3c7; padding:2px 6px; border-radius:3px;">${esc(lang)}</code> - Language (2 letters) ${langStatus}</li>
+                      <li><code style="background:#fef3c7; padding:2px 6px; border-radius:3px;">${esc(loc)}</code> - Location (2 letters) ${locStatus}</li>
+                      <li><code style="background:#fef3c7; padding:2px 6px; border-radius:3px;">${esc(studio)}</code> - Studio (2 letters) ${studioStatus}</li>
+                      <li><code style="background:#fef3c7; padding:2px 6px; border-radius:3px;">${esc(initials)}</code> - Talent initials ${initialsNote}</li>
+                    </ul>
+                  </div>`;
+              }
+              
+              sessionError.innerHTML = `
+                <strong>SESSION NAME: Speaker ID must be 9-10 lowercase letters followed by 4 digits.</strong>
+                ${breakdown}
+                <div style="margin-top:12px; font-size:13px; color:#666;">
+                  Example: <code>engblycli0001</code> or <code>enxxstnnnn0001</code>
+                </div>`;
               sessionError.style.display = "block";
               output.innerHTML = "";
               sessionNameHasError = true;
