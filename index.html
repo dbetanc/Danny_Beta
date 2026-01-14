@@ -1688,7 +1688,6 @@ if (!['line','lout','scene'].includes(m.token)) {
         }
 
         if (open) errors.push(`${open.raw} not closed`);
-        if (sceneCount > 50) errors.push(`Too many scene markers (${sceneCount})`);
         return errors;
       }
 
