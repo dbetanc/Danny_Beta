@@ -1728,6 +1728,41 @@ if (!['line','lout','scene'].includes(m.token)) {
         return {rows};
       }
 
+      function checkFolderName(sessionName, rows){
+        if (!rows || rows.length === 0) return {pass: true, errors: []};
+        
+        // Find a file in Audio Files folder to extract the session folder name
+        const audioFileRow = rows.find(r => /[:/]Audio Files:?$/i.test(r.location || ''));
+        if (!audioFileRow) return {pass: true, errors: []};
+        
+        const location = audioFileRow.location || '';
+        
+        // Extract folder name from path like:
+        // Macintosh HD:Users:...:enusbsgsan-enusbsscur0001_t1lt2r-dualcharacter007:Audio Files:
+        // Split by : or / and get the folder before "Audio Files"
+        const parts = location.split(/[:/]/);
+        const audioFilesIdx = parts.findIndex(p => /^Audio Files$/i.test(p.trim()));
+        
+        if (audioFilesIdx <= 0) return {pass: true, errors: []};
+        
+        const folderName = parts[audioFilesIdx - 1].trim();
+        
+        if (!folderName) return {pass: true, errors: []};
+        
+        // Compare folder name with session name (case-insensitive)
+        if (folderName.toLowerCase() !== sessionName.toLowerCase()) {
+          return {
+            pass: false,
+            errors: [{
+              found: folderName,
+              expected: sessionName
+            }]
+          };
+        }
+        
+        return {pass: true, errors: []};
+      }
+
       // *** FIXED IN v1.0.4 ***
       function isInBouncedFiles(loc){
         return /[:/]Bounced Files:?$/.test(loc || '');
@@ -2022,6 +2057,34 @@ if (!['line','lout','scene'].includes(m.token)) {
               <div class="should-be-container">
                 <div class="should-be-box">
                   <code id="text-${copyId}">${esc(correctedName)}</code>
+                </div>
+                <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
+              </div>
+            </div>`;
+          });
+          html += `</div>`;
+        }
+
+        html += `</div>`;
+        return html;
+      }
+
+      function renderFolderNameSection(sessionName, folderCheck){
+        let html = `<div class="section"><h2>Session Folder</h2>`;
+
+        if (folderCheck.pass) {
+          html += `<div class="badge ok">PASSED</div>`;
+        } else {
+          html += `<div class="badge fail">FAIL</div>`;
+          html += `<div class="error-list">`;
+          folderCheck.errors.forEach((err, idx) => {
+            const copyId = `copy-folder-${idx}`;
+            html += `<div class="error-item">
+              <div><strong>Folder Name:</strong> ${esc(err.found)}</div>
+              <div class="should-be">Should Be:</div>
+              <div class="should-be-container">
+                <div class="should-be-box">
+                  <code id="text-${copyId}">${esc(err.expected)}</code>
                 </div>
                 <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
               </div>
@@ -2456,13 +2519,17 @@ const tracks = parseTracks(lines);
         const bounced = online.err ? {pass:false, errors:[online.err]} : checkBouncedFiles(sessionName, online.rows);
         const bouncedPass = !online.err && bounced.pass;
 
+        const folderCheck = online.err ? {pass:true, errors:[]} : checkFolderName(sessionName, online.rows);
+        const folderPass = folderCheck.pass;
+
         output.innerHTML =
+          renderFolderNameSection(sessionName, folderCheck) +
           renderAudioFilesSection(online, audioCheck) +
           renderTracksSection(tracks, expectedList) +
           renderMarkersReport(markerErrors) +
           renderBouncedSection(sessionName, online, bounced);
 
-        if (tracksPass && markersPass && bouncedPass && audioPass) {
+        if (tracksPass && markersPass && bouncedPass && audioPass && folderPass) {
           setTimeout(triggerParty, 300);
         }
       }
