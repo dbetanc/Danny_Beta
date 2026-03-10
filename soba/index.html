@@ -1,1 +1,1203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SOBA QA Checker v1.0.0</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    :root {
+      --success:#16a34a;
+      --danger:#d32f2f;
+      --border:rgba(0,0,0,0.08);
+      --text:#1d1d1f;
+      --muted:#86868b;
+      --good-bg:rgba(220,252,231,0.6);
+      --bad-bg:rgba(254,226,226,0.6);
+      --good-border:rgba(134,239,172,0.6);
+      --bad-border:rgba(252,165,165,0.6);
+      --good-text:#166534;
+      --bad-text:#991b1b;
+      --warn-bg:rgba(254,252,232,0.6);
+      --warn-border:rgba(253,224,71,0.5);
+      --warn-text:#854d0e;
+      --glass-bg:rgba(255,255,255,0.65);
+      --glass-border:rgba(255,255,255,0.5);
+      --glass-shadow:0 4px 24px rgba(0,0,0,0.06);
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue",system-ui,sans-serif;
+    }
 
+    .mode-toggle {
+      position:fixed;
+      top:20px;
+      right:20px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      background:var(--glass-bg);
+      padding:8px 14px;
+      border-radius:20px;
+      cursor:pointer;
+      z-index:1000;
+      border:1px solid var(--glass-border);
+      font-size:13px;
+      font-weight:600;
+      color:#3a3a3c;
+      transition:all 0.3s ease;
+      backdrop-filter:blur(20px);
+      -webkit-backdrop-filter:blur(20px);
+      box-shadow:0 2px 12px rgba(0,0,0,0.06);
+    }
+    .mode-toggle:hover { background:rgba(255,255,255,0.85); box-shadow:0 4px 16px rgba(0,0,0,0.08); }
+    .mode-toggle .icon { font-size:16px; }
+    body.dark-mode .mode-toggle { background:#334155; border-color:#475569; color:#e2e8f0; }
+    body.dark-mode .mode-toggle:hover { background:#475569; }
+
+    body {
+      background:linear-gradient(135deg,#f5f7fa 0%,#e4e8ee 40%,#dfe6ed 60%,#f0f2f5 100%);
+      background-attachment:fixed;
+      color:var(--text);
+      margin:0;
+      padding:40px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      position:relative;
+      min-height:100vh;
+    }
+
+    h1 {
+      margin:0 0 12px;
+      font-size:34px !important;
+      font-weight:800;
+      letter-spacing:-0.5px;
+      color:#1d1d1f;
+      text-align:center;
+      line-height:1.2;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    h1 span { font-size:34px !important; font-weight:800; }
+    h1 .version {
+      font-size:14px !important;
+      font-weight:600;
+      color:#86868b;
+      background:rgba(0,0,0,0.04);
+      padding:4px 10px;
+      border-radius:20px;
+      letter-spacing:0;
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+    }
+
+    p { margin:0 0 18px; font-size:14px; color:#86868b; text-align:center; max-width:600px; }
+
+    .requirements-wrapper { display:flex; justify-content:center; width:100%; margin:12px 0 16px; }
+    .requirements-accordion { width:100%; max-width:600px; }
+    .requirements-header {
+      background:rgba(254,252,232,0.6);
+      border:1px solid rgba(253,224,71,0.4);
+      border-radius:14px;
+      padding:8px 12px;
+      cursor:pointer;
+      user-select:none;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
+      transition:all 0.3s ease;
+      font-size:13px;
+      font-weight:600;
+      color:#854d0e;
+      white-space:nowrap;
+      backdrop-filter:blur(20px);
+      -webkit-backdrop-filter:blur(20px);
+      box-shadow:0 2px 12px rgba(0,0,0,0.04);
+    }
+    .requirements-header:hover { background:rgba(254,249,195,0.7); border-color:rgba(250,204,21,0.5); }
+    .requirements-header.active { border-bottom-left-radius:0; border-bottom-right-radius:0; border-bottom-color:transparent; }
+    .requirements-header .icon { font-size:15px; }
+    .requirements-chevron { font-size:12px; color:#a16207; transition:transform 0.2s ease; margin-left:4px; }
+    .requirements-chevron.open { transform:rotate(180deg); }
+    .requirements-content {
+      max-height:0;
+      overflow:hidden;
+      transition:max-height 0.3s ease,border-width 0.1s ease;
+      background:rgba(254,252,232,0.5);
+      border:0px solid rgba(253,224,71,0.4);
+      border-top:none;
+      border-bottom-left-radius:14px;
+      border-bottom-right-radius:14px;
+      backdrop-filter:blur(20px);
+      -webkit-backdrop-filter:blur(20px);
+    }
+    .requirements-content.open { max-height:500px; border-width:1px; }
+    .requirements-inner { padding:14px 18px 16px; }
+    .requirements-inner ul { margin:0 0 12px; padding-left:18px; list-style:none; }
+    .requirements-inner li { margin-bottom:5px; font-size:12px; color:#713f12; line-height:1.4; }
+    .requirements-inner li::before { content:"✓"; color:#16a34a; font-weight:900; margin-right:6px; }
+    .requirements-inner .disclaimer {
+      background:#fef2f2;
+      border:1px solid #fca5a5;
+      border-radius:8px;
+      padding:8px 10px;
+      font-size:11px;
+      font-weight:600;
+      color:#991b1b;
+      line-height:1.3;
+    }
+    .requirements-inner .disclaimer::before { content:"⚠️ "; margin-right:4px; }
+
+    .drop {
+      width:100%;
+      max-width:600px;
+      height:100px;
+      border:2px dashed rgba(59,130,246,0.4);
+      border-radius:20px;
+      padding:16px;
+      text-align:center;
+      font-weight:700;
+      font-size:18px;
+      cursor:pointer;
+      transition:all .3s ease;
+      background:rgba(96,165,250,0.15);
+      backdrop-filter:blur(20px);
+      -webkit-backdrop-filter:blur(20px);
+      user-select:none;
+      -webkit-user-select:none;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      gap:6px;
+      color:#2563eb;
+      box-shadow:0 4px 24px rgba(59,130,246,0.08);
+    }
+    .drop, .drop.dragover {
+      background:rgba(96,165,250,0.25) !important;
+      border-color:rgba(59,130,246,0.5) !important;
+      color:#1e40af !important;
+      box-shadow:0 4px 24px rgba(59,130,246,0.1) !important;
+      backdrop-filter:blur(20px) !important;
+      -webkit-backdrop-filter:blur(20px) !important;
+    }
+    .drop.dragover { background:rgba(96,165,250,0.35) !important; border-color:rgba(37,99,235,0.6) !important; }
+    .drop small { font-weight:500; font-size:14px; color:#6b7280; }
+
+    .session-name {
+      margin:16px auto 6px;
+      font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:16px !important;
+      font-weight:700 !important;
+      padding:14px 20px;
+      border-radius:16px;
+      border:1px solid rgba(14,165,233,0.3);
+      width:fit-content;
+      max-width:90vw;
+      white-space:nowrap;
+      text-align:center;
+      box-shadow:var(--glass-shadow);
+      animation:fadeInUp .25s ease-out;
+      box-sizing:border-box;
+      backdrop-filter:blur(20px);
+      -webkit-backdrop-filter:blur(20px);
+      background:var(--glass-bg);
+    }
+    .session-name.good { background:rgba(220,252,231,0.5); border-color:rgba(134,239,172,0.5); color:var(--good-text); }
+    .session-name.bad { background:rgba(254,226,226,0.5); border-color:rgba(252,165,165,0.5); color:var(--bad-text); }
+
+    .illegal { color:#FFD700 !important; font-weight:bold !important; background:#991b1b !important; border-radius:2px !important; }
+
+    .error-box {
+      margin-top:8px;
+      padding:10px 14px;
+      background:var(--glass-bg);
+      border:1px solid var(--glass-border);
+      border-radius:12px;
+      font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:13px;
+      color:#3a3a3c;
+      text-align:center;
+      max-width:600px;
+      backdrop-filter:blur(20px);
+      -webkit-backdrop-filter:blur(20px);
+    }
+
+    .section {
+      border:1px solid rgba(0,0,0,0.06);
+      border-radius:16px;
+      padding:12px 16px;
+      margin-top:10px;
+      width:100%;
+      max-width:600px;
+      background:var(--glass-bg);
+      backdrop-filter:blur(20px);
+      -webkit-backdrop-filter:blur(20px);
+      box-shadow:var(--glass-shadow);
+      animation:fadeInUp .25s ease-out;
+    }
+    .section h2 { font-size:15px; font-weight:800; margin:0 0 8px; border-bottom:1px solid rgba(0,0,0,0.1); padding-bottom:4px; color:#000; letter-spacing:-0.2px; }
+    .note { font-size:13px; color:#777; font-style:italic; margin:-6px 0 10px; }
+
+    .badge {
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      padding:8px 14px;
+      border-radius:12px;
+      font-weight:600;
+      margin-top:8px;
+      font-size:13px;
+    }
+    .badge.ok::before { content:"✔"; font-size:13px; }
+    .badge.fail::before { content:"✖"; font-size:13px; }
+    .badge.warn::before { content:"⚠"; font-size:13px; }
+
+    .ok { color:var(--success); background:rgba(220,252,231,0.5); border:1px solid rgba(167,243,208,0.5); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+    .fail { color:var(--danger); background:rgba(254,226,226,0.5); border:1px solid rgba(255,205,210,0.5); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+    .warn { color:var(--warn-text); background:var(--warn-bg); border:1px solid var(--warn-border); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+
+    .expand-arrow { font-size:10px; transition:transform 0.2s ease; margin-left:4px; }
+
+    .passed-details {
+      margin-top:10px;
+      padding:10px;
+      background:rgba(240,253,244,0.5);
+      border:1px solid rgba(167,243,208,0.4);
+      border-radius:12px;
+      transition:all 0.2s ease;
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+    }
+    .passed-details.hidden { display:none; }
+    .passed-details .track-box { background:rgba(255,255,255,0.6); border:1px solid rgba(167,243,208,0.4); color:#166534; white-space:nowrap; overflow-x:auto; font-size:13px; }
+
+    .error-list { margin-top:14px; text-align:left; }
+    .error-item {
+      background:rgba(255,245,245,0.6);
+      border-left:3px solid var(--danger);
+      padding:10px 14px;
+      margin-bottom:8px;
+      border-radius:8px;
+      font-size:13px;
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+    }
+
+    .tracks-list { margin-top:8px; display:flex; flex-direction:column; align-items:stretch; width:100%; }
+
+    .track-box {
+      border-radius:10px;
+      padding:8px 12px;
+      margin-bottom:6px;
+      font-weight:600;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      border:1px solid rgba(134,239,172,0.4);
+      background:rgba(220,252,231,0.4);
+      color:var(--good-text);
+      font-size:13px;
+      word-break:break-all;
+    }
+    .track-box.bad { border-color:rgba(252,165,165,0.4); background:rgba(254,226,226,0.4); color:var(--bad-text); }
+
+    .track-num { background:var(--success); color:white; font-weight:700; padding:2px 8px; border-radius:6px; font-size:12px; flex-shrink:0; }
+    .track-box.bad .track-num { background:#d32f2f; }
+
+    /* Track attribute badges (Mono / Timebase) */
+    .track-attrs { display:flex; flex-wrap:wrap; gap:4px; margin:2px 0 6px 0; }
+    .attr-chip {
+      font-size:11px;
+      font-weight:600;
+      padding:3px 8px;
+      border-radius:6px;
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+    }
+    .attr-chip.ok { color:#166534; background:rgba(220,252,231,0.7); border:1px solid rgba(134,239,172,0.5); }
+    .attr-chip.fail { color:#991b1b; background:rgba(254,226,226,0.7); border:1px solid rgba(252,165,165,0.5); }
+    .attr-chip.warn { color:#854d0e; background:rgba(254,252,232,0.7); border:1px solid rgba(253,224,71,0.5); }
+
+    .should-be { margin-left:0; margin-top:6px; margin-bottom:4px; font-size:13px; color:var(--bad-text); font-style:normal; font-weight:600; text-align:center; }
+    .should-be-wrapper { width:100%; display:flex; flex-direction:column; align-items:center; margin-bottom:8px; }
+    .should-be-container { display:flex; align-items:center; gap:10px; margin:4px auto; width:fit-content; max-width:100%; }
+    .should-be-box {
+      background:rgba(248,250,252,0.6);
+      padding:10px 14px;
+      border-radius:10px;
+      border:1px solid rgba(226,232,240,0.5);
+      display:flex;
+      align-items:center;
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+    }
+    .should-be code { font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; background:transparent; padding:0; color:#0ea5e9; font-weight:600; white-space:nowrap; }
+
+    .copy-btn {
+      background:transparent;
+      color:#0ea5e9;
+      border:none;
+      padding:6px;
+      border-radius:4px;
+      cursor:pointer;
+      transition:all 0.2s ease;
+      flex-shrink:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      width:28px;
+      height:28px;
+      font-family:'Material Icons';
+      font-size:18px;
+    }
+    .copy-btn::before { content:"content_copy"; }
+    .copy-btn:hover { background:#e0f2fe; color:#0284c7; }
+    .copy-btn:active { transform:scale(0.9); }
+    .copy-btn.copied { color:#16a34a; }
+    .copy-btn.copied::before { content:"check"; }
+
+    @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+    @keyframes fadeInUp { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
+    @keyframes spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+
+    canvas { position:fixed; top:0; left:0; pointer-events:none; z-index:9999; display:none; }
+    input[type=file] { display:none; }
+
+    /* ===== DARK MODE (system) ===== */
+    @media (prefers-color-scheme:dark) {
+      body { background:linear-gradient(135deg,#0a0e1a 0%,#111827 40%,#0f172a 60%,#0d1117 100%); color:#e5e7eb; }
+      h1 { color:#e5e7eb; }
+      h1 .version { background:rgba(255,255,255,0.06); color:#9ca3af; border:1px solid rgba(255,255,255,0.08); }
+      p { color:#9ca3af; }
+      .requirements-header { background:rgba(66,32,6,0.6); border-color:rgba(113,63,18,0.5); color:#fef08a; backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); }
+      .requirements-header:hover { background:rgba(82,41,10,0.7); border-color:rgba(133,77,14,0.5); }
+      .requirements-chevron { color:#fde047; }
+      .requirements-content { background:rgba(66,32,6,0.5); border-color:rgba(113,63,18,0.5); }
+      .requirements-inner li { color:#fef3c7; }
+      .requirements-inner li::before { color:#34d399; }
+      .requirements-inner .disclaimer { background:rgba(30,27,27,0.6); border-color:rgba(127,29,29,0.5); color:#fca5a5; }
+      .drop { background:rgba(30,58,138,0.2); border-color:rgba(29,78,216,0.4); color:#bfdbfe; box-shadow:0 8px 32px rgba(0,0,0,0.3); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); }
+      .drop.dragover { background:rgba(30,58,138,0.35); }
+      .session-name { background:rgba(30,41,59,0.6); border-color:rgba(14,165,233,0.3); color:#e5e7eb; box-shadow:0 6px 24px rgba(0,0,0,0.3); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); }
+      .session-name.good { background:rgba(22,163,74,0.1); border-color:rgba(34,197,94,0.3); color:#bbf7d0; }
+      .session-name.bad { background:rgba(220,38,38,0.1); border-color:rgba(248,113,113,0.3); color:#fecaca; }
+      .error-box { background:rgba(30,41,59,0.6); border-color:rgba(255,255,255,0.06); color:#e5e7eb; backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); }
+      .section { background:rgba(30,41,59,0.5); border-color:rgba(255,255,255,0.06); box-shadow:0 8px 32px rgba(0,0,0,0.25); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); }
+      .section h2 { border-bottom-color:rgba(255,255,255,0.1); color:#fff; }
+      .note { color:#9ca3af; }
+      .badge.ok { background:rgba(22,163,74,0.15); border-color:rgba(34,197,94,0.3); color:#bbf7d0; }
+      .badge.fail { background:rgba(220,38,38,0.15); border-color:rgba(249,115,115,0.3); color:#fecaca; }
+      .badge.warn { background:rgba(66,32,6,0.5); border-color:rgba(113,63,18,0.5); color:#fef08a; }
+      .error-item { background:rgba(127,29,29,0.2); border-left-color:rgba(249,115,115,0.6); color:#fecaca; }
+      .track-box { background:rgba(22,163,74,0.12); border-color:rgba(34,197,94,0.25); color:#bbf7d0; }
+      .track-box.bad { background:rgba(127,29,29,0.2); border-color:rgba(249,115,115,0.3); color:#fecaca; }
+      .track-num { background:#16a34a; }
+      .track-box.bad .track-num { background:#dc2626; }
+      .should-be { color:#fecaca; }
+      .should-be-box { background:rgba(30,41,59,0.6); border-color:rgba(255,255,255,0.08); }
+      .should-be code { color:#38bdf8; }
+      .copy-btn { color:#38bdf8; }
+      .copy-btn:hover { background:rgba(30,58,82,0.5); color:#7dd3fc; }
+      .copy-btn.copied { color:#34d399; }
+      .passed-details { background:rgba(22,163,74,0.1); border-color:rgba(34,197,94,0.2); }
+      .passed-details .track-box { background:rgba(22,163,74,0.15); border-color:rgba(34,197,94,0.2); color:#bbf7d0; }
+      .attr-chip.ok { color:#bbf7d0; background:rgba(22,163,74,0.2); border-color:rgba(34,197,94,0.3); }
+      .attr-chip.fail { color:#fecaca; background:rgba(127,29,29,0.3); border-color:rgba(249,115,115,0.4); }
+      .attr-chip.warn { color:#fef08a; background:rgba(66,32,6,0.4); border-color:rgba(113,63,18,0.5); }
+    }
+
+    /* ===== MANUAL DARK MODE ===== */
+    body.dark-mode { background:linear-gradient(135deg,#0a0e1a 0%,#111827 40%,#0f172a 60%,#0d1117 100%); color:#e5e7eb; }
+    body.dark-mode h1 { color:#e5e7eb; }
+    body.dark-mode h1 .version { background:rgba(255,255,255,0.06); color:#9ca3af; border:1px solid rgba(255,255,255,0.08); }
+    body.dark-mode p { color:#9ca3af; }
+    body.dark-mode .mode-toggle { background:rgba(51,65,85,0.6); border-color:rgba(255,255,255,0.08); color:#e2e8f0; }
+    body.dark-mode .mode-toggle:hover { background:rgba(71,85,105,0.6); }
+    body.dark-mode .requirements-header { background:rgba(66,32,6,0.6); border-color:rgba(113,63,18,0.5); color:#fef08a; }
+    body.dark-mode .requirements-header:hover { background:rgba(82,41,10,0.7); border-color:rgba(133,77,14,0.5); }
+    body.dark-mode .requirements-chevron { color:#fde047; }
+    body.dark-mode .requirements-content { background:rgba(66,32,6,0.5); border-color:rgba(113,63,18,0.5); }
+    body.dark-mode .requirements-inner li { color:#fef3c7; }
+    body.dark-mode .requirements-inner li::before { color:#34d399; }
+    body.dark-mode .requirements-inner .disclaimer { background:rgba(30,27,27,0.6); border-color:rgba(127,29,29,0.5); color:#fca5a5; }
+    body.dark-mode .drop { background:rgba(30,58,138,0.2); border-color:rgba(29,78,216,0.4); color:#bfdbfe; }
+    body.dark-mode .session-name { background:rgba(30,41,59,0.6); border-color:rgba(14,165,233,0.3); color:#e5e7eb; }
+    body.dark-mode .session-name.good { background:rgba(22,163,74,0.1); border-color:rgba(34,197,94,0.3); color:#bbf7d0; }
+    body.dark-mode .session-name.bad { background:rgba(220,38,38,0.1); border-color:rgba(248,113,113,0.3); color:#fecaca; }
+    body.dark-mode .error-box { background:rgba(30,41,59,0.6); border-color:rgba(255,255,255,0.06); color:#e5e7eb; }
+    body.dark-mode .section { background:rgba(30,41,59,0.5); border-color:rgba(255,255,255,0.06); box-shadow:0 8px 32px rgba(0,0,0,0.25); }
+    body.dark-mode .section h2 { border-bottom-color:rgba(255,255,255,0.1); color:#fff; }
+    body.dark-mode .note { color:#9ca3af; }
+    body.dark-mode .badge.ok { background:rgba(22,163,74,0.15); border-color:rgba(34,197,94,0.3); color:#bbf7d0; }
+    body.dark-mode .badge.fail { background:rgba(220,38,38,0.15); border-color:rgba(249,115,115,0.3); color:#fecaca; }
+    body.dark-mode .badge.warn { background:rgba(66,32,6,0.5); border-color:rgba(113,63,18,0.5); color:#fef08a; }
+    body.dark-mode .error-item { background:rgba(127,29,29,0.2); border-left-color:rgba(249,115,115,0.6); color:#fecaca; }
+    body.dark-mode .track-box { background:rgba(22,163,74,0.12); border-color:rgba(34,197,94,0.25); color:#bbf7d0; }
+    body.dark-mode .track-box.bad { background:rgba(127,29,29,0.2); border-color:rgba(249,115,115,0.3); color:#fecaca; }
+    body.dark-mode .track-num { background:#16a34a; }
+    body.dark-mode .track-box.bad .track-num { background:#dc2626; }
+    body.dark-mode .should-be { color:#fecaca; }
+    body.dark-mode .should-be-box { background:rgba(30,41,59,0.6); border-color:rgba(255,255,255,0.08); }
+    body.dark-mode .should-be code { color:#38bdf8; }
+    body.dark-mode .copy-btn { color:#38bdf8; }
+    body.dark-mode .copy-btn:hover { background:rgba(30,58,82,0.5); color:#7dd3fc; }
+    body.dark-mode .copy-btn.copied { color:#34d399; }
+    body.dark-mode .passed-details { background:rgba(22,163,74,0.1); border-color:rgba(34,197,94,0.2); }
+    body.dark-mode .passed-details .track-box { background:rgba(22,163,74,0.15); border-color:rgba(34,197,94,0.2); color:#bbf7d0; }
+    body.dark-mode .attr-chip.ok { color:#bbf7d0; background:rgba(22,163,74,0.2); border-color:rgba(34,197,94,0.3); }
+    body.dark-mode .attr-chip.fail { color:#fecaca; background:rgba(127,29,29,0.3); border-color:rgba(249,115,115,0.4); }
+    body.dark-mode .attr-chip.warn { color:#fef08a; background:rgba(66,32,6,0.4); border-color:rgba(113,63,18,0.5); }
+
+    /* ===== MANUAL LIGHT MODE ===== */
+    body.light-mode { background:linear-gradient(135deg,#f5f7fa 0%,#e4e8ee 40%,#dfe6ed 60%,#f0f2f5 100%); color:#1d1d1f; }
+    body.light-mode h1 { color:#1d1d1f; }
+    body.light-mode h1 .version { background:rgba(0,0,0,0.04); color:#86868b; border:none; }
+    body.light-mode p { color:#86868b; }
+    body.light-mode .mode-toggle { background:var(--glass-bg); border-color:var(--glass-border); color:#3a3a3c; }
+    body.light-mode .mode-toggle:hover { background:rgba(255,255,255,0.85); }
+    body.light-mode .requirements-header { background:rgba(254,252,232,0.6); border-color:rgba(253,224,71,0.4); color:#854d0e; }
+    body.light-mode .session-name { background:var(--glass-bg); border-color:rgba(14,165,233,0.3); color:#1d1d1f; }
+    body.light-mode .session-name.good { background:rgba(220,252,231,0.5); border-color:rgba(134,239,172,0.5); color:#166534; }
+    body.light-mode .session-name.bad { background:rgba(254,226,226,0.5); border-color:rgba(252,165,165,0.5); color:#991b1b; }
+    body.light-mode .section { background:var(--glass-bg); border-color:rgba(0,0,0,0.06); }
+    body.light-mode .section h2 { color:#000; border-bottom-color:rgba(0,0,0,0.1); }
+    body.light-mode .badge.ok { background:rgba(220,252,231,0.5); color:#16a34a; }
+    body.light-mode .badge.fail { background:rgba(254,226,226,0.5); color:#d32f2f; }
+    body.light-mode .track-box { background:rgba(220,252,231,0.4); border-color:rgba(134,239,172,0.4); color:#166534; }
+    body.light-mode .track-box.bad { background:rgba(254,226,226,0.4); border-color:rgba(252,165,165,0.4); color:#991b1b; }
+  </style>
+</head>
+<body>
+  <div class="mode-toggle" id="modeToggle">
+    <span class="icon" id="modeIcon">🌙</span>
+    <span id="modeText">Dark</span>
+  </div>
+
+  <h1>
+    SOBA <span>🎙️ Studio QA Checker ✅</span> <span class="version">v1.0.0</span>
+  </h1>
+  <p>Pre-edit session validation — checks studio sessions before editing begins</p>
+
+  <div class="requirements-wrapper">
+    <div class="requirements-accordion">
+      <div class="requirements-header" id="requirementsToggle">
+        <span class="icon">⚠️</span>
+        <span>Export Requirements (click to expand)</span>
+        <span class="requirements-chevron" id="requirementsChevron">▼</span>
+      </div>
+      <div class="requirements-content" id="requirementsContent">
+        <div class="requirements-inner">
+          <ul>
+            <li>Export <strong>Session Info as Text</strong> from Pro Tools</li>
+            <li>Include: <strong>Session Info</strong> (sample rate, bit depth)</li>
+            <li>Include: <strong>Track EDLs</strong> (for track names &amp; format)</li>
+            <li>Include: <strong>Markers Listing</strong> (scene markers)</li>
+          </ul>
+          <div class="disclaimer">
+            SOBA QA Checker — for pre-edit studio session validation only. This does not replace the full Mochi QA workflow.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="droparea" class="drop">
+    Drop .txt Session File Here
+    <small>or click to choose</small>
+    <input id="fileinput" type="file" accept=".txt"/>
+  </div>
+
+  <div id="sessionContainer" style="width:100%;display:flex;flex-direction:column;align-items:center;">
+    <div id="sessionDisplay" class="session-name" style="display:none;">
+      <strong>SESSION NAME:</strong><br>
+      <span id="sessionText"></span>
+    </div>
+    <div id="sessionError" class="error-box" style="display:none;"></div>
+  </div>
+  <div id="output" style="margin-top:20px;width:100%;display:flex;flex-direction:column;align-items:center;"></div>
+
+  <script>
+  (function(){
+    const drop       = document.getElementById('droparea');
+    const fileinput  = document.getElementById('fileinput');
+    const output     = document.getElementById('output');
+    const sessionDisplay = document.getElementById('sessionDisplay');
+    const sessionText    = document.getElementById('sessionText');
+    const sessionError   = document.getElementById('sessionError');
+
+    // ── Requirements accordion ──
+    const reqToggle  = document.getElementById('requirementsToggle');
+    const reqContent = document.getElementById('requirementsContent');
+    const reqChevron = document.getElementById('requirementsChevron');
+    reqToggle.addEventListener('click', () => {
+      const open = reqContent.classList.contains('open');
+      if (open) {
+        reqContent.classList.remove('open');
+        reqChevron.classList.remove('open');
+        reqToggle.classList.remove('active');
+      } else {
+        reqContent.classList.add('open');
+        reqChevron.classList.add('open');
+        reqToggle.classList.add('active');
+      }
+    });
+
+    // ── Dark / Light Mode ──
+    const modeToggle = document.getElementById('modeToggle');
+    const modeIcon   = document.getElementById('modeIcon');
+    const modeText   = document.getElementById('modeText');
+    let isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    function updateModeUI() {
+      if (isDarkMode) { modeIcon.textContent='☀️'; modeText.textContent='Light'; }
+      else            { modeIcon.textContent='🌙'; modeText.textContent='Dark'; }
+    }
+    updateModeUI();
+    modeToggle.addEventListener('click', () => {
+      isDarkMode = !isDarkMode;
+      document.body.classList.toggle('dark-mode', isDarkMode);
+      document.body.classList.toggle('light-mode', !isDarkMode);
+      updateModeUI();
+    });
+
+    // ── Clipboard helper ──
+    window.copyToClipboard = function(textId, btnId) {
+      const el = document.getElementById(textId);
+      const btn = document.getElementById(btnId);
+      if (!el || !btn) return;
+      navigator.clipboard.writeText(el.textContent).then(() => {
+        btn.classList.add('copied');
+        setTimeout(() => btn.classList.remove('copied'), 1500);
+      });
+    };
+
+    window.togglePassedDetails = function(id, badge) {
+      const el = document.getElementById(id);
+      const arrow = badge.querySelector('.expand-arrow');
+      if (!el) return;
+      el.classList.toggle('hidden');
+      if (arrow) arrow.textContent = el.classList.contains('hidden') ? '▶' : '▼';
+    };
+
+    // ── Utilities ──
+    const esc = s => String(s||'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+    const normHeader = ln => String(ln||'').replace(/\s+/g,'').toUpperCase();
+
+    // ── Session name regexes (same rules as Danny Beta) ──
+    const VALID_SESSION_REGEX = /^(?:[a-z]+-[a-z]+\d{4}_(t1lt2r|t2lt1r)-[a-z0-9-]+|[a-z]+\d{4,5}_[a-z0-9-]+)$/i;
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // SESSION NAME DISPLAY — highlight illegal characters
+    // ────────────────────────────────────────────────────────────────────────────
+    function highlightSessionName(name) {
+      if (VALID_SESSION_REGEX.test(name)) return esc(name);
+
+      const chars = [];
+      const parts = name.split('');
+      let i = 0;
+
+      // Leading letters (speaker1 part)
+      while (i < parts.length && /[a-z]/i.test(parts[i]))
+        chars.push({char:parts[i++], ok:true});
+
+      // Separator: '-' or digit for single
+      if (i < parts.length && parts[i] === '-') {
+        chars.push({char:parts[i++], ok:true});
+        // Second speaker letters
+        while (i < parts.length && /[a-z]/i.test(parts[i]))
+          chars.push({char:parts[i++], ok:true});
+      } else if (i < parts.length) {
+        chars.push({char:parts[i++], ok:!/[^a-z0-9_-]/i.test(parts[i-1])});
+      }
+
+      // 4 digits
+      let digits = 0;
+      while (i < parts.length && /\d/.test(parts[i]) && digits < 4) {
+        chars.push({char:parts[i++], ok:true}); digits++;
+      }
+
+      // underscore separator
+      if (i < parts.length && parts[i]==='_') chars.push({char:parts[i++], ok:true});
+      else if (i < parts.length)             chars.push({char:parts[i++], ok:false});
+
+      // rest
+      while (i < parts.length) {
+        const c = parts[i];
+        chars.push({char:c, ok:/[a-z0-9_\-]/i.test(c)});
+        i++;
+      }
+
+      let html=''; let j=0;
+      while (j < chars.length) {
+        const ok=chars[j].ok; let grp='';
+        while (j < chars.length && chars[j].ok===ok) grp+=chars[j++].char;
+        html += ok ? esc(grp) : `<span class="illegal">${esc(grp)}</span>`;
+      }
+      return html;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // PARSE SESSION NAME → structured info
+    // ────────────────────────────────────────────────────────────────────────────
+    function getSessionName(lines) {
+      const m = (lines[0]||'').trim().match(/^SESSION NAME:\s*(.+)$/i);
+      return m ? m[1].trim() : null;
+    }
+
+    function parseSessionInfo(name) {
+      // Dual: speaker1-speaker2XXXX_(t1lt2r|t2lt1r)-script
+      const dual = name.match(/^([a-z]{9,10})-([a-z]{9,10})(\d{4})_(t1lt2r|t2lt1r)-([a-z0-9-]+)$/i);
+      if (dual) {
+        let s1=dual[1], s2=dual[2];
+        if (s1.toLowerCase() > s2.toLowerCase()) [s1,s2]=[s2,s1];
+        return {type:'dual', speaker1:s1, speaker2:s2, code:dual[3], mode:dual[4].toLowerCase(), script:dual[5]};
+      }
+      // Single: speakerXXXX_script  (singlecharacter or any script)
+      const single = name.match(/^([a-z]{9,10})(\d{4,5})_([a-z0-9-]+)$/i);
+      if (single) return {type:'single', speaker1:single[1], fileId:single[2], script:single[3]};
+      return null;
+    }
+
+    function suggestCorrectedSessionName(name) {
+      return name
+        .replace(/t1rt2l/gi,'t1lt2r')
+        .replace(/t2rt1l/gi,'t2lt1r')
+        .replace(/t1llt2r/gi,'t1lt2r')
+        .replace(/t2llt1r/gi,'t2lt1r')
+        .replace(/_t1lt2r_/i,'_t1lt2r-')
+        .replace(/_t2lt1r_/i,'_t2lt1r-')
+        .toLowerCase();
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // PARSE SESSION FORMAT (sample rate, bit depth)
+    // ────────────────────────────────────────────────────────────────────────────
+    function parseSessionFormat(lines) {
+      let sampleRate=null, bitDepth=null;
+      for (const ln of lines) {
+        if (!sampleRate) { const m=ln.trim().match(/^SAMPLE RATE:\s*(.+)$/i); if (m) sampleRate=m[1].trim(); }
+        if (!bitDepth)   { const m=ln.trim().match(/^BIT DEPTH:\s*(.+)$/i);   if (m) bitDepth=m[1].trim(); }
+        if (sampleRate && bitDepth) break;
+      }
+      return {sampleRate, bitDepth};
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // PARSE TRACKS from T R A C K  L I S T I N G
+    // Each track: { name, format, timebase, maxChannel }
+    // ────────────────────────────────────────────────────────────────────────────
+    function parseTracks(lines) {
+      const tracks = [];
+      let inSection = false;
+      let cur = null;
+
+      for (let i=0; i<lines.length; i++) {
+        const ln = lines[i];
+
+        if (normHeader(ln).includes('TRACKLISTING')) { inSection=true; continue; }
+        if (inSection && normHeader(ln).includes('MARKERSLISTING')) {
+          if (cur) tracks.push(cur);
+          cur = null; // prevent double-push in post-loop check
+          break;
+        }
+        if (!inSection) continue;
+
+        if (/^TRACK NAME:/i.test(ln)) {
+          if (cur) tracks.push(cur);
+          let name = ln.replace(/^TRACK NAME:\s*/i,'').trim()
+                        .replace(/\s*\([^)]*\)\s*$/, '')
+                        .replace(/\s+/g,' ');
+          cur = {name, format:null, timebase:null, maxChannel:0};
+          continue;
+        }
+
+        if (!cur) continue;
+
+        // FORMAT field (Mono / Stereo / etc.)
+        const fmtM = ln.trim().match(/^(?:TRACK\s+)?FORMAT:\s*(.+)$/i);
+        if (fmtM) { cur.format = fmtM[1].trim(); continue; }
+
+        // TIMEBASE field (Samples / Ticks / etc.)
+        const tbM = ln.trim().match(/^(?:TRACK\s+)?TIMEBASE:\s*(.+)$/i);
+        if (tbM) { cur.timebase = tbM[1].trim(); continue; }
+
+        // CHANNEL column in clip events — infer mono from max channel seen
+        const clipM = ln.match(/^(\d+)\s+\d+\s+/);
+        if (clipM) {
+          const ch = parseInt(clipM[1], 10);
+          if (!isNaN(ch) && ch > cur.maxChannel) cur.maxChannel = ch;
+        }
+      }
+      if (cur && inSection) tracks.push(cur);
+      return tracks;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // VALIDATE TRACK NAME
+    // Expected: {speakerID}_{4digits}_{script}
+    // ────────────────────────────────────────────────────────────────────────────
+    function validateTrackName(trackName, speakerID, script) {
+      // Split on underscore to avoid RegExp escaping complexity
+      const parts = trackName.split('_');
+      if (parts.length < 3) return false;
+      const tSpeaker = parts[0];
+      const tDate    = parts[1];
+      const tScript  = parts.slice(2).join('_');
+      return (
+        tSpeaker.toLowerCase() === speakerID.toLowerCase() &&
+        /^\d{4}$/.test(tDate) &&
+        tScript.toLowerCase() === script.toLowerCase()
+      );
+    }
+
+    function highlightTrackName(found, speakerID, script) {
+      if (validateTrackName(found, speakerID, script)) return esc(found);
+      const expectedPrefix = speakerID + '_';
+      // Build display with wrong parts highlighted
+      // Check if speaker prefix matches
+      if (!found.toLowerCase().startsWith(speakerID.toLowerCase() + '_')) {
+        // Wrong speaker — highlight the speaker portion
+        const under = found.indexOf('_');
+        if (under > 0) {
+          return `<span class="illegal">${esc(found.substring(0, under))}</span>${esc(found.substring(under))}`;
+        }
+        return `<span class="illegal">${esc(found)}</span>`;
+      }
+      // Speaker OK — check date portion
+      const parts = found.split('_');
+      const tDate = parts[1] || '';
+      const tScript = parts.slice(2).join('_');
+      const dateOk = /^\d{4}$/.test(tDate);
+      const scriptOk = tScript.toLowerCase() === script.toLowerCase();
+      let html = esc(speakerID) + '_';
+      if (!dateOk) {
+        html += `<span class="illegal">${esc(tDate) || '⚠️'}</span>_`;
+      } else {
+        html += esc(tDate) + '_';
+      }
+      if (!scriptOk) {
+        html += `<span class="illegal">${esc(tScript)}</span>`;
+      } else {
+        html += esc(tScript);
+      }
+      return html;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // PARSE MARKERS LISTING
+    // ────────────────────────────────────────────────────────────────────────────
+    function parseMarkersSection(lines) {
+      let start=-1;
+      for (let i=0;i<lines.length;i++) {
+        if (normHeader(lines[i]).includes('MARKERSLISTING')) { start=i; break; }
+      }
+      if (start===-1) return {err:"Couldn't find MARKERS LISTING section."};
+
+      let header=-1;
+      for (let j=start; j<start+12&&j<lines.length; j++) {
+        if (/NAME/i.test(lines[j])) { header=j; break; }
+      }
+      if (header===-1) header=start+1;
+
+      const hdr = lines[header]||'';
+      const sep = hdr.includes('\t') ? /\t+/ : /\s{2,}/;
+      const cols = hdr.split(sep).map(s=>s.trim());
+      const nameIdx  = cols.findIndex(c=>/\bNAME\b/i.test(c));
+      const unitsIdx = cols.findIndex(c=>/\bUNITS\b/i.test(c));
+      if (nameIdx===-1) return {err:"No NAME column found in markers."};
+
+      const data=[];
+      for (let i=header+1; i<lines.length; i++) {
+        const raw=lines[i];
+        if (!raw.trim()) break;
+        const c=raw.split(sep).map(s=>s.trim());
+        if (c[nameIdx]) data.push({name:c[nameIdx], units: unitsIdx!==-1?(c[unitsIdx]||''):''});
+      }
+      return {data};
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // VALIDATE MARKERS — sceneXX format, sequential, Samples units
+    // ────────────────────────────────────────────────────────────────────────────
+    function validateMarkers(markers) {
+      const errors=[];
+      let sceneCount=0;
+      for (const m of markers) {
+        const name=m.name;
+        // Units check
+        if (m.units && m.units.toLowerCase()==='ticks') {
+          errors.push(`Marker '${name}' has UNITS = Ticks — track timebase must be set to Samples (not Bars/Beats).`);
+        }
+        // Must be scene format
+        if (!/^scene\d{2}$/.test(name)) {
+          errors.push(`Invalid marker '${name}' — must be lowercase: scene01, scene02, etc. Pre-edit sessions should only have scene markers.`);
+          continue;
+        }
+        sceneCount++;
+        const num = parseInt(name.replace(/[^0-9]/g,''),10);
+        if (num !== sceneCount) {
+          errors.push(`Scene out of order: '${name}' — expected scene${String(sceneCount).padStart(2,'0')}`);
+        }
+      }
+      return errors;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // RENDER — Session Format section
+    // ────────────────────────────────────────────────────────────────────────────
+    function renderSessionFormat(fmt) {
+      const sr = fmt.sampleRate;
+      const bd = fmt.bitDepth;
+      const srNum = sr ? parseFloat(sr) : null;
+      const srOk = srNum === 48000;
+      const bdOk = bd && bd.toLowerCase() === '24-bit';
+      const allOk = srOk && bdOk;
+
+      // Format sample rate as "48 kHz" or "44.1 kHz"
+      function formatSampleRate(hz) {
+        if (!hz) return hz;
+        const n = parseFloat(hz);
+        if (isNaN(n)) return hz;
+        const khz = n / 1000;
+        // Use integer display if it's a whole number (e.g. 48), otherwise 1 decimal (e.g. 44.1)
+        const display = Number.isInteger(khz) ? khz.toString() : parseFloat(khz.toFixed(1)).toString();
+        return display + ' kHz';
+      }
+      const srDisplay = formatSampleRate(sr);
+
+      let html=`<div class="section"><h2>Session Format</h2>`;
+      if (allOk) {
+        html+=`<div class="badge ok">PASSED</div>
+        <div class="passed-details" style="margin-top:10px;">
+          <div class="track-box">🎚️ Sample Rate: ${esc(srDisplay)}</div>
+          <div class="track-box">🎛️ Bit Depth: ${esc(bd)}</div>
+        </div>`;
+      } else {
+        const issues=[];
+        if (!srOk) {
+          if (!sr) issues.push('Sample Rate not found in export');
+          else     issues.push(`Sample Rate is <strong>${esc(srDisplay)}</strong> — must be 48 kHz`);
+        }
+        if (!bdOk) {
+          if (!bd) issues.push('Bit Depth not found in export');
+          else     issues.push(`Bit Depth is <strong>${esc(bd)}</strong> — must be 24-bit`);
+        }
+        html+=`<div class="badge fail">FAIL — ${issues.length} issue${issues.length>1?'s':''}</div>
+        <div class="error-list">`;
+        issues.forEach(e=>{ html+=`<div class="error-item">${e}</div>`; });
+        html+=`</div>`;
+      }
+      html+=`</div>`;
+      return html;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // RENDER — Tracks section
+    // ────────────────────────────────────────────────────────────────────────────
+    function renderTracksSection(tracks, sessionInfo) {
+      // Build expected list
+      let expected=[];
+      if (sessionInfo && sessionInfo.type==='dual') {
+        expected=[
+          {speaker:sessionInfo.speaker1, script:sessionInfo.script},
+          {speaker:sessionInfo.speaker2, script:sessionInfo.script}
+        ];
+      } else if (sessionInfo && sessionInfo.type==='single') {
+        expected=[{speaker:sessionInfo.speaker1, script:sessionInfo.script}];
+      }
+
+      let html=`<div class="section"><h2>Tracks</h2>`;
+
+      // Count check
+      const expectedCount = expected.length;
+      const actualCount   = tracks.length;
+
+      // Per-track analysis
+      const analysis = tracks.map((t,i) => {
+        const exp = expected[i] || null;
+        const nameOk  = exp ? validateTrackName(t.name, exp.speaker, exp.script) : true;
+
+        // FORMAT: explicit field takes priority; else infer from channel data
+        let formatStatus='unknown'; // 'ok' | 'fail' | 'unknown'
+        let formatLabel='';
+        if (t.format !== null) {
+          if (t.format.toLowerCase()==='mono') { formatStatus='ok'; formatLabel='Mono'; }
+          else { formatStatus='fail'; formatLabel=t.format; }
+        } else if (t.maxChannel > 0) {
+          // Infer from channel column
+          if (t.maxChannel===1) { formatStatus='ok'; formatLabel='Mono'; }
+          else { formatStatus='fail'; formatLabel=`Stereo (ch ${t.maxChannel} detected)`; }
+        }
+
+        // TIMEBASE: explicit field takes priority; else rely on marker units (checked separately)
+        let tbStatus='unknown';
+        let tbLabel='';
+        if (t.timebase !== null) {
+          if (t.timebase.toLowerCase()==='samples') { tbStatus='ok'; tbLabel='Samples'; }
+          else { tbStatus='fail'; tbLabel=t.timebase; }
+        }
+
+        const hasError = !nameOk || formatStatus==='fail' || tbStatus==='fail';
+        return {track:t, exp, nameOk, formatStatus, formatLabel, tbStatus, tbLabel, hasError};
+      });
+
+      const anyError = (actualCount !== expectedCount && expectedCount>0) || analysis.some(a=>a.hasError);
+
+      if (!anyError) {
+        html+=`<div class="badge ok">PASSED</div>
+        <div class="passed-details" style="margin-top:10px;">`;
+        analysis.forEach((a,i)=>{
+          html+=`<div class="track-box"><div class="track-num">${i+1}</div>${esc(a.track.name)}`;
+          const chips=[];
+          if (a.formatStatus==='ok')      chips.push(`<span class="attr-chip ok">✔ ${esc(a.formatLabel)}</span>`);
+          else if (a.formatStatus==='fail') chips.push(`<span class="attr-chip fail">✖ ${esc(a.formatLabel)} — must be Mono</span>`);
+          if (a.formatStatus==='unknown') chips.push(`<span class="attr-chip warn">Format: not in export</span>`);
+          if (chips.length) html+=`</div><div class="track-attrs" style="padding-left:44px;">${chips.join('')}</div>`;
+          else html+=`</div>`;
+        });
+        html+=`</div></div>`;
+        return html;
+      }
+
+      // FAIL path
+      let failCount=0;
+      if (actualCount !== expectedCount && expectedCount>0) failCount++;
+      analysis.forEach(a=>{ if(a.hasError) failCount++; });
+      html+=`<div class="badge fail">FAIL — ${failCount} issue${failCount>1?'s':''}</div>`;
+
+      if (actualCount !== expectedCount && expectedCount>0) {
+        html+=`<div class="error-item">Expected <strong>${expectedCount}</strong> audio track${expectedCount>1?'s':''}, found <strong>${actualCount}</strong></div>`;
+      }
+
+      html+=`<div class="tracks-list">`;
+      analysis.forEach((a,i) => {
+        const bad = a.hasError;
+        html+=`<div class="track-box ${bad?'bad':''}">
+          <div class="track-num">${i+1}</div>${bad&&a.exp ? highlightTrackName(a.track.name,a.exp.speaker,a.exp.script) : esc(a.track.name)}
+        </div>`;
+
+        // Name error
+        if (!a.nameOk && a.exp) {
+          const cid=`copy-track-${i}`;
+          const expected_name=`${a.exp.speaker}_XXXX_${a.exp.script}`;
+          html+=`<div class="should-be-wrapper">
+            <div class="should-be">Should Be (XXXX = 4-digit date code):</div>
+            <div class="should-be-container">
+              <div class="should-be-box"><code id="text-${cid}">${esc(expected_name)}</code></div>
+              <button class="copy-btn" id="btn-${cid}" onclick="copyToClipboard('text-${cid}','btn-${cid}')" title="Copy"></button>
+            </div>
+          </div>`;
+        }
+
+        // Attribute chips
+        const chips=[];
+        if (a.formatStatus==='ok')        chips.push(`<span class="attr-chip ok">✔ ${esc(a.formatLabel)}</span>`);
+        else if (a.formatStatus==='fail') chips.push(`<span class="attr-chip fail">✖ ${esc(a.formatLabel)} — must be Mono</span>`);
+        else                              chips.push(`<span class="attr-chip warn">Format: not in export</span>`);
+
+        if (a.tbStatus==='ok')        chips.push(`<span class="attr-chip ok">✔ ${esc(a.tbLabel)}</span>`);
+        else if (a.tbStatus==='fail') chips.push(`<span class="attr-chip fail">✖ ${esc(a.tbLabel)} — must be Samples</span>`);
+        // tbStatus==='unknown' → silently omitted (timebase not extractable from text export)
+
+        html+=`<div class="track-attrs" style="padding-left:8px;margin-bottom:6px;">${chips.join('')}</div>`;
+      });
+
+      html+=`</div></div>`;
+      return html;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // RENDER — Scene Markers section
+    // ────────────────────────────────────────────────────────────────────────────
+    function renderMarkersSection(markerResult) {
+      let html=`<div class="section"><h2>Scene Markers</h2>`;
+      if (markerResult.err) {
+        html+=`<div class="badge fail">FAIL — ${esc(markerResult.err)}</div>`;
+        html+=`</div>`; return html;
+      }
+      const errors = validateMarkers(markerResult.data);
+      const count  = markerResult.data.length;
+      if (!errors.length) {
+        html+=`<div class="badge ok">PASSED — ${count} scene marker${count!==1?'s':''}</div>`;
+      } else {
+        html+=`<div class="badge fail">FAIL — ${errors.length} issue${errors.length>1?'s':''}</div>
+        <div class="error-list">`;
+        errors.forEach(e=>{ html+=`<div class="error-item">${esc(e)}</div>`; });
+        html+=`</div>`;
+      }
+      html+=`</div>`;
+      return html;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // MAIN — handle dropped / selected file
+    // ────────────────────────────────────────────────────────────────────────────
+    async function handleFile(file) {
+      output.innerHTML='<div style="text-align:center;padding:20px;color:#86868b;">Processing…</div>';
+      sessionDisplay.style.display='none';
+      sessionError.style.display='none';
+      sessionError.innerHTML='';
+
+      const text  = await file.text();
+      const lines = text.split(/\r?\n/);
+
+      // ── Session name ──
+      const sessionName = getSessionName(lines);
+      if (!sessionName) {
+        output.innerHTML=`<div class="section"><div class="badge fail">No SESSION NAME found in this file</div></div>`;
+        return;
+      }
+
+      const isValid = VALID_SESSION_REGEX.test(sessionName);
+      sessionDisplay.className=`session-name ${isValid?'good':'bad'}`;
+      sessionText.innerHTML = highlightSessionName(sessionName);
+      sessionDisplay.style.display='block';
+
+      if (!isValid) {
+        const corrected = suggestCorrectedSessionName(sessionName);
+        const cid='copy-sn';
+        sessionError.innerHTML=`<strong>INVALID SESSION NAME FORMAT</strong><br>
+          Expected: <code>{speaker1}-{speaker2}XXXX_(t1lt2r|t2lt1r)-{script}</code>
+          <div class="should-be" style="margin-top:12px;">Suggested Fix:</div>
+          <div class="should-be-container">
+            <div class="should-be-box"><code id="text-${cid}">${esc(corrected)}</code></div>
+            <button class="copy-btn" id="btn-${cid}" onclick="copyToClipboard('text-${cid}','btn-${cid}')" title="Copy"></button>
+          </div>`;
+        sessionError.style.display='block';
+        output.innerHTML='';
+        return;
+      }
+
+      // ── Parse info ──
+      const sessionInfo = parseSessionInfo(sessionName);
+
+      if (!sessionInfo) {
+        sessionDisplay.className='session-name bad';
+
+        // Speaker ID breakdown
+        function breakdownSpeaker(letters, label) {
+          const len=letters.length;
+          const parts={lang:letters.slice(0,2)||'??', loc:letters.slice(2,4)||'??',
+                       studio:letters.slice(4,6)||'??', initials:letters.slice(6)||'??'};
+          const il=parts.initials.length;
+          return `<div style="margin-top:10px;text-align:left;padding:10px;background:rgba(0,0,0,0.05);border-radius:8px;">
+            <strong>${esc(label)}:</strong> <code>${esc(letters)}</code> (${len} letters — must be 9–10)
+            <ul style="margin:6px 0 0;padding-left:16px;list-style:none;font-size:12px;">
+              <li>• <code>${esc(parts.lang)}</code> Language (2 letters) ${parts.lang.length===2?'✓':'✗'}</li>
+              <li>• <code>${esc(parts.loc)}</code> Location (2 letters) ${parts.loc.length===2?'✓':'✗'}</li>
+              <li>• <code>${esc(parts.studio)}</code> Studio (2 letters) ${parts.studio.length===2?'✓':'✗'}</li>
+              <li>• <code>${esc(parts.initials)}</code> Initials (3–4 letters) ${il>=3&&il<=4?'✓':il<3?'✗ Too short':'✗ Too long'}</li>
+            </ul>
+          </div>`;
+        }
+
+        let breakdown='';
+        const dualLax=sessionName.match(/^([a-z]+)-([a-z]+)\d*_/i);
+        if (dualLax) {
+          if (dualLax[1].length<9||dualLax[1].length>10) breakdown+=breakdownSpeaker(dualLax[1],'Speaker 1');
+          if (dualLax[2].length<9||dualLax[2].length>10) breakdown+=breakdownSpeaker(dualLax[2],'Speaker 2');
+        } else {
+          const sLax=sessionName.match(/^([a-z]+)\d*_/i);
+          if (sLax&&(sLax[1].length<9||sLax[1].length>10)) breakdown+=breakdownSpeaker(sLax[1],'Speaker ID');
+        }
+        sessionError.innerHTML=`<strong>INVALID SESSION NAME — Speaker ID length error</strong><br>
+          Speaker IDs must be 9–10 lowercase letters.${breakdown}`;
+        sessionError.style.display='block';
+        output.innerHTML='';
+        return;
+      }
+
+      // Strict dual speaker order check
+      if (sessionInfo.type==='dual') {
+        const dualRe=/^([a-z]{9,10})-([a-z]{9,10})\d{4}_(t1lt2r|t2lt1r)-/i;
+        const dm=sessionName.match(dualRe);
+        if (dm && dm[1].toLowerCase() > dm[2].toLowerCase()) {
+          sessionDisplay.className='session-name bad';
+          const corrected=sessionName.replace(
+            new RegExp(`^${dm[1]}-${dm[2]}`,'i'),
+            `${dm[2]}-${dm[1]}`
+          ).toLowerCase();
+          const cid='copy-order';
+          sessionError.innerHTML=`<strong>SESSION NAME: Speaker IDs must be in alphabetical order.</strong><br>
+            '${esc(dm[1])}' should come after '${esc(dm[2])}'
+            <div class="should-be" style="margin-top:12px;">Should Be:</div>
+            <div class="should-be-container">
+              <div class="should-be-box"><code id="text-${cid}">${esc(corrected)}</code></div>
+              <button class="copy-btn" id="btn-${cid}" onclick="copyToClipboard('text-${cid}','btn-${cid}')" title="Copy"></button>
+            </div>`;
+          sessionError.style.display='block';
+          output.innerHTML='';
+          return;
+        }
+      }
+
+      // ── Parse the rest ──
+      const fmt     = parseSessionFormat(lines);
+      const tracks  = parseTracks(lines);
+      const markers = parseMarkersSection(lines);
+
+      // ── Check for missing required sections ──
+      if (tracks.length===0 && !markers.data) {
+        sessionError.innerHTML=`<strong>INCOMPLETE FILE EXPORT</strong><br><br>
+          Missing required sections:<br>
+          ${tracks.length===0 ? '• Track Listing — check export options<br>' : ''}
+          ${markers.err ? `• ${esc(markers.err)}<br>` : ''}
+          <br>Re-export with Track EDLs and Markers Listing included.`;
+        sessionError.style.display='block';
+        output.innerHTML='';
+        return;
+      }
+
+      // ── Determine individual pass/fail ──
+      const srNum = fmt.sampleRate ? parseFloat(fmt.sampleRate) : null;
+      const fmtPass = (srNum===48000) && (fmt.bitDepth&&fmt.bitDepth.toLowerCase()==='24-bit');
+
+      // Track pass: name ok, format ok or unknown, timebase ok or unknown
+      const expectedTrackCount = sessionInfo.type==='dual' ? 2 : 1;
+      let tracksPass = tracks.length===expectedTrackCount;
+      if (tracksPass) {
+        const expected = sessionInfo.type==='dual'
+          ? [{speaker:sessionInfo.speaker1,script:sessionInfo.script},{speaker:sessionInfo.speaker2,script:sessionInfo.script}]
+          : [{speaker:sessionInfo.speaker1,script:sessionInfo.script}];
+        tracksPass = tracks.every((t,i)=>{
+          const exp=expected[i];
+          if (!validateTrackName(t.name,exp.speaker,exp.script)) return false;
+          if (t.format!==null && t.format.toLowerCase()!=='mono') return false;
+          if (t.timebase!==null && t.timebase.toLowerCase()!=='samples') return false;
+          if (t.maxChannel>1) return false; // inferred stereo
+          return true;
+        });
+      }
+
+      const markerErrors = markers.err ? [markers.err] : validateMarkers(markers.data);
+      const markersPass  = markerErrors.length===0;
+
+      // ── Render ──
+      output.innerHTML =
+        renderSessionFormat(fmt) +
+        renderTracksSection(tracks, sessionInfo) +
+        renderMarkersSection(markers);
+
+      if (fmtPass && tracksPass && markersPass) {
+      }
+    }
+
+    // ── Drag & drop / click ──
+    drop.addEventListener('dragover', e => { e.stopPropagation(); e.preventDefault(); drop.classList.add('dragover'); e.dataTransfer.dropEffect='copy'; });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', e => {
+      e.stopPropagation(); e.preventDefault();
+      drop.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    drop.addEventListener('click', () => fileinput.click());
+    fileinput.addEventListener('change', () => { if (fileinput.files[0]) handleFile(fileinput.files[0]); });
+
+  })();
+  </script>
+</body>
+</html>
