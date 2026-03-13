@@ -1,8 +1,19 @@
 <!doctype html>
+<!--
+  ============================================
+  SOBA Session Checker v2.0.1
+  Created by: Danny Beta
+  Date: March 2026
+  
+  Description: Pro Tools session validation tool
+  for SOBA audio production workflows
+  ============================================
+-->
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="author" content="Danny Beta"/>
   <title>SOBA Session Checker v2.0.1</title>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
@@ -984,6 +995,35 @@
     body.light-mode .copy-btn:hover { background:rgba(224,242,254,0.5); color:#0284c7; }
     body.light-mode .copy-btn.copied { color:#16a34a; }
     body.light-mode #party .perfect { color:#2563eb; }
+
+    /* Footer credit */
+    .footer-credit {
+      margin-top:40px;
+      padding:20px;
+      text-align:center;
+      font-size:12px;
+      color:#86868b;
+      opacity:0.7;
+      transition:opacity 0.3s ease;
+    }
+
+    .footer-credit:hover {
+      opacity:1;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .footer-credit {
+        color:#9ca3af;
+      }
+    }
+
+    body.dark-mode .footer-credit {
+      color:#9ca3af;
+    }
+
+    body.light-mode .footer-credit {
+      color:#86868b;
+    }
   </style>
 </head>
 <body>
@@ -1037,6 +1077,10 @@
   <div id="partyContainer" style="width:100%;display:flex;flex-direction:column;align-items:center;"></div>
 
   <div id="output" style="margin-top:20px;width:100%;display:flex;flex-direction:column;align-items:center;"></div>
+
+  <div class="footer-credit">
+    Created by Danny Beta
+  </div>
 
   <canvas id="confetti"></canvas>
 
