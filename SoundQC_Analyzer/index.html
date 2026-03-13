@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -168,7 +168,7 @@ h1 span { color: var(--green); }
 .drop-zone {
   border: 1.5px dashed var(--green);
   border-radius: 14px;
-  padding: 2.75rem 2rem;
+  padding: 1.1rem 2rem;
   text-align: center; cursor: pointer;
   background: var(--bg2);
   transition: border-color .2s, background .2s, transform .15s;
@@ -192,8 +192,8 @@ h1 span { color: var(--green); }
 .drop-zone.over { background: var(--green-dim); }
 
 .drop-icon {
-  width: 54px; height: 54px;
-  margin: 0 auto 1.1rem;
+  width: 36px; height: 36px;
+  margin: 0 auto 0.5rem;
   border-radius: 50%;
   border: 1.5px solid var(--green);
   display: flex; align-items: center; justify-content: center;
@@ -202,7 +202,7 @@ h1 span { color: var(--green); }
 }
 .drop-zone:hover .drop-icon, .drop-zone.over .drop-icon { transform: scale(1.1); }
 
-.drop-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.drop-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
 
 .drop-sub {
   font-family: 'Share Tech Mono', monospace;
@@ -639,9 +639,11 @@ function toggleTheme() {
 }
 (function(){
   const saved = localStorage.getItem('sqc-theme');
-  if (saved && saved !== 'dark') {
+  if (saved) {
     document.documentElement.setAttribute('data-theme', saved);
     document.getElementById('themeLabel').textContent = saved.toUpperCase();
+  } else {
+    document.getElementById('themeLabel').textContent = 'LIGHT';
   }
 })();
 
@@ -845,115 +847,100 @@ function mRow(label, val, extra, vcls) {
   </div>`;
 }
 function nfBarHTML(nf, rms, peak) {
-  // Scale: -80 dBFS (left) → 0 dBFS (right), 1000 SVG units wide
-  const MIN = -80, RANGE = 80;
-  const px = db => Math.max(0, Math.min(1000, (db - MIN) / RANGE * 1000));
+  // Wider coordinate space (1400 units) gives labels more room — fixes Safari Courier overlap
+  const MIN = -80, RANGE = 80, W = 1400;
+  const px = db => Math.max(0, Math.min(W, (db - MIN) / RANGE * W));
 
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 
-  // ── Fully opaque, high-contrast colors ──────────────────────
   const nfCol  = nf > -50  ? (isDark ? '#ff4060' : '#d4001a')
-               : nf < -60  ? (isDark ? '#00ff7f' : '#006b32')
+               : nf < -60  ? (isDark ? '#cc44ff' : '#7700cc')
                             : (isDark ? '#ffaa00' : '#c06000');
-  const rmsCol = isDark ? '#3db0ff' : '#0055cc';
-  const pkCol  = isDark ? '#ffe040' : '#9a6000';
+  const rmsCol = isDark ? '#00e060' : '#007a30';
+  const pkCol  = isDark ? '#ff2040' : '#cc0020';
 
-  // ── Track & tick colors — solid, not rgba ────────────────────
-  const trackBg   = isDark ? '#2a3348'   : '#c8d0dc';
-  const trackBdr  = isDark ? '#3d4f6a'   : '#a0aab8';
-  const tickMinor = isDark ? '#4a5e7a'   : '#8090a8';
-  const tickMajor = isDark ? '#8aa0c0'   : '#3a4a60';
-  const labelCol  = isDark ? '#d0e0ff'   : '#1a2a40';   // <-- fully opaque, high contrast
-  const th60Col   = isDark ? '#00e87a'   : '#006e36';
-  const th50Col   = isDark ? '#ff3050'   : '#c20018';
+  const trackBg   = isDark ? '#2a3348' : '#c8d0dc';
+  const trackBdr  = isDark ? '#3d4f6a' : '#a0aab8';
+  const tickMinor = isDark ? '#4a5e7a' : '#8090a8';
+  const tickMajor = isDark ? '#8aa0c0' : '#3a4a60';
+  const labelCol  = isDark ? '#d0e0ff' : '#1a2a40';
+  const th60Col   = isDark ? '#00e87a' : '#006e36';
+  const th50Col   = isDark ? '#ff3050' : '#c20018';
+
+  // Use system monospace — Safari doesn't load Google Fonts in SVG attrs
+  const FONT = 'Courier New, Courier, monospace';
 
   const nfX  = px(nf),  rmsX = px(rms), pkX = px(peak);
   const th60 = px(-60), th50 = px(-50);
-  const TY = 42, TH = 12; // track top Y (extra room for 12px labels above taller ticks)
+  const TY = 44, TH = 13;
 
-  // Ticks every 3 dB, labels match reference: -70,-60,-50,-40 then every 3dB from -36 to 0
+  // Labels: sparse on left (-70,-60,-50,-40), every 6dB from -36, then -3, 0
   const ticks = [];
   for (let d = -78; d <= 0; d += 3) ticks.push(d);
-  const majorSet = new Set([-70, -60, -50, -40, -36, -33, -30, -27, -24, -21, -18, -15, -12, -9, -6, -3, 0]);
+  const majorSet = new Set([-70, -60, -50, -40, -36, -30, -24, -18, -12, -6, -3, 0]);
 
   const ticksSVG = ticks.map(d => {
     const x   = px(d).toFixed(1);
     const maj = majorSet.has(d);
-    const tickH = maj ? 16 : 8;
-    const sw    = maj ? 1.5 : 0.8;
+    const tickH = maj ? 18 : 9;
+    const sw    = maj ? 1.5 : 0.7;
     const col   = maj ? tickMajor : tickMinor;
     const lbl   = maj
-      ? `<text x="${x}" y="${(TY - tickH - 3).toFixed(1)}" text-anchor="middle"
-               font-family="Share Tech Mono,monospace"
-               font-size="12" font-weight="700"
+      ? `<text x="${x}" y="${(TY - tickH - 4).toFixed(1)}"
+               text-anchor="middle"
+               font-family="${FONT}"
+               font-size="13" font-weight="bold"
                fill="${labelCol}">${d}</text>`
       : '';
     return `<line x1="${x}" y1="${(TY - tickH).toFixed(1)}" x2="${x}" y2="${(TY - 1).toFixed(1)}"
                   stroke="${col}" stroke-width="${sw}"/>${lbl}`;
   }).join('');
 
-  // Bold triangular pointers — larger and more visible
   const tri = (cx, col, up, sz=7) => {
-    const tip  = up ? TY - 1         : TY + TH + 1;
-    const base = up ? TY - 1 - sz*1.4: TY + TH + 1 + sz*1.4;
+    const tip  = up ? TY - 1          : TY + TH + 1;
+    const base = up ? TY - 1 - sz*1.4 : TY + TH + 1 + sz*1.4;
     return `<polygon points="${(cx-sz).toFixed(1)},${base.toFixed(1)} ${(cx+sz).toFixed(1)},${base.toFixed(1)} ${cx.toFixed(1)},${tip.toFixed(1)}"
-                     fill="${col}" stroke="${isDark?'rgba(0,0,0,0.4)':'rgba(255,255,255,0.5)'}" stroke-width="0.8"/>`;
+                     fill="${col}" stroke="${isDark?'#000':'#fff'}" stroke-width="0.8" stroke-opacity="0.4"/>`;
   };
 
-  const totalH = TY + TH + 22;
+  const totalH = TY + TH + 24;
+  const VW = W + 44; // viewBox width with left margin
 
   return `<div class="ruler-row">
-    <svg viewBox="-30 -4 1060 ${totalH}" width="100%" style="display:block;overflow:visible" class="ruler-svg">
+    <svg viewBox="-30 -6 ${VW} ${totalH}" width="100%" style="display:block;overflow:visible">
 
-      <!-- −Inf. label -->
-      <text x="-14" y="${(TY - 16 - 3).toFixed(1)}" text-anchor="middle"
-            font-family="Share Tech Mono,monospace" font-size="12" font-weight="700"
-            fill="${labelCol}">−Inf.</text>
-      <line x1="0" y1="${(TY-16).toFixed(1)}" x2="0" y2="${(TY-1).toFixed(1)}" stroke="${tickMajor}" stroke-width="1.5"/>
+      <text x="-14" y="${(TY - 18 - 4).toFixed(1)}" text-anchor="middle"
+            font-family="${FONT}" font-size="13" font-weight="bold"
+            fill="${labelCol}">-Inf.</text>
+      <line x1="0" y1="${(TY-18).toFixed(1)}" x2="0" y2="${(TY-1).toFixed(1)}" stroke="${tickMajor}" stroke-width="1.5"/>
 
-      <!-- Ruler ticks + labels -->
       ${ticksSVG}
 
-      <!-- Track background with subtle border -->
-      <rect x="0" y="${TY}" width="1000" height="${TH}" rx="3" fill="${trackBg}" stroke="${trackBdr}" stroke-width="0.5"/>
+      <rect x="0" y="${TY}" width="${W}" height="${TH}" rx="3" fill="${trackBg}" stroke="${trackBdr}" stroke-width="0.5"/>
 
-      <!-- NF shaded region (left → NF position) -->
-      <rect x="0" y="${TY}" width="${nfX.toFixed(1)}" height="${TH}" rx="3"
-            fill="${nfCol}" opacity="0.55"/>
+      <rect x="0" y="${TY}" width="${nfX.toFixed(1)}" height="${TH}" rx="3" fill="${nfCol}" opacity="0.55"/>
 
-      <!-- Threshold dashed guide: −60 PASS -->
-      <line x1="${th60.toFixed(1)}" y1="${(TY-4).toFixed(1)}"
-            x2="${th60.toFixed(1)}" y2="${(TY+TH+4).toFixed(1)}"
-            stroke="${th60Col}" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.9"/>
-      <text x="${th60.toFixed(1)}" y="${(TY+TH+17).toFixed(1)}" text-anchor="middle"
-            font-family="Share Tech Mono,monospace" font-size="11" font-weight="700"
-            fill="${th60Col}">−60</text>
+      <line x1="${th60.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th60.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
+            stroke="${th60Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="${th60.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
+            font-family="${FONT}" font-size="12" font-weight="bold" fill="${th60Col}">-60</text>
 
-      <!-- Threshold dashed guide: −50 FAIL -->
-      <line x1="${th50.toFixed(1)}" y1="${(TY-4).toFixed(1)}"
-            x2="${th50.toFixed(1)}" y2="${(TY+TH+4).toFixed(1)}"
-            stroke="${th50Col}" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.9"/>
-      <text x="${th50.toFixed(1)}" y="${(TY+TH+17).toFixed(1)}" text-anchor="middle"
-            font-family="Share Tech Mono,monospace" font-size="11" font-weight="700"
-            fill="${th50Col}">−50</text>
+      <line x1="${th50.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th50.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
+            stroke="${th50Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="${th50.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
+            font-family="${FONT}" font-size="12" font-weight="bold" fill="${th50Col}">-50</text>
 
-      <!-- PEAK marker — gold, pointer below -->
-      <line x1="${pkX.toFixed(1)}" y1="${(TY-1).toFixed(1)}"
-            x2="${pkX.toFixed(1)}" y2="${(TY+TH+1).toFixed(1)}"
-            stroke="${pkCol}" stroke-width="3" stroke-linecap="round"/>
-      ${tri(pkX, pkCol, false, 7)}
+      <line x1="${pkX.toFixed(1)}" y1="${(TY-4).toFixed(1)}" x2="${pkX.toFixed(1)}" y2="${(TY+TH+4).toFixed(1)}"
+            stroke="${pkCol}" stroke-width="7" stroke-linecap="round"/>
+      ${tri(pkX, pkCol, false, 13)}
 
-      <!-- RMS marker — blue, pointer below -->
-      <line x1="${rmsX.toFixed(1)}" y1="${(TY-1).toFixed(1)}"
-            x2="${rmsX.toFixed(1)}" y2="${(TY+TH+1).toFixed(1)}"
-            stroke="${rmsCol}" stroke-width="3" stroke-linecap="round"/>
-      ${tri(rmsX, rmsCol, false, 6)}
+      <line x1="${rmsX.toFixed(1)}" y1="${(TY-4).toFixed(1)}" x2="${rmsX.toFixed(1)}" y2="${(TY+TH+4).toFixed(1)}"
+            stroke="${rmsCol}" stroke-width="7" stroke-linecap="round"/>
+      ${tri(rmsX, rmsCol, false, 11)}
 
-      <!-- NF marker — bright green, thicker line + larger pointer above -->
-      <line x1="${nfX.toFixed(1)}" y1="${(TY-2).toFixed(1)}"
-            x2="${nfX.toFixed(1)}" y2="${(TY+TH+2).toFixed(1)}"
-            stroke="${nfCol}" stroke-width="5" stroke-linecap="round"/>
-      ${tri(nfX, nfCol, true, 10)}
+      <line x1="${nfX.toFixed(1)}" y1="${(TY-4).toFixed(1)}" x2="${nfX.toFixed(1)}" y2="${(TY+TH+4).toFixed(1)}"
+            stroke="${nfCol}" stroke-width="7" stroke-linecap="round"/>
+      ${tri(nfX, nfCol, true, 13)}
 
     </svg>
 
