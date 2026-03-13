@@ -1,1 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sound Analyzer QC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── DARK THEME (default) ─────────────────────────── */
+[data-theme="dark"] {
+  --bg:        #090c10;
+  --bg2:       #0f1318;
+  --bg3:       #151b23;
+  --border:    rgba(255,255,255,0.07);
+  --border2:   rgba(255,255,255,0.15);
+  --text:      #f2f6ff;
+  --text2:     #a0abbe;
+  --text3:     #5e6e88;
+  --shadow:    0 2px 24px rgba(0,0,0,0.55);
+  --grid-line: rgba(255,255,255,0.024);
+  --card-hover:rgba(255,255,255,0.028);
+  --green:     #1dff8a;
+  --green-dim: rgba(29,255,138,0.11);
+  --amber:     #f5a623;
+  --amber-dim: rgba(245,166,35,0.13);
+  --red:       #ff3d57;
+  --red-dim:   rgba(255,61,87,0.12);
+  --blue:      #4da6ff;
+  --blue-dim:  rgba(77,166,255,0.12);
+}
 
+/* ── LIGHT THEME ──────────────────────────────────── */
+[data-theme="light"] {
+  --bg:        #edf0f5;
+  --bg2:       #ffffff;
+  --bg3:       #e2e7ef;
+  --border:    rgba(0,0,0,0.08);
+  --border2:   rgba(0,0,0,0.16);
+  --text:      #080d14;
+  --text2:     #2e3a50;
+  --text3:     #6a7b96;
+  --shadow:    0 2px 16px rgba(0,0,0,0.09);
+  --grid-line: rgba(0,0,0,0.045);
+  --card-hover:rgba(0,0,0,0.018);
+  --green:     #008c4a;
+  --green-dim: rgba(0,140,74,0.1);
+  --amber:     #b86c00;
+  --amber-dim: rgba(184,108,0,0.1);
+  --red:       #c8001f;
+  --red-dim:   rgba(200,0,31,0.09);
+  --blue:      #0e5fd0;
+  --blue-dim:  rgba(14,95,208,0.1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background .28s, color .28s;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed; top: 0; left: 8%; right: 8%; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--green), transparent);
+  opacity: .5; z-index: 1;
+}
+
+.app {
+  position: relative; z-index: 2;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 2rem 1.75rem 5rem;
+}
+
+/* ── HEADER ────────────────────────────────────────── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border2);
+  animation: fadeDown .4s ease both;
+}
+
+.logo-row { display: flex; align-items: center; gap: 14px; }
+
+.logo-icon {
+  width: 42px; height: 42px;
+  border: 1.5px solid var(--green);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--green-dim); flex-shrink: 0;
+}
+
+h1 { font-size: 28px; font-weight: 800; letter-spacing: -.5px; color: var(--text); line-height: 1; }
+h1 span { color: var(--green); }
+
+.header-sub {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px; color: var(--text2);
+  letter-spacing: .9px; text-transform: uppercase;
+  margin-top: 5px;
+}
+
+.header-right { display: flex; align-items: center; gap: 12px; }
+
+.version-badge {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; color: var(--text2);
+  border: 1px solid var(--border2);
+  border-radius: 5px; padding: 5px 10px; letter-spacing: .5px;
+}
+
+/* ── THEME TOGGLE ──────────────────────────────────── */
+.theme-toggle {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--bg3);
+  border: 1.5px solid var(--border2);
+  border-radius: 20px;
+  padding: 5px 12px 5px 8px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; color: var(--text2);
+  letter-spacing: .5px;
+  transition: border-color .2s, background .2s;
+  outline: none;
+}
+.theme-toggle:hover { border-color: var(--green); color: var(--green); }
+
+.toggle-knob {
+  width: 28px; height: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  position: relative;
+  transition: background .25s;
+}
+
+.toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--green);
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+  box-shadow: 0 0 5px var(--green);
+}
+
+[data-theme="light"] .toggle-thumb { transform: translateX(12px); }
+
+/* ── DROP ZONE ─────────────────────────────────────── */
+.drop-section { animation: fadeUp .5s .05s ease both; }
+
+.drop-zone {
+  border: 1.5px dashed var(--green);
+  border-radius: 14px;
+  padding: 2.75rem 2rem;
+  text-align: center; cursor: pointer;
+  background: var(--bg2);
+  transition: border-color .2s, background .2s, transform .15s;
+  position: relative; overflow: hidden;
+}
+
+.drop-zone::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 55% 45% at 50% 0%, var(--green-dim), transparent 70%);
+  pointer-events: none;
+}
+
+[data-theme="dark"] .drop-zone { border-color: rgba(29,255,138,0.38); }
+[data-theme="dark"] .drop-zone:hover, [data-theme="dark"] .drop-zone.over { border-color: var(--green); }
+
+.drop-zone:hover, .drop-zone.over {
+  background: var(--bg3);
+  transform: translateY(-2px);
+}
+.drop-zone.over { background: var(--green-dim); }
+
+.drop-icon {
+  width: 54px; height: 54px;
+  margin: 0 auto 1.1rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--green);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--green-dim);
+  transition: transform .2s;
+}
+.drop-zone:hover .drop-icon, .drop-zone.over .drop-icon { transform: scale(1.1); }
+
+.drop-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+
+.drop-sub {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 14px; color: var(--text2);
+  letter-spacing: .2px; line-height: 1.85;
+}
+
+.drop-sub code {
+  color: var(--green);
+  background: var(--green-dim);
+  padding: 1px 6px; border-radius: 3px;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+/* ── FILE SLOTS ────────────────────────────────────── */
+.file-slots {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; margin-top: 12px;
+}
+
+.file-slot {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 9px;
+  padding: 12px 16px;
+  display: flex; align-items: flex-start; gap: 11px;
+  transition: border-color .2s;
+}
+.file-slot.filled { border-color: var(--green); }
+
+.slot-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--text3); flex-shrink: 0; margin-top: 5px;
+  transition: background .2s, box-shadow .2s;
+}
+.file-slot.filled .slot-dot {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+}
+
+.slot-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .9px; margin-bottom: 3px;
+}
+.slot-name { font-size: 14px; font-weight: 700; color: var(--text); word-break: break-all; line-height: 1.45; }
+.slot-info { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+/* ── ANALYZE BUTTON ───────────────────────────────── */
+.btn-analyze {
+  width: 100%; margin-top: 12px;
+  padding: 15px;
+  font-family: 'Syne', sans-serif;
+  font-size: 15px; font-weight: 800;
+  letter-spacing: 2.5px; text-transform: uppercase;
+  color: #040a06;
+  background: var(--green);
+  border: none; border-radius: 9px; cursor: pointer;
+  transition: opacity .15s, transform .1s;
+  box-shadow: 0 0 28px var(--green-dim);
+}
+.btn-analyze:hover { opacity: .9; transform: translateY(-1px); }
+.btn-analyze:active { transform: scale(.99); }
+.btn-analyze:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+
+/* ── PROGRESS ─────────────────────────────────────── */
+.progress-wrap {
+  margin-top: 16px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 9px; padding: 16px 18px;
+}
+.progress-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.progress-text {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px; color: var(--text2);
+  display: flex; align-items: center; gap: 9px;
+}
+.spinner {
+  width: 13px; height: 13px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--green);
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+.progress-pct { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--green); font-weight: 600; }
+.progress-bar-track { width: 100%; height: 3px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+.progress-bar-fill  { height: 3px; background: var(--green); border-radius: 2px; width: 0; transition: width .35s ease; }
+
+/* ── RESULTS HEADER ───────────────────────────────── */
+.results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.results-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: var(--text3); }
+
+.overall-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 7px 16px; border-radius: 6px;
+}
+.overall-badge.pass { background: var(--green-dim); color: var(--green); border: 1.5px solid var(--green); }
+.overall-badge.fail { background: var(--red-dim);   color: var(--red);   border: 1.5px solid var(--red); }
+.overall-badge.warn { background: var(--amber-dim); color: var(--amber); border: 1.5px solid var(--amber); }
+
+.badge-dot { width: 7px; height: 7px; border-radius: 50%; animation: pulse 1.6s ease infinite; }
+.pass .badge-dot { background: var(--green); }
+.fail .badge-dot { background: var(--red); }
+.warn .badge-dot { background: var(--amber); }
+
+/* ── RESULT CARDS ─────────────────────────────────── */
+.cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+
+.result-card {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 12px; overflow: hidden;
+  box-shadow: var(--shadow);
+  animation: fadeUp .4s ease both;
+}
+
+.card-header {
+  background: var(--bg3);
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border2);
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+}
+
+.card-type {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 1.4px; margin-bottom: 6px;
+}
+
+/* ← filename title */
+.card-filename {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px; font-weight: 600;
+  color: var(--text);
+  word-break: break-word; line-height: 1.45;
+  letter-spacing: 0;
+}
+
+.card-meta { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); margin-top: 5px; }
+
+.nf-badge {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1.2px; text-transform: uppercase;
+  padding: 5px 11px; border-radius: 5px; flex-shrink: 0; white-space: nowrap;
+}
+.nf-pass { background: var(--green-dim); color: var(--green); border: 1.5px solid var(--green); }
+.nf-fail { background: var(--red-dim);   color: var(--red);   border: 1.5px solid var(--red); }
+.nf-warn { background: var(--amber-dim); color: var(--amber); border: 1.5px solid var(--amber); }
+
+.card-body { padding: 4px 0; }
+
+/* ── METRIC ROWS ──────────────────────────────────── */
+.metric-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  transition: background .12s;
+}
+.metric-row:last-child { border-bottom: none; }
+.metric-row:hover { background: var(--card-hover); }
+
+.metric-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px; color: var(--text2);
+  text-transform: uppercase; letter-spacing: .6px; flex-shrink: 0;
+}
+
+.metric-right { display: flex; align-items: center; gap: 9px; justify-content: flex-end; }
+
+.metric-value {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 15px; font-weight: 600;
+  color: var(--text); text-align: right;
+}
+.metric-value.hl-green { color: var(--green); }
+.metric-value.hl-red   { color: var(--red); }
+.metric-value.hl-amber { color: var(--amber); }
+.metric-value.hl-blue  { color: var(--blue); }
+
+.rating-tag {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .9px; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 4px;
+}
+.rt-excellent  { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+.rt-acceptable { background: var(--blue-dim);  color: var(--blue);  border: 1px solid var(--blue); }
+.rt-noticeable { background: var(--amber-dim); color: var(--amber); border: 1px solid var(--amber); }
+.rt-problem    { background: var(--red-dim);   color: var(--red);   border: 1px solid var(--red); }
+
+/* ── dBFS RULER ───────────────────────────────────── */
+.ruler-row { padding: 10px 20px 16px; border-bottom: 1px solid var(--border); }
+.ruler-legend { display:flex; flex-wrap:wrap; gap:22px; margin-top:10px; }
+.ruler-legend-item { display:flex; align-items:center; gap:8px; font-family:'Share Tech Mono',monospace; font-size:13px; }
+.ruler-legend-swatch { width:18px; height:4px; border-radius:2px; flex-shrink:0; }
+
+/* ── COMPARE PANEL ────────────────────────────────── */
+.compare-panel {
+  background: var(--bg2); border: 1px solid var(--border2);
+  border-radius: 12px; overflow: hidden;
+  margin-bottom: 14px; box-shadow: var(--shadow);
+  animation: fadeUp .4s .1s ease both;
+}
+.compare-header {
+  background: var(--bg3); border-bottom: 1px solid var(--border2);
+  padding: 12px 20px;
+  display: flex; align-items: center; gap: 8px;
+}
+.compare-title {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; color: var(--text2);
+  text-transform: uppercase; letter-spacing: 1.2px;
+}
+.compare-grid { display: grid; grid-template-columns: repeat(4,1fr); }
+.compare-cell { padding: 16px 20px; border-right: 1px solid var(--border); }
+.compare-cell:last-child { border-right: none; }
+.compare-cell-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; color: var(--text2);
+  text-transform: uppercase; letter-spacing: .9px; margin-bottom: 8px;
+}
+.compare-val { font-family: 'Share Tech Mono', monospace; font-size: 20px; font-weight: 600; color: var(--text); line-height: 1; }
+.compare-val.pos { color: var(--amber); }
+.compare-val.neg { color: var(--blue); }
+
+/* ── ALERTS ───────────────────────────────────────── */
+.alert {
+  border-radius: 9px; padding: 12px 16px; margin-bottom: 10px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px; line-height: 1.75;
+  display: flex; align-items: flex-start; gap: 11px;
+}
+.alert-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.alert-fail { background: var(--red-dim);   border: 1.5px solid var(--red);   color: var(--red); }
+.alert-fail .alert-icon { background: var(--red-dim); }
+.alert-warn { background: var(--amber-dim); border: 1.5px solid var(--amber); color: var(--amber); }
+.alert-warn .alert-icon { background: var(--amber-dim); }
+
+/* ── LEGEND ───────────────────────────────────────── */
+.legend {
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: 9px; padding: 14px 20px;
+  display: flex; align-items: flex-start; flex-wrap: wrap; gap: 14px;
+  animation: fadeUp .4s .15s ease both;
+}
+.legend-title { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
+.legend-items { display: flex; flex-wrap: wrap; gap: 16px; }
+.legend-item  { display: flex; align-items: center; gap: 6px; font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); }
+.legend-dot   { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.divider-l    { width: 1px; height: 18px; background: var(--border2); margin: 0 6px; }
+.legend-nf    { display: flex; flex-wrap: wrap; gap: 14px; }
+.legend-nf-item { display: flex; align-items: center; gap: 7px; font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); }
+.nf-chip      { font-family: 'Share Tech Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: .6px; padding: 2px 7px; border-radius: 3px; }
+
+/* ── KEYFRAMES ─────────────────────────────────────── */
+@keyframes fadeUp   { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+@keyframes fadeDown { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:none; } }
+@keyframes spin     { to { transform:rotate(360deg); } }
+@keyframes pulse    { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+@keyframes barGrow  { from{width:0;} }
+
+/* ── RESPONSIVE ────────────────────────────────────── */
+@media(max-width:660px){
+  .cards-grid,.file-slots{grid-template-columns:1fr;}
+  .compare-grid{grid-template-columns:repeat(2,1fr);}
+  .compare-cell:nth-child(2){border-right:none;}
+  .compare-cell:nth-child(3),.compare-cell:nth-child(4){border-top:1px solid var(--border);}
+  .compare-cell:nth-child(4){border-right:none;}
+}
+[hidden]{display:none!important;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-row">
+      <div class="logo-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round">
+          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Sound<span>QC</span></h1>
+        <div class="header-sub">Waveform Quality Control Analyzer</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="version-badge">v2.1</div>
+      <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
+        <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
+        <span id="themeLabel">DARK</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- DROP ZONE -->
+  <div class="drop-section">
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <div class="drop-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+          <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+        </svg>
+      </div>
+      <div class="drop-title">Drop Folder or WAV Files — Analyzes Automatically</div>
+      <div class="drop-sub">
+        Auto-detects <code>_edit.wav</code> + <code>_mixed.wav</code> — or any 2 WAV files<br>
+        Supports <code>Bounced Files/</code> folder drop
+      </div>
+    </div>
+    <input type="file" id="fileInput" accept=".wav,audio/*" multiple hidden>
+  </div>
+
+  <!-- FILE SLOTS -->
+  <div class="file-slots" id="fileSlots" hidden>
+    <div class="file-slot" id="slotEdit">
+      <div class="slot-dot"></div>
+      <div style="min-width:0;flex:1">
+        <div class="slot-label">Edit WAV</div>
+        <div class="slot-name" id="slotEditName">Waiting…</div>
+        <div class="slot-info" id="slotEditInfo"></div>
+      </div>
+    </div>
+    <div class="file-slot" id="slotMix">
+      <div class="slot-dot"></div>
+      <div style="min-width:0;flex:1">
+        <div class="slot-label">Mixed WAV</div>
+        <div class="slot-name" id="slotMixName">Waiting…</div>
+        <div class="slot-info" id="slotMixInfo"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANALYZE BUTTON (manual / re-analyze) -->
+  <button class="btn-analyze" id="analyzeBtn" hidden onclick="runAnalysis()">▶ &nbsp; Run Analysis</button>
+
+  <!-- PROGRESS -->
+  <div class="progress-wrap" id="progressWrap" hidden>
+    <div class="progress-head">
+      <div class="progress-text"><div class="spinner"></div><span id="progressText">Initializing…</span></div>
+      <div class="progress-pct" id="progressPct">0%</div>
+    </div>
+    <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results" hidden style="margin-top:1.75rem">
+
+    <div class="results-header">
+      <div class="results-title">Analysis Report</div>
+      <div id="overallBadge"></div>
+    </div>
+
+    <div class="cards-grid" id="cardsGrid">
+      <div class="result-card" id="editCard">
+        <div class="card-header">
+          <div style="min-width:0;flex:1">
+            <div class="card-type" id="editCardType">Edit WAV</div>
+            <div class="card-filename" id="editCardName"></div>
+            <div class="card-meta"    id="editCardMeta"></div>
+          </div>
+          <div id="editNFBadge"></div>
+        </div>
+        <div class="card-body" id="editMetrics"></div>
+      </div>
+
+      <div class="result-card" id="mixCard">
+        <div class="card-header">
+          <div style="min-width:0;flex:1">
+            <div class="card-type">Mixed WAV</div>
+            <div class="card-filename" id="mixCardName"></div>
+            <div class="card-meta"    id="mixCardMeta"></div>
+          </div>
+          <div id="mixNFBadge"></div>
+        </div>
+        <div class="card-body" id="mixMetrics"></div>
+      </div>
+    </div>
+
+    <div class="compare-panel" id="comparePanel">
+      <div class="compare-header">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+        <div class="compare-title">Δ Edit vs Mixed Comparison</div>
+      </div>
+      <div class="compare-grid" id="compareGrid"></div>
+    </div>
+
+    <div id="alertsWrap"></div>
+
+    <div class="legend">
+
+      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:220px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Acoustic Delta L/R</div>
+        <div class="legend-items">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>&lt; 1 dB &nbsp;<span style="color:var(--text3)">Excellent</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>1–2 dB &nbsp;<span style="color:var(--text3)">Acceptable</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>2–3 dB &nbsp;<span style="color:var(--text3)">Noticeable</span></div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>&gt; 3 dB &nbsp;<span style="color:var(--text3)">Problem</span></div>
+        </div>
+      </div>
+
+      <div class="divider-l"></div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:200px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Noise Floor Threshold</div>
+        <div class="legend-nf">
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">PASS</span>&lt; −60 dBFS</div>
+          <div class="legend-nf-item"><span class="nf-chip nf-warn">WARN</span>−60 to −50 dBFS</div>
+          <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>&gt; −50 dBFS</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /results -->
+</div><!-- /app -->
+
+<script>
+// ── Theme ────────────────────────────────────────────────────
+function toggleTheme() {
+  const html  = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  const next   = isDark ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  document.getElementById('themeLabel').textContent = next.toUpperCase();
+  localStorage.setItem('sqc-theme', next);
+}
+(function(){
+  const saved = localStorage.getItem('sqc-theme');
+  if (saved && saved !== 'dark') {
+    document.documentElement.setAttribute('data-theme', saved);
+    document.getElementById('themeLabel').textContent = saved.toUpperCase();
+  }
+})();
+
+// ── File state ───────────────────────────────────────────────
+let eFile = null, mFile = null;
+
+// ── Drag & Drop ──────────────────────────────────────────────
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', ()  => dz.classList.remove('over'));
+dz.addEventListener('drop', async e => {
+  e.preventDefault(); dz.classList.remove('over');
+  const items = [...e.dataTransfer.items];
+  const files = [];
+  for (const item of items) {
+    if (item.kind !== 'file') continue;
+    const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+    if (entry && entry.isDirectory) { const df = await readDir(entry); files.push(...df); }
+    else { const f = item.getAsFile(); if (f) files.push(f); }
+  }
+  processFiles(files, true);
+});
+
+document.getElementById('fileInput').addEventListener('change', e => processFiles([...e.target.files], false));
+
+async function readDir(dir) {
+  return new Promise(res => {
+    const reader = dir.createReader(), all = [];
+    function batch() {
+      reader.readEntries(async entries => {
+        if (!entries.length) { res(all); return; }
+        const ps = entries.map(e => e.isFile ? new Promise(r => e.file(r)) : readDir(e));
+        const rs = await Promise.all(ps);
+        rs.forEach(r => Array.isArray(r) ? all.push(...r) : all.push(r));
+        batch();
+      });
+    }
+    batch();
+  });
+}
+
+function processFiles(files, autoRun) {
+  const wavs = files.filter(f => f.name.toLowerCase().endsWith('.wav'));
+  if (!wavs.length) { alert('No WAV files found.'); return; }
+
+  // Reset both slots on every new drop
+  eFile = null; mFile = null;
+
+  const edits = wavs.filter(f => /_edit\b/i.test(f.name) || f.name.toLowerCase().includes('_edit'));
+  const mixes = wavs.filter(f => /_mix(ed)?\b/i.test(f.name) || f.name.toLowerCase().includes('_mixed') || f.name.toLowerCase().includes('_mix'));
+
+  if (wavs.length === 1) {
+    eFile = wavs[0];                               // single file — analyze alone
+  } else if (edits.length && mixes.length) {
+    eFile = edits[0]; mFile = mixes[0];            // named pair
+  } else {
+    eFile = wavs[0]; mFile = wavs[1];              // any two wavs
+  }
+
+  refreshSlots();
+  if (autoRun && eFile) runAnalysis();
+}
+
+function fmtSize(b) { return b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(1)+' MB'; }
+function fmtDur(s)  { const m = Math.floor(s/60), sc = Math.floor(s%60); return m+':'+String(sc).padStart(2,'0'); }
+
+function refreshSlots() {
+  // Reset slot UI
+  ['slotEdit','slotMix'].forEach(id => document.getElementById(id).classList.remove('filled'));
+  document.getElementById('slotEditName').textContent = 'Waiting…';
+  document.getElementById('slotMixName').textContent  = 'Waiting…';
+  document.getElementById('slotEditInfo').textContent = '';
+  document.getElementById('slotMixInfo').textContent  = '';
+
+  if (eFile || mFile) document.getElementById('fileSlots').removeAttribute('hidden');
+
+  if (eFile) {
+    document.getElementById('slotEditName').textContent = eFile.name;
+    document.getElementById('slotEditInfo').textContent = fmtSize(eFile.size);
+    document.getElementById('slotEdit').classList.add('filled');
+  }
+  if (mFile) {
+    document.getElementById('slotMixName').textContent = mFile.name;
+    document.getElementById('slotMixInfo').textContent = fmtSize(mFile.size);
+    document.getElementById('slotMix').classList.add('filled');
+  }
+
+  // Show button as long as at least one file is ready
+  if (eFile) document.getElementById('analyzeBtn').removeAttribute('hidden');
+}
+
+// ── Audio ────────────────────────────────────────────────────
+function toDB(lin) { return 20 * Math.log10(Math.max(lin, 1e-10)); }
+
+function analyzeChannel(data, sr) {
+  const N = data.length;
+  let sumSq = 0, peak = 0;
+  for (let i = 0; i < N; i++) { const s = data[i]; sumSq += s*s; const a = Math.abs(s); if (a > peak) peak = a; }
+  const rmsLin = Math.sqrt(sumSq/N);
+  const cSz = Math.floor(sr * 0.1), cRms = [];
+  for (let i = 0; i+cSz <= N; i += cSz) {
+    let sq = 0;
+    for (let j = i; j < i+cSz; j++) sq += data[j]*data[j];
+    const cr = Math.sqrt(sq/cSz); if (cr > 1e-8) cRms.push(cr);
+  }
+  let nfDb = -100;
+  if (cRms.length) { cRms.sort((a,b)=>a-b); nfDb = toDB(cRms[Math.max(0,Math.floor(cRms.length*.08))]); }
+  return { rmsDb: toDB(rmsLin), peakDb: toDB(peak), noiseFloorDb: nfDb, rmsLin };
+}
+
+function analyzeBuffer(buf) {
+  const sr = buf.sampleRate, nc = buf.numberOfChannels;
+  const ch0 = analyzeChannel(buf.getChannelData(0), sr);
+  const ch1 = nc >= 2 ? analyzeChannel(buf.getChannelData(1), sr) : null;
+  let rmsDb, noiseFloorDb, peakDb;
+  if (ch1) {
+    rmsDb        = toDB(Math.sqrt((ch0.rmsLin**2 + ch1.rmsLin**2)/2));
+    noiseFloorDb = (ch0.noiseFloorDb + ch1.noiseFloorDb)/2;
+    peakDb       = Math.max(ch0.peakDb, ch1.peakDb);
+  } else { rmsDb = ch0.rmsDb; noiseFloorDb = ch0.noiseFloorDb; peakDb = ch0.peakDb; }
+  const snr = rmsDb - noiseFloorDb;
+  const dynamicRange = peakDb - noiseFloorDb;
+  const lrDelta = ch1 ? Math.abs(ch0.rmsDb - ch1.rmsDb) : null;
+  return { channels:nc, sampleRate:sr, duration:buf.duration, rmsDb, peakDb, noiseFloorDb, snr, dynamicRange, lrDelta, ch0, ch1 };
+}
+
+async function decodeFile(file) {
+  const ab = await file.arrayBuffer();
+  const ctx = new(window.AudioContext||window.webkitAudioContext)();
+  const buf = await ctx.decodeAudioData(ab);
+  await ctx.close(); return buf;
+}
+
+function setProgress(txt, pct) {
+  document.getElementById('progressText').textContent = txt;
+  document.getElementById('progressPct').textContent  = pct+'%';
+  document.getElementById('progressFill').style.width = pct+'%';
+}
+
+async function runAnalysis() {
+  if (!eFile) return;
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true; btn.textContent = '⏳  Analyzing…';
+  document.getElementById('progressWrap').removeAttribute('hidden');
+  document.getElementById('results').setAttribute('hidden','');
+  try {
+    setProgress('Decoding file 1…', 15);
+    const eBuf = await decodeFile(eFile);
+    setProgress('Analyzing file 1…', 40);
+    await new Promise(r=>setTimeout(r,20));
+    const eA = analyzeBuffer(eBuf);
+
+    let mA = null;
+    if (mFile) {
+      setProgress('Decoding file 2…', 55);
+      const mBuf = await decodeFile(mFile);
+      setProgress('Analyzing file 2…', 75);
+      await new Promise(r=>setTimeout(r,20));
+      mA = analyzeBuffer(mBuf);
+    }
+
+    setProgress('Building report…', 95);
+    await new Promise(r=>setTimeout(r,100));
+    document.getElementById('progressWrap').setAttribute('hidden','');
+    renderResults(eA, mA);
+    document.getElementById('results').removeAttribute('hidden');
+    btn.textContent = '↺  Re-Analyze';
+    setTimeout(()=>document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'}), 80);
+  } catch(err) {
+    document.getElementById('progressWrap').setAttribute('hidden','');
+    btn.textContent = '▶  Run Analysis';
+    alert('Analysis error: '+err.message);
+  }
+  btn.disabled = false;
+}
+
+// ── Render ───────────────────────────────────────────────────
+function nfBadgeHTML(db) {
+  if (db > -50) return '<div class="nf-badge nf-fail">FAIL</div>';
+  if (db < -60) return '<div class="nf-badge nf-pass">PASS</div>';
+  return '<div class="nf-badge nf-warn">WARN</div>';
+}
+function nfColorCls(db) {
+  if (db > -50) return 'hl-red';
+  if (db < -60) return 'hl-green';
+  return 'hl-amber';
+}
+function deltaRating(d) {
+  if (d === null) return { label:'N/A — Mono', cls:'' };
+  if (d < 1)     return { label:'Excellent',  cls:'rt-excellent' };
+  if (d < 2)     return { label:'Acceptable', cls:'rt-acceptable' };
+  if (d < 3)     return { label:'Noticeable', cls:'rt-noticeable' };
+  return           { label:'Problem',     cls:'rt-problem' };
+}
+function mRow(label, val, extra, vcls) {
+  return `<div class="metric-row">
+    <div class="metric-label">${label}</div>
+    <div class="metric-right">
+      <div class="metric-value ${vcls||''}">${val}</div>${extra?`<div>${extra}</div>`:''}
+    </div>
+  </div>`;
+}
+function nfBarHTML(nf, rms, peak) {
+  // Scale: -80 dBFS (left) → 0 dBFS (right), 1000 SVG units wide
+  const MIN = -80, RANGE = 80;
+  const px = db => Math.max(0, Math.min(1000, (db - MIN) / RANGE * 1000));
+
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+
+  // ── Fully opaque, high-contrast colors ──────────────────────
+  const nfCol  = nf > -50  ? (isDark ? '#ff4060' : '#d4001a')
+               : nf < -60  ? (isDark ? '#00ff7f' : '#006b32')
+                            : (isDark ? '#ffaa00' : '#c06000');
+  const rmsCol = isDark ? '#3db0ff' : '#0055cc';
+  const pkCol  = isDark ? '#ffe040' : '#9a6000';
+
+  // ── Track & tick colors — solid, not rgba ────────────────────
+  const trackBg   = isDark ? '#2a3348'   : '#c8d0dc';
+  const trackBdr  = isDark ? '#3d4f6a'   : '#a0aab8';
+  const tickMinor = isDark ? '#4a5e7a'   : '#8090a8';
+  const tickMajor = isDark ? '#8aa0c0'   : '#3a4a60';
+  const labelCol  = isDark ? '#d0e0ff'   : '#1a2a40';   // <-- fully opaque, high contrast
+  const th60Col   = isDark ? '#00e87a'   : '#006e36';
+  const th50Col   = isDark ? '#ff3050'   : '#c20018';
+
+  const nfX  = px(nf),  rmsX = px(rms), pkX = px(peak);
+  const th60 = px(-60), th50 = px(-50);
+  const TY = 42, TH = 12; // track top Y (extra room for 12px labels above taller ticks)
+
+  // Ticks every 3 dB, labels match reference: -70,-60,-50,-40 then every 3dB from -36 to 0
+  const ticks = [];
+  for (let d = -78; d <= 0; d += 3) ticks.push(d);
+  const majorSet = new Set([-70, -60, -50, -40, -36, -33, -30, -27, -24, -21, -18, -15, -12, -9, -6, -3, 0]);
+
+  const ticksSVG = ticks.map(d => {
+    const x   = px(d).toFixed(1);
+    const maj = majorSet.has(d);
+    const tickH = maj ? 16 : 8;
+    const sw    = maj ? 1.5 : 0.8;
+    const col   = maj ? tickMajor : tickMinor;
+    const lbl   = maj
+      ? `<text x="${x}" y="${(TY - tickH - 3).toFixed(1)}" text-anchor="middle"
+               font-family="Share Tech Mono,monospace"
+               font-size="12" font-weight="700"
+               fill="${labelCol}">${d}</text>`
+      : '';
+    return `<line x1="${x}" y1="${(TY - tickH).toFixed(1)}" x2="${x}" y2="${(TY - 1).toFixed(1)}"
+                  stroke="${col}" stroke-width="${sw}"/>${lbl}`;
+  }).join('');
+
+  // Bold triangular pointers — larger and more visible
+  const tri = (cx, col, up, sz=7) => {
+    const tip  = up ? TY - 1         : TY + TH + 1;
+    const base = up ? TY - 1 - sz*1.4: TY + TH + 1 + sz*1.4;
+    return `<polygon points="${(cx-sz).toFixed(1)},${base.toFixed(1)} ${(cx+sz).toFixed(1)},${base.toFixed(1)} ${cx.toFixed(1)},${tip.toFixed(1)}"
+                     fill="${col}" stroke="${isDark?'rgba(0,0,0,0.4)':'rgba(255,255,255,0.5)'}" stroke-width="0.8"/>`;
+  };
+
+  const totalH = TY + TH + 22;
+
+  return `<div class="ruler-row">
+    <svg viewBox="-30 -4 1060 ${totalH}" width="100%" style="display:block;overflow:visible" class="ruler-svg">
+
+      <!-- −Inf. label -->
+      <text x="-14" y="${(TY - 16 - 3).toFixed(1)}" text-anchor="middle"
+            font-family="Share Tech Mono,monospace" font-size="12" font-weight="700"
+            fill="${labelCol}">−Inf.</text>
+      <line x1="0" y1="${(TY-16).toFixed(1)}" x2="0" y2="${(TY-1).toFixed(1)}" stroke="${tickMajor}" stroke-width="1.5"/>
+
+      <!-- Ruler ticks + labels -->
+      ${ticksSVG}
+
+      <!-- Track background with subtle border -->
+      <rect x="0" y="${TY}" width="1000" height="${TH}" rx="3" fill="${trackBg}" stroke="${trackBdr}" stroke-width="0.5"/>
+
+      <!-- NF shaded region (left → NF position) -->
+      <rect x="0" y="${TY}" width="${nfX.toFixed(1)}" height="${TH}" rx="3"
+            fill="${nfCol}" opacity="0.55"/>
+
+      <!-- Threshold dashed guide: −60 PASS -->
+      <line x1="${th60.toFixed(1)}" y1="${(TY-4).toFixed(1)}"
+            x2="${th60.toFixed(1)}" y2="${(TY+TH+4).toFixed(1)}"
+            stroke="${th60Col}" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.9"/>
+      <text x="${th60.toFixed(1)}" y="${(TY+TH+17).toFixed(1)}" text-anchor="middle"
+            font-family="Share Tech Mono,monospace" font-size="11" font-weight="700"
+            fill="${th60Col}">−60</text>
+
+      <!-- Threshold dashed guide: −50 FAIL -->
+      <line x1="${th50.toFixed(1)}" y1="${(TY-4).toFixed(1)}"
+            x2="${th50.toFixed(1)}" y2="${(TY+TH+4).toFixed(1)}"
+            stroke="${th50Col}" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.9"/>
+      <text x="${th50.toFixed(1)}" y="${(TY+TH+17).toFixed(1)}" text-anchor="middle"
+            font-family="Share Tech Mono,monospace" font-size="11" font-weight="700"
+            fill="${th50Col}">−50</text>
+
+      <!-- PEAK marker — gold, pointer below -->
+      <line x1="${pkX.toFixed(1)}" y1="${(TY-1).toFixed(1)}"
+            x2="${pkX.toFixed(1)}" y2="${(TY+TH+1).toFixed(1)}"
+            stroke="${pkCol}" stroke-width="3" stroke-linecap="round"/>
+      ${tri(pkX, pkCol, false, 7)}
+
+      <!-- RMS marker — blue, pointer below -->
+      <line x1="${rmsX.toFixed(1)}" y1="${(TY-1).toFixed(1)}"
+            x2="${rmsX.toFixed(1)}" y2="${(TY+TH+1).toFixed(1)}"
+            stroke="${rmsCol}" stroke-width="3" stroke-linecap="round"/>
+      ${tri(rmsX, rmsCol, false, 6)}
+
+      <!-- NF marker — bright green, thicker line + larger pointer above -->
+      <line x1="${nfX.toFixed(1)}" y1="${(TY-2).toFixed(1)}"
+            x2="${nfX.toFixed(1)}" y2="${(TY+TH+2).toFixed(1)}"
+            stroke="${nfCol}" stroke-width="5" stroke-linecap="round"/>
+      ${tri(nfX, nfCol, true, 10)}
+
+    </svg>
+
+    <div class="ruler-legend">
+      <div class="ruler-legend-item">
+        <div class="ruler-legend-swatch" style="background:${nfCol};height:4px;border-radius:2px"></div>
+        <span style="color:${nfCol};font-weight:700">Noise Floor</span>
+        <span style="color:${isDark?'#e0eaff':'#1a2a40'}">${nf.toFixed(1)} dBFS</span>
+      </div>
+      <div class="ruler-legend-item">
+        <div class="ruler-legend-swatch" style="background:${rmsCol};height:4px;border-radius:2px"></div>
+        <span style="color:${rmsCol};font-weight:700">RMS</span>
+        <span style="color:${isDark?'#e0eaff':'#1a2a40'}">${rms.toFixed(1)} dBFS</span>
+      </div>
+      <div class="ruler-legend-item">
+        <div class="ruler-legend-swatch" style="background:${pkCol};height:4px;border-radius:2px"></div>
+        <span style="color:${pkCol};font-weight:700">Peak</span>
+        <span style="color:${isDark?'#e0eaff':'#1a2a40'}">${peak.toFixed(1)} dBFS</span>
+      </div>
+    </div>
+  </div>`;
+}
+function buildMetrics(a) {
+  const dr = deltaRating(a.lrDelta);
+  const lrVal = a.lrDelta !== null ? a.lrDelta.toFixed(2)+' dB' : 'N/A — Mono';
+  const rTag  = dr.cls
+    ? `<span class="rating-tag ${dr.cls}">${dr.label}</span>`
+    : `<span style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">${dr.label}</span>`;
+  return [
+    nfBarHTML(a.noiseFloorDb, a.rmsDb, a.peakDb),
+    mRow('Noise Floor',    a.noiseFloorDb.toFixed(1)+' dBFS', nfBadgeHTML(a.noiseFloorDb), nfColorCls(a.noiseFloorDb)),
+    mRow('RMS Level',      a.rmsDb.toFixed(1)+' dBFS', '', ''),
+    mRow('Peak Level',     a.peakDb.toFixed(1)+' dBFS', '', ''),
+    mRow('Signal / Noise', a.snr.toFixed(1)+' dB', '', a.snr>40?'hl-green':a.snr>20?'':'hl-amber'),
+    mRow('Dynamic Range',  a.dynamicRange.toFixed(1)+' dB', '', ''),
+    mRow('L / R Delta',    lrVal, '', a.lrDelta!==null&&a.lrDelta>3?'hl-red':''),
+    mRow('Acoustic Δ',     lrVal, rTag, ''),
+    ...(a.ch1 ? [
+      mRow('L / R RMS',   a.ch0.rmsDb.toFixed(1)+' / '+a.ch1.rmsDb.toFixed(1)+' dBFS', '', ''),
+      mRow('L / R Noise', a.ch0.noiseFloorDb.toFixed(1)+' / '+a.ch1.noiseFloorDb.toFixed(1)+' dBFS', '', ''),
+    ] : []),
+  ].join('');
+}
+
+function renderResults(eA, mA) {
+  const single = !mA;
+
+  // Card grid: single file = full width, dual = side by side
+  const grid = document.getElementById('cardsGrid');
+  grid.style.gridTemplateColumns = single ? '1fr' : '';
+
+  // Edit card — always shown; label changes if single file
+  document.getElementById('editCardType').textContent  = single ? 'WAV File' : 'Edit WAV';
+  document.getElementById('editCardName').textContent  = eFile.name;
+  document.getElementById('editCardMeta').textContent  =
+    fmtSize(eFile.size)+' · '+eA.sampleRate/1000+' kHz · '+(eA.channels===1?'Mono':'Stereo')+' · '+fmtDur(eA.duration);
+  document.getElementById('editNFBadge').innerHTML     = nfBadgeHTML(eA.noiseFloorDb);
+  document.getElementById('editMetrics').innerHTML     = buildMetrics(eA);
+
+  // Mix card — only shown for dual file
+  document.getElementById('mixCard').style.display = single ? 'none' : '';
+  if (!single) {
+    document.getElementById('mixCardName').textContent  = mFile.name;
+    document.getElementById('mixCardMeta').textContent  =
+      fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration);
+    document.getElementById('mixNFBadge').innerHTML     = nfBadgeHTML(mA.noiseFloorDb);
+    document.getElementById('mixMetrics').innerHTML     = buildMetrics(mA);
+  }
+
+  // Compare panel — only shown for dual file
+  const cp = document.getElementById('comparePanel');
+  cp.style.display = single ? 'none' : '';
+  if (!single) {
+    const sign = v => v > 0 ? '+' : '';
+    const nfD = eA.noiseFloorDb - mA.noiseFloorDb;
+    const rmsD= eA.rmsDb        - mA.rmsDb;
+    const snrD= eA.snr          - mA.snr;
+    const drD = eA.dynamicRange - mA.dynamicRange;
+    document.getElementById('compareGrid').innerHTML = [
+      ['Noise Floor Δ',nfD],['RMS Δ',rmsD],['SNR Δ',snrD],['Dyn. Range Δ',drD],
+    ].map(([l,v])=>`<div class="compare-cell">
+      <div class="compare-cell-label">${l}</div>
+      <div class="compare-val ${v>0.1?'pos':v<-0.1?'neg':''}">${sign(v)}${v.toFixed(1)} dB</div>
+    </div>`).join('');
+  }
+
+  // Overall badge
+  const files = single ? [eA] : [eA, mA];
+  const anyFail = files.some(a => a.noiseFloorDb > -50);
+  const allPass = files.every(a => a.noiseFloorDb < -60);
+  const overall = !anyFail ? (allPass ? 'PASS' : 'WARN') : 'FAIL';
+  const cls = overall==='PASS'?'pass':overall==='FAIL'?'fail':'warn';
+  document.getElementById('overallBadge').innerHTML =
+    `<div class="overall-badge ${cls}"><div class="badge-dot"></div>${overall}</div>`;
+
+  // Alert banners
+  let alerts = '';
+  const eFail = eA.noiseFloorDb > -50;
+  const mFail = !single && mA.noiseFloorDb > -50;
+  if (eFail || mFail)
+    alerts += `<div class="alert alert-fail"><div class="alert-icon">!</div><div>${eFail?`<strong>${single?'File':'Edit WAV'}</strong> noise floor ${eA.noiseFloorDb.toFixed(1)} dBFS exceeds −50 dBFS threshold. `:''} ${mFail?`<strong>Mixed WAV</strong> noise floor ${mA.noiseFloorDb.toFixed(1)} dBFS exceeds −50 dBFS threshold.`:''}</div></div>`;
+  if ((eA.lrDelta!==null&&eA.lrDelta>3)||(!single&&mA.lrDelta!==null&&mA.lrDelta>3))
+    alerts += `<div class="alert alert-warn"><div class="alert-icon">△</div><div>${eA.lrDelta>3?`<strong>${single?'File':'Edit WAV'}</strong> L/R imbalance ${eA.lrDelta.toFixed(2)} dB — check channel routing. `:''} ${!single&&mA.lrDelta>3?`<strong>Mixed WAV</strong> L/R imbalance ${mA.lrDelta.toFixed(2)} dB — check channel routing.`:''}</div></div>`;
+  document.getElementById('alertsWrap').innerHTML = alerts;
+}
+</script>
+</body>
+</html>
