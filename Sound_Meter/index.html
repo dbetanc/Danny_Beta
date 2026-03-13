@@ -9,14 +9,14 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg:       #0d0f12;
-    --bg2:      #13161b;
-    --bg3:      #1a1e26;
-    --border:   rgba(255,255,255,0.07);
-    --border2:  rgba(255,255,255,0.13);
-    --text:     #e2e4e9;
-    --muted:    #616a7a;
-    --dim:      #3a4050;
+    --bg:       #f4f3ef;
+    --bg2:      #eceae4;
+    --bg3:      #e2e0d9;
+    --border:   rgba(0,0,0,0.08);
+    --border2:  rgba(0,0,0,0.14);
+    --text:     #1a1c22;
+    --muted:    #737b8c;
+    --dim:      #b0b6c2;
 
     --red:    #e84040;
     --orange: #f0922b;
@@ -52,7 +52,7 @@
   /* ── Header ── */
   header {
     width: 100%;
-    max-width: 900px;
+    max-width: 980px;
     margin-bottom: 36px;
     display: flex;
     align-items: flex-end;
@@ -98,10 +98,10 @@
   /* ── Main grid ── */
   .main-grid {
     width: 100%;
-    max-width: 900px;
+    max-width: 980px;
     display: grid;
-    grid-template-columns: auto auto 1fr;
-    gap: 28px;
+    grid-template-columns: auto auto 120px 1fr;
+    gap: 0 18px;
     align-items: start;
   }
 
@@ -199,7 +199,6 @@
     transition: height 0.07s linear;
     overflow: hidden;
   }
-  /* gradient fill inside the bar */
   .meter-fill::after {
     content: '';
     position: absolute;
@@ -208,8 +207,8 @@
       180deg,
       transparent 0px,
       transparent 3px,
-      rgba(0,0,0,0.18) 3px,
-      rgba(0,0,0,0.18) 4px
+      rgba(255,255,255,0.22) 3px,
+      rgba(255,255,255,0.22) 4px
     );
   }
   .meter-peak {
@@ -217,11 +216,10 @@
     left: 0; right: 0;
     height: 2px;
     border-radius: 1px;
-    background: #fff;
-    opacity: 0.8;
+    background: #1a1c22;
+    opacity: 0.7;
     transition: bottom 0.35s ease-out;
   }
-  /* Zone divider lines */
   .zone-line {
     position: absolute;
     left: -2px; right: -2px;
@@ -230,7 +228,6 @@
     pointer-events: none;
     z-index: 3;
   }
-  /* Noise floor dashed line */
   .nf-dashed {
     position: absolute;
     left: -2px; right: -2px;
@@ -240,16 +237,27 @@
     z-index: 4;
   }
 
-  /* Right-side zone labels (shown on meter R) */
-  .zone-tag {
+  /* Zone-labels column */
+  .zone-labels-col {
+    position: relative;
+    height: var(--h);
+    margin-top: 33px;
+  }
+  .zlbl {
     position: absolute;
-    left: calc(var(--meter-w) + 8px);
+    left: 0;
     font-family: var(--font-mono);
     font-size: 9.5px;
     white-space: nowrap;
-    pointer-events: none;
-    z-index: 5;
-    transform: translateY(40%);
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .zlbl-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
 
   /* ── Info panel ── */
@@ -324,7 +332,7 @@
   /* ── Controls ── */
   .controls-panel {
     width: 100%;
-    max-width: 900px;
+    max-width: 980px;
     margin-top: 28px;
     background: var(--bg2);
     border: 0.5px solid var(--border);
@@ -427,9 +435,307 @@
     letter-spacing: 0.03em;
   }
 
+  /* ── Analysis panel ── */
+  .analysis-panel {
+    width: 100%;
+    max-width: 980px;
+    margin-top: 28px;
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+  }
+  .analysis-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 1.5px dashed var(--border2);
+    border-radius: 10px;
+    padding: 36px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    color: var(--muted);
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--blue);
+    background: rgba(59,130,246,0.04);
+    color: var(--blue);
+  }
+  .drop-icon { margin-bottom: 4px; }
+  .drop-title {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .drop-sub {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .drop-browse {
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--blue);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  /* Progress */
+  .analysis-progress {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+  }
+  .progress-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--bg3);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--blue);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.2s;
+  }
+  .progress-lbl {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* Analysis stat grid */
+  .analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .an-card {
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .an-card-head {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 8px 12px 6px;
+    border-bottom: 0.5px solid var(--border);
+    background: var(--bg2);
+  }
+  .an-rows { padding: 4px 0; }
+  .an-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .an-row:nth-child(odd) { background: rgba(0,0,0,0.015); }
+  .an-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .fft-canvas { width: 100%; background: var(--bg3); border-radius: 6px; display: block; }
+  .fft-axis { display: flex; justify-content: space-between; padding: 0 2px; }
+  .fft-axis span { font-family: var(--font-mono); font-size: 9px; color: var(--dim); }
+
+  /* ── Noise floor report ── */
+  .nf-report { display: flex; flex-direction: column; gap: 0; }
+
+  .nf-summary {
+    display: flex;
+    align-items: stretch;
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .nf-big-card {
+    flex: 1;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .nf-divider {
+    width: 0.5px;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+  .nf-big-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .nf-big-val {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .nf-big-sub {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .delta-card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px 12px;
+  }
+  .delta-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .delta-val {
+    font-family: var(--font-mono);
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .delta-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+    font-family: var(--font-mono);
+  }
+  .delta-grade {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    padding: 3px 9px;
+    border-radius: 4px;
+    border: 0.5px solid;
+  }
+  .grade-good { color: var(--green);  border-color: var(--green);  background: rgba(61,186,110,0.08); }
+  .grade-warn { color: var(--orange); border-color: var(--orange); background: rgba(240,146,43,0.09); }
+  .grade-bad  { color: var(--red);    border-color: var(--red);    background: rgba(232,64,64,0.09); }
+
+  /* Stereo image bar */
+  .si-wrap {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 4px;
+  }
+  .si-endpoint {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--muted);
+    width: 10px;
+    text-align: center;
+  }
+  .si-track {
+    flex: 1;
+    height: 10px;
+    background: var(--bg3);
+    border-radius: 5px;
+    position: relative;
+    border: 0.5px solid var(--border);
+    overflow: visible;
+  }
+  .si-center-mark {
+    position: absolute;
+    left: 50%;
+    top: -3px;
+    bottom: -3px;
+    width: 1px;
+    background: var(--border2);
+    transform: translateX(-50%);
+  }
+  .si-needle {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--border2);
+    transform: translate(-50%, -50%);
+    transition: left 0.12s ease-out;
+    left: 50%;
+  }
+  .si-label {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--muted);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .si-ticks {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 17px;
+    margin-top: 18px;
+  }
+  .si-ticks span {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    color: var(--dim);
+  }
+
+  /* Send to meters */
+  .send-btn {
+    margin-top: 16px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 7px 16px;
+    border: 0.5px solid var(--border2);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    transition: all 0.15s;
+  }
+  .send-btn:hover { background: var(--bg3); border-color: var(--blue); color: var(--blue); }
+
   /* ── Footer ── */
   footer {
-    width: 100%; max-width: 900px;
+    width: 100%; max-width: 980px;
     margin-top: 28px;
     display: flex;
     gap: 20px;
@@ -462,6 +768,7 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+
 </style>
 </head>
 <body>
@@ -507,6 +814,9 @@
     </div>
   </div>
 
+  <!-- Zone labels column -->
+  <div class="zone-labels-col" id="zone-labels-col"></div>
+
   <!-- Info column -->
   <div class="info-panel">
 
@@ -528,6 +838,34 @@
         <div class="stat-card">
           <div class="stat-val" id="ic-zone">Nominal</div>
           <div class="stat-lbl">Current zone</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- L/R Delta + Stereo image -->
+    <div>
+      <div class="section-label">Acoustic delta L/R</div>
+      <div class="delta-card">
+        <div class="delta-top">
+          <div>
+            <div class="delta-val" id="ic-delta">−2.0 dB</div>
+            <div class="delta-sub" id="ic-delta-sub">R is 2.0 dB louder</div>
+          </div>
+          <div class="delta-grade" id="ic-grade">GOOD</div>
+        </div>
+
+        <!-- Stereo image bar -->
+        <div class="si-wrap">
+          <span class="si-endpoint">L</span>
+          <div class="si-track">
+            <div class="si-center-mark"></div>
+            <div class="si-needle" id="si-needle"></div>
+            <div class="si-label" id="si-label">Center</div>
+          </div>
+          <span class="si-endpoint">R</span>
+        </div>
+        <div class="si-ticks">
+          <span>−6</span><span>−3</span><span>0</span><span>+3</span><span>+6</span>
         </div>
       </div>
     </div>
@@ -594,6 +932,7 @@
 <div class="controls-panel">
   <div class="ctrl-header">
     <span class="ctrl-title">Signal Source</span>
+    <button id="link-btn" onclick="toggleLink()" title="Link L & R faders" style="font-family:var(--font-mono);font-size:11px;padding:4px 12px;border:0.5px solid var(--border2);border-radius:5px;background:var(--bg3);color:var(--text);cursor:pointer;letter-spacing:0.04em;transition:all 0.15s;">⛓ Linked</button>
   </div>
   <div class="src-row" id="src-row">
     <button class="src-btn active" data-src="manual">Manual</button>
@@ -621,6 +960,172 @@
   </div>
 </div>
 
+<!-- Audio File Analysis -->
+<div class="analysis-panel" id="analysis-panel">
+  <div class="analysis-header">
+    <span class="ctrl-title">Audio File Analysis</span>
+    <span class="ctrl-title" id="file-name" style="color:var(--text);font-weight:500;"></span>
+  </div>
+
+  <!-- Drop zone -->
+  <div class="drop-zone" id="drop-zone">
+    <div class="drop-icon">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+        <rect x="4" y="6" width="24" height="20" rx="3" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M16 12v8M12 16l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M10 26h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="drop-title">Drop an audio file here</div>
+    <div class="drop-sub">WAV · AIFF · FLAC · MP3 · OGG</div>
+    <label class="drop-browse">
+      or click to browse
+      <input type="file" id="file-input" accept="audio/*" style="display:none">
+    </label>
+  </div>
+
+  <!-- Progress -->
+  <div class="analysis-progress" id="analysis-progress" style="display:none">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="progress-lbl" id="progress-lbl">Decoding…</div>
+  </div>
+
+  <!-- Results -->
+  <div class="analysis-results" id="analysis-results" style="display:none">
+
+    <!-- Stat cards -->
+    <div class="section-label" style="margin:18px 0 8px;">Channel analysis</div>
+    <div class="analysis-grid">
+      <div class="an-card">
+        <div class="an-card-head">Left channel</div>
+        <div class="an-rows">
+          <div class="an-row"><span>Peak</span><span id="an-peak-L" class="an-val">—</span></div>
+          <div class="an-row"><span>True peak</span><span id="an-tp-L" class="an-val">—</span></div>
+          <div class="an-row"><span>RMS</span><span id="an-rms-L" class="an-val">—</span></div>
+          <div class="an-row"><span>Crest factor</span><span id="an-cr-L" class="an-val">—</span></div>
+        </div>
+      </div>
+      <div class="an-card">
+        <div class="an-card-head">Right channel</div>
+        <div class="an-rows">
+          <div class="an-row"><span>Peak</span><span id="an-peak-R" class="an-val">—</span></div>
+          <div class="an-row"><span>True peak</span><span id="an-tp-R" class="an-val">—</span></div>
+          <div class="an-row"><span>RMS</span><span id="an-rms-R" class="an-val">—</span></div>
+          <div class="an-row"><span>Crest factor</span><span id="an-cr-R" class="an-val">—</span></div>
+        </div>
+      </div>
+      <div class="an-card">
+        <div class="an-card-head">L/R Delta</div>
+        <div class="an-rows">
+          <div class="an-row"><span>Peak delta</span><span id="an-delta-peak" class="an-val">—</span></div>
+          <div class="an-row"><span>RMS delta</span><span id="an-delta-rms" class="an-val">—</span></div>
+          <div class="an-row"><span>Grade</span><span id="an-delta-grade" class="an-val">—</span></div>
+          <div class="an-row"><span>Image</span><span id="an-delta-img" class="an-val">—</span></div>
+        </div>
+      </div>
+      <div class="an-card">
+        <div class="an-card-head">File info</div>
+        <div class="an-rows">
+          <div class="an-row"><span>Sample rate</span><span id="an-sr" class="an-val">—</span></div>
+          <div class="an-row"><span>Channels</span><span id="an-ch" class="an-val">—</span></div>
+          <div class="an-row"><span>Duration</span><span id="an-dur" class="an-val">—</span></div>
+          <div class="an-row"><span>Samples</span><span id="an-samp" class="an-val">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Noise Floor Report -->
+    <div class="section-label" style="margin:18px 0 8px;">Noise floor report</div>
+    <div class="nf-report" id="nf-report">
+
+      <!-- Big summary row -->
+      <div class="nf-summary">
+        <div class="nf-big-card">
+          <div class="nf-big-label">Noise floor L</div>
+          <div class="nf-big-val" id="nf-val-L">—</div>
+          <div class="nf-big-sub" id="nf-grade-L">—</div>
+        </div>
+        <div class="nf-divider"></div>
+        <div class="nf-big-card">
+          <div class="nf-big-label">Noise floor R</div>
+          <div class="nf-big-val" id="nf-val-R">—</div>
+          <div class="nf-big-sub" id="nf-grade-R">—</div>
+        </div>
+        <div class="nf-divider"></div>
+        <div class="nf-big-card">
+          <div class="nf-big-label">L/R NF delta</div>
+          <div class="nf-big-val" id="nf-delta">—</div>
+          <div class="nf-big-sub" id="nf-delta-grade">—</div>
+        </div>
+      </div>
+
+      <!-- Detail rows -->
+      <div class="analysis-grid" style="margin-top:10px;">
+        <div class="an-card">
+          <div class="an-card-head">Signal vs noise (L)</div>
+          <div class="an-rows">
+            <div class="an-row"><span>Signal RMS</span><span id="nf-sig-L" class="an-val">—</span></div>
+            <div class="an-row"><span>Noise floor</span><span id="nf-floor-L" class="an-val">—</span></div>
+            <div class="an-row"><span>SNR</span><span id="nf-snr-L" class="an-val">—</span></div>
+            <div class="an-row"><span>Dynamic range</span><span id="nf-dr-L" class="an-val">—</span></div>
+          </div>
+        </div>
+        <div class="an-card">
+          <div class="an-card-head">Signal vs noise (R)</div>
+          <div class="an-rows">
+            <div class="an-row"><span>Signal RMS</span><span id="nf-sig-R" class="an-val">—</span></div>
+            <div class="an-row"><span>Noise floor</span><span id="nf-floor-R" class="an-val">—</span></div>
+            <div class="an-row"><span>SNR</span><span id="nf-snr-R" class="an-val">—</span></div>
+            <div class="an-row"><span>Dynamic range</span><span id="nf-dr-R" class="an-val">—</span></div>
+          </div>
+        </div>
+        <div class="an-card">
+          <div class="an-card-head">Noise character</div>
+          <div class="an-rows">
+            <div class="an-row"><span>Consistency L</span><span id="nf-cons-L" class="an-val">—</span></div>
+            <div class="an-row"><span>Consistency R</span><span id="nf-cons-R" class="an-val">—</span></div>
+            <div class="an-row"><span>Quiet windows</span><span id="nf-qwin" class="an-val">—</span></div>
+            <div class="an-row"><span>Noise type</span><span id="nf-type" class="an-val">—</span></div>
+          </div>
+        </div>
+        <div class="an-card">
+          <div class="an-card-head">Thresholds</div>
+          <div class="an-rows">
+            <div class="an-row"><span>Excellent SNR</span><span class="an-val" style="color:var(--green)">≥ 80 dB</span></div>
+            <div class="an-row"><span>Good SNR</span><span class="an-val" style="color:var(--green)">60–80 dB</span></div>
+            <div class="an-row"><span>Acceptable</span><span class="an-val" style="color:var(--orange)">40–60 dB</span></div>
+            <div class="an-row"><span>Problem</span><span class="an-val" style="color:var(--red)">< 40 dB</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Noise floor timeline -->
+      <div style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span class="section-label" style="margin:0;">Noise floor over time</span>
+          <span style="font-family:var(--font-mono);font-size:9px;color:var(--muted);">
+            <span style="color:var(--blue);">■</span> L &nbsp;
+            <span style="color:var(--orange);">■</span> R &nbsp;
+            <span style="color:var(--purple);border-top:1px dashed var(--purple);display:inline-block;width:16px;vertical-align:middle;"></span> noise floor est.
+          </span>
+        </div>
+        <canvas id="nf-timeline" class="fft-canvas" style="height:90px;"></canvas>
+        <div class="fft-axis" style="margin-top:4px;" id="nf-time-axis"></div>
+      </div>
+
+      <!-- Send NF to meter slider -->
+      <button class="send-btn" style="margin-top:12px;" onclick="sendNFToSlider()">
+        Send noise floor to meter slider ↗
+      </button>
+    </div>
+
+    <!-- Send to meters button -->
+    <button class="send-btn" id="send-btn" onclick="sendToMeters()">
+      Send RMS levels to meters ↗
+    </button>
+  </div>
+</div>
+
 <!-- Footer explainer boxes -->
 <footer>
   <div class="info-box">
@@ -636,6 +1141,7 @@
     <p>At <strong>0 dBFS</strong>, digital audio hits a hard ceiling. The waveform is sliced flat, producing harsh harmonic distortion. Unlike analog tape, digital clip sounds ugly — keep peaks below <strong>−3 dBFS</strong>.</p>
   </div>
 </footer>
+
 
 <script>
   const DB_MIN = -90, DB_MAX = 6, DB_RANGE = DB_MAX - DB_MIN;
@@ -654,8 +1160,8 @@
     el.className = 'tick';
     el.style.cssText = `top:${y}px;right:0;`;
     el.innerHTML = `
-      <span class="tick-val" style="color:${important?'#c8ccd5':'#616a7a'};font-weight:${important?500:300};">${db>0?'+'+db:db}</span>
-      <div class="tick-mark" style="width:${important?14:8}px;background:${important?'rgba(255,255,255,0.25)':'rgba(255,255,255,0.08)'}"></div>`;
+      <span class="tick-val" style="color:${important?'#1a1c22':'#9aa0ae'};font-weight:${important?500:300};">${db>0?'+'+db:db}</span>
+      <div class="tick-mark" style="width:${important?14:8}px;background:${important?'rgba(0,0,0,0.3)':'rgba(0,0,0,0.1)'}"></div>`;
     ruler.appendChild(el);
   });
 
@@ -684,7 +1190,7 @@
     if (db >= -18) return 'var(--green)';
     if (db >= -40) return 'var(--blue)';
     if (db >= -60) return 'var(--purple)';
-    return '#22262e';
+    return 'var(--bg3)';
   }
 
   // ── Build a meter ──
@@ -715,13 +1221,6 @@
       line.className = 'zone-line';
       line.style.cssText = `bottom:${pct}%;background:${z.col};`;
       track.appendChild(line);
-      if (ch === 'R') {
-        const lbl = document.createElement('div');
-        lbl.className = 'zone-tag';
-        lbl.style.cssText = `bottom:${pct}%;color:${z.col};`;
-        lbl.textContent = z.lbl;
-        track.appendChild(lbl);
-      }
     });
 
     // noise floor line
@@ -729,17 +1228,37 @@
     nfl.className = 'nf-dashed';
     nfl.id = 'nfl-'+ch;
     track.appendChild(nfl);
-
-    if (ch === 'R') {
-      const nflbl = document.createElement('div');
-      nflbl.className = 'zone-tag';
-      nflbl.id = 'nf-lbl';
-      nflbl.style.color = 'var(--purple)';
-      track.appendChild(nflbl);
-    }
   }
 
   buildMeter('L'); buildMeter('R');
+
+  // ── Build zone-labels column ──
+  const zlCol = document.getElementById('zone-labels-col');
+  const H_px = 420;
+  const DB_RANGE_V = DB_MAX - DB_MIN;
+  function dbToPctV(db) { return (1 - (db - DB_MIN) / DB_RANGE_V) * 100; }
+
+  const allZoneLabels = [
+    { db: 0,   col: 'var(--red)',    lbl: '0 dBFS — clip' },
+    { db: -6,  col: 'var(--orange)', lbl: '−6 dB' },
+    { db: -18, col: 'var(--green)',  lbl: '−18 dB  nominal' },
+    { db: -40, col: 'var(--blue)',   lbl: '−40 dB' },
+  ];
+  allZoneLabels.forEach(z => {
+    const pct = dbToPctV(z.db);
+    const el = document.createElement('div');
+    el.className = 'zlbl';
+    el.style.cssText = `top:${pct}%;color:${z.col};`;
+    el.innerHTML = `<div class="zlbl-dot" style="background:${z.col}"></div>${z.lbl}`;
+    zlCol.appendChild(el);
+  });
+  // noise floor label (dynamic)
+  const nfZlbl = document.createElement('div');
+  nfZlbl.className = 'zlbl';
+  nfZlbl.id = 'nf-lbl';
+  nfZlbl.style.color = 'var(--purple)';
+  nfZlbl.innerHTML = `<div class="zlbl-dot" style="background:var(--purple);border:1px dashed var(--purple);background:none;"></div><span id="nf-lbl-text">−60 dB  noise floor</span>`;
+  zlCol.appendChild(nfZlbl);
 
   // ── Peak hold ──
   let pkL = -90, pkR = -90, ptL, ptR;
@@ -769,8 +1288,9 @@
     });
     const lbl = document.getElementById('nf-lbl');
     if (lbl) {
-      lbl.style.bottom = dbToPct(nf) + '%';
-      lbl.textContent = nf + ' dB  noise floor';
+      lbl.style.top = dbToPctV(nf) + '%';
+      const txt = document.getElementById('nf-lbl-text');
+      if (txt) txt.textContent = nf + ' dB  noise floor';
     }
   }
 
@@ -789,7 +1309,81 @@
     document.getElementById('ic-snr').textContent  = (avg - nf).toFixed(1) + ' dB';
     document.getElementById('ic-headroom').textContent = (0 - avg).toFixed(1) + ' dB';
     document.getElementById('ic-zone').textContent = zoneName(avg);
+
+    // ── Delta L/R ──
+    const delta = dbl - dbr;   // positive = L louder, negative = R louder
+    const absDelta = Math.abs(delta);
+    document.getElementById('ic-delta').textContent =
+      (delta >= 0 ? '+' : '') + delta.toFixed(1) + ' dB';
+
+    const sub = document.getElementById('ic-delta-sub');
+    if (absDelta < 0.1) {
+      sub.textContent = 'Perfectly balanced';
+    } else {
+      const louder = delta > 0 ? 'L' : 'R';
+      sub.textContent = louder + ' is ' + absDelta.toFixed(1) + ' dB louder';
+    }
+
+    // Grade
+    const grade = document.getElementById('ic-grade');
+    grade.className = 'delta-grade';
+    if (absDelta < 1) {
+      grade.textContent = 'EXCELLENT'; grade.classList.add('grade-good');
+    } else if (absDelta < 2) {
+      grade.textContent = 'ACCEPTABLE'; grade.classList.add('grade-warn');
+    } else if (absDelta < 3) {
+      grade.textContent = 'NOTICEABLE'; grade.classList.add('grade-warn');
+    } else {
+      grade.textContent = 'PROBLEM'; grade.classList.add('grade-bad');
+    }
+
+    // ── Stereo image needle ──
+    // Clamp delta to ±6 dB range, map to 0–100%
+    const clamp = Math.max(-6, Math.min(6, delta));
+    const pct = ((clamp + 6) / 12) * 100;
+    document.getElementById('si-needle').style.left = pct + '%';
+    document.getElementById('si-needle').style.background =
+      absDelta < 1 ? 'var(--green)' : absDelta < 3 ? 'var(--orange)' : 'var(--red)';
+
+    const lbl = document.getElementById('si-label');
+    if (absDelta < 0.2) {
+      lbl.textContent = 'Center';
+    } else {
+      const side = delta > 0 ? 'L' : 'R';
+      lbl.textContent = side + ' ' + absDelta.toFixed(1) + ' dB';
+    }
+    lbl.style.left = pct + '%';
   }
+
+  // ── Linked L/R faders ──
+  let linked = false;
+
+  function toggleLink() {
+    linked = !linked;
+    const btn = document.getElementById('link-btn');
+    btn.textContent = linked ? '⛓ Linked' : '⛓\u20E0 Unlinked';
+    btn.style.opacity = linked ? '1' : '0.5';
+  }
+
+  // Set initial button state to Unlinked
+  document.getElementById('link-btn').textContent = '⛓\u20E0 Unlinked';
+  document.getElementById('link-btn').style.opacity = '0.5';
+
+  document.getElementById('sl-L').addEventListener('input', function() {
+    if (linked) {
+      document.getElementById('sl-R').value = this.value;
+    }
+    onSlider();
+  });
+
+  document.getElementById('sl-R').addEventListener('input', function() {
+    if (linked) {
+      document.getElementById('sl-L').value = this.value;
+    }
+    onSlider();
+  });
+
+  document.getElementById('sl-NF').addEventListener('input', onSlider);
 
   // ── Controls ──
   let source = 'manual', animId, t = 0;
@@ -817,8 +1411,6 @@
     updateNFLine(NF);
     updateCards(L, R, NF);
   }
-
-  document.querySelectorAll('input[type=range]').forEach(r => r.addEventListener('input', onSlider));
 
   // Source buttons
   document.getElementById('src-row').addEventListener('click', e => {
@@ -858,6 +1450,398 @@
       animId = requestAnimationFrame(tick);
     }
     animId = requestAnimationFrame(tick);
+  }
+
+  // ═══════════════════════════════════════════════
+  // Audio File Analysis Engine
+  // ═══════════════════════════════════════════════
+
+  let analysisResult = null;
+
+  // Drag & drop
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault(); dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+
+  function setProgress(pct, lbl) {
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-lbl').textContent = lbl;
+  }
+
+  async function handleFile(file) {
+    document.getElementById('file-name').textContent = file.name;
+    document.getElementById('analysis-results').style.display = 'none';
+    document.getElementById('analysis-progress').style.display = 'flex';
+    setProgress(10, 'Reading file…');
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      setProgress(30, 'Decoding audio…');
+
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      setProgress(60, 'Analysing channels…');
+
+      const nCh = audioBuffer.numberOfChannels;
+      const sr  = audioBuffer.sampleRate;
+      const dur = audioBuffer.duration;
+      const len = audioBuffer.length;
+
+      const chL = audioBuffer.getChannelData(0);
+      const chR = nCh > 1 ? audioBuffer.getChannelData(1) : chL;
+
+      // Peak, True Peak (4× oversample approx), RMS
+      function analyse(ch) {
+        let peak = 0, sumSq = 0;
+        for (let i = 0; i < ch.length; i++) {
+          const s = Math.abs(ch[i]);
+          if (s > peak) peak = s;
+          sumSq += ch[i] * ch[i];
+        }
+        const rms = Math.sqrt(sumSq / ch.length);
+        // True peak: simple 4× linear interpolation
+        let tp = peak;
+        for (let i = 1; i < ch.length - 2; i++) {
+          for (let f = 0; f < 4; f++) {
+            const t = f / 4;
+            const interp = ch[i-1]*(-t*(1-t)*(2-t)/6) +
+                           ch[i]*((2-t*t*(5-3*t))/2) +
+                           ch[i+1]*(t*(1+t*(4-3*t))/2) +
+                           ch[i+2]*(t*t*(t-1)/6);
+            if (Math.abs(interp) > tp) tp = Math.abs(interp);
+          }
+        }
+        const peakDb = peak > 0 ? 20 * Math.log10(peak) : -Infinity;
+        const tpDb   = tp   > 0 ? 20 * Math.log10(tp)   : -Infinity;
+        const rmsDb  = rms  > 0 ? 20 * Math.log10(rms)  : -Infinity;
+        const crest  = peakDb - rmsDb;
+        return { peak, peakDb, tpDb, rmsDb, crest };
+      }
+
+      const aL = analyse(chL);
+      const aR = analyse(chR);
+
+      setProgress(80, 'Analysing noise floor…');
+      const nfL = noiseFloorAnalysis(chL, sr, aL.rmsDb, aL.peakDb);
+      const nfR = noiseFloorAnalysis(chR, sr, aR.rmsDb, aR.peakDb);
+      populateNoiseFloor(nfL, nfR, aL.rmsDb, aR.rmsDb, dur);
+      drawNFTimeline(nfL, nfR, dur);
+
+      setProgress(100, 'Done');
+
+      // Fill stat cards
+      function fmtDb(v) {
+        return isFinite(v) ? (v >= 0 ? '+' : '') + v.toFixed(2) + ' dBFS' : '−∞';
+      }
+      function fmtDelta(v) {
+        return isFinite(v) ? (v >= 0 ? '+' : '') + v.toFixed(2) + ' dB' : '—';
+      }
+      function gradeTxt(abs) {
+        if (abs < 1) return 'Excellent';
+        if (abs < 2) return 'Acceptable';
+        if (abs < 3) return 'Noticeable';
+        return 'Problem';
+      }
+
+      document.getElementById('an-peak-L').textContent  = fmtDb(aL.peakDb);
+      document.getElementById('an-tp-L').textContent    = fmtDb(aL.tpDb);
+      document.getElementById('an-rms-L').textContent   = fmtDb(aL.rmsDb);
+      document.getElementById('an-cr-L').textContent    = isFinite(aL.crest) ? aL.crest.toFixed(1) + ' dB' : '—';
+
+      document.getElementById('an-peak-R').textContent  = fmtDb(aR.peakDb);
+      document.getElementById('an-tp-R').textContent    = fmtDb(aR.tpDb);
+      document.getElementById('an-rms-R').textContent   = fmtDb(aR.rmsDb);
+      document.getElementById('an-cr-R').textContent    = isFinite(aR.crest) ? aR.crest.toFixed(1) + ' dB' : '—';
+
+      const deltaPeak = aL.peakDb - aR.peakDb;
+      const deltaRms  = aL.rmsDb  - aR.rmsDb;
+      const absDeltaRms = Math.abs(deltaRms);
+      document.getElementById('an-delta-peak').textContent = fmtDelta(deltaPeak);
+      document.getElementById('an-delta-rms').textContent  = fmtDelta(deltaRms);
+      document.getElementById('an-delta-grade').textContent = gradeTxt(absDeltaRms);
+
+      const imgSide = Math.abs(deltaRms) < 0.1 ? 'Centered' :
+                      (deltaRms > 0 ? 'L +' : 'R +') + absDeltaRms.toFixed(1) + ' dB';
+      document.getElementById('an-delta-img').textContent = imgSide;
+
+      function fmtDur(s) {
+        const m = Math.floor(s / 60), sec = (s % 60).toFixed(2);
+        return m + ':' + sec.padStart(5, '0');
+      }
+      document.getElementById('an-sr').textContent   = (sr / 1000).toFixed(1) + ' kHz';
+      document.getElementById('an-ch').textContent   = nCh === 1 ? 'Mono' : 'Stereo';
+      document.getElementById('an-dur').textContent  = fmtDur(dur);
+      document.getElementById('an-samp').textContent = len.toLocaleString();
+
+      // Color peak cells
+      colorVal('an-peak-L', aL.peakDb);
+      colorVal('an-peak-R', aR.peakDb);
+      colorVal('an-tp-L',   aL.tpDb);
+      colorVal('an-tp-R',   aR.tpDb);
+      colorGrade('an-delta-grade', absDeltaRms);
+
+      analysisResult = { rmsL: aL.rmsDb, rmsR: aR.rmsDb };
+
+      document.getElementById('analysis-progress').style.display = 'none';
+      document.getElementById('analysis-results').style.display  = 'block';
+      await ctx.close();
+
+    } catch(err) {
+      setProgress(0, 'Error: ' + err.message);
+    }
+  }
+
+  function colorVal(id, db) {
+    const el = document.getElementById(id);
+    if (!isFinite(db)) return;
+    if (db >= 0)   el.style.color = 'var(--red)';
+    else if (db >= -3)  el.style.color = 'var(--orange)';
+    else if (db >= -18) el.style.color = 'var(--green)';
+    else                el.style.color = 'var(--text)';
+  }
+
+  function colorGrade(id, abs) {
+    const el = document.getElementById(id);
+    if (abs < 1)      el.style.color = 'var(--green)';
+    else if (abs < 3) el.style.color = 'var(--orange)';
+    else              el.style.color = 'var(--red)';
+  }
+
+  // ── Noise floor analysis ──
+  // Splits channel into ~100ms windows, computes RMS per window,
+  // uses bottom 5th percentile as noise floor estimate.
+  let lastNF = { L: -90, R: -90 };
+
+  function noiseFloorAnalysis(ch, sr, rmsDb, peakDb) {
+    const winSize = Math.floor(sr * 0.1); // 100ms windows
+    const windows = [];
+    for (let i = 0; i + winSize <= ch.length; i += winSize) {
+      let sumSq = 0;
+      for (let j = i; j < i + winSize; j++) sumSq += ch[j] * ch[j];
+      const rms = Math.sqrt(sumSq / winSize);
+      if (rms > 0) windows.push(rms);
+    }
+    if (!windows.length) return { floorDb: -90, snr: 0, dr: 0, consistency: 0, windowRms: [], quietPct: 0 };
+
+    windows.sort((a, b) => a - b);
+
+    // Bottom 5th percentile = noise floor
+    const p5idx  = Math.max(0, Math.floor(windows.length * 0.05));
+    const p10idx = Math.max(0, Math.floor(windows.length * 0.10));
+    const floorRms = windows.slice(p5idx, p10idx + 1).reduce((a, b) => a + b, 0) /
+                     Math.max(1, p10idx - p5idx + 1);
+    const floorDb = 20 * Math.log10(floorRms);
+
+    // Quiet windows = bottom 20%
+    const quietCount = Math.floor(windows.length * 0.20);
+    const quietPct   = (quietCount / windows.length * 100);
+
+    // Consistency = std dev of quiet windows (lower = more consistent/stable noise)
+    const quietWins = windows.slice(0, quietCount);
+    const quietMean = quietWins.reduce((a, b) => a + b, 0) / quietWins.length;
+    const variance  = quietWins.reduce((a, b) => a + (b - quietMean) ** 2, 0) / quietWins.length;
+    const stdDev    = Math.sqrt(variance);
+    const consistDb = stdDev > 0 ? 20 * Math.log10(stdDev / quietMean) : -60;
+
+    const snr = rmsDb - floorDb;
+    const dr  = peakDb - floorDb;
+
+    // Chronological window RMS for timeline (downsample to 300 points)
+    const rawWins = [];
+    const step = Math.ceil(ch.length / winSize);
+    const targetPts = 300;
+    const skip = Math.max(1, Math.floor(step / targetPts));
+    for (let i = 0; i + winSize <= ch.length; i += winSize * skip) {
+      let sumSq = 0;
+      for (let j = i; j < i + winSize && j < ch.length; j++) sumSq += ch[j] * ch[j];
+      const r = Math.sqrt(sumSq / winSize);
+      rawWins.push(r > 0 ? 20 * Math.log10(r) : -90);
+    }
+
+    return { floorDb, snr, dr, consistDb, windowRms: rawWins, quietPct };
+  }
+
+  function nfGrade(db) {
+    if (db <= -80) return { txt: 'Excellent', col: 'var(--green)' };
+    if (db <= -65) return { txt: 'Very good',  col: 'var(--green)' };
+    if (db <= -50) return { txt: 'Good',        col: 'var(--green)' };
+    if (db <= -40) return { txt: 'Acceptable',  col: 'var(--orange)' };
+    if (db <= -30) return { txt: 'Noisy',        col: 'var(--orange)' };
+    return { txt: 'Problem', col: 'var(--red)' };
+  }
+
+  function snrGrade(snr) {
+    if (snr >= 80) return { txt: 'Excellent', col: 'var(--green)' };
+    if (snr >= 60) return { txt: 'Good',       col: 'var(--green)' };
+    if (snr >= 40) return { txt: 'Acceptable', col: 'var(--orange)' };
+    return { txt: 'Problem', col: 'var(--red)' };
+  }
+
+  function consistLabel(db) {
+    if (db <= -20) return 'Stable (flat noise)';
+    if (db <= -12) return 'Mostly stable';
+    if (db <= -6)  return 'Variable';
+    return 'Intermittent noise';
+  }
+
+  function noiseType(snr, consistDb) {
+    if (snr >= 70 && consistDb <= -20) return 'Low broadband hiss';
+    if (snr >= 70) return 'Intermittent hum';
+    if (consistDb <= -15) return 'Steady-state noise';
+    return 'Variable / room noise';
+  }
+
+  function populateNoiseFloor(nfL, nfR, rmsL, rmsR, dur) {
+    const fmtDb = v => isFinite(v) ? (v >= 0 ? '+' : '') + v.toFixed(1) + ' dB' : '—';
+
+    // Big summary cards
+    const gL = nfGrade(nfL.floorDb);
+    const gR = nfGrade(nfR.floorDb);
+    document.getElementById('nf-val-L').textContent   = fmtDb(nfL.floorDb);
+    document.getElementById('nf-val-L').style.color   = gL.col;
+    document.getElementById('nf-grade-L').textContent = gL.txt;
+
+    document.getElementById('nf-val-R').textContent   = fmtDb(nfR.floorDb);
+    document.getElementById('nf-val-R').style.color   = gR.col;
+    document.getElementById('nf-grade-R').textContent = gR.txt;
+
+    const nfDelta    = nfL.floorDb - nfR.floorDb;
+    const absNfDelta = Math.abs(nfDelta);
+    const ndG = absNfDelta < 1 ? { txt:'Excellent', col:'var(--green)' } :
+                absNfDelta < 3 ? { txt:'Acceptable', col:'var(--orange)' } :
+                                 { txt:'Problem',   col:'var(--red)' };
+    document.getElementById('nf-delta').textContent       = fmtDb(nfDelta);
+    document.getElementById('nf-delta').style.color       = ndG.col;
+    document.getElementById('nf-delta-grade').textContent = ndG.txt;
+
+    // Detail cards
+    ['L','R'].forEach(ch => {
+      const nf  = ch === 'L' ? nfL : nfR;
+      const rms = ch === 'L' ? rmsL : rmsR;
+      const sg  = snrGrade(nf.snr);
+      document.getElementById('nf-sig-'  + ch).textContent = fmtDb(rms);
+      document.getElementById('nf-floor-'+ ch).textContent = fmtDb(nf.floorDb);
+      document.getElementById('nf-snr-'  + ch).textContent = nf.snr.toFixed(1) + ' dB';
+      document.getElementById('nf-snr-'  + ch).style.color = sg.col;
+      document.getElementById('nf-dr-'   + ch).textContent = nf.dr.toFixed(1) + ' dB';
+    });
+
+    document.getElementById('nf-cons-L').textContent = consistLabel(nfL.consistDb);
+    document.getElementById('nf-cons-R').textContent = consistLabel(nfR.consistDb);
+    document.getElementById('nf-qwin').textContent   = nfL.quietPct.toFixed(0) + '% of file';
+    document.getElementById('nf-type').textContent   = noiseType(
+      (nfL.snr + nfR.snr) / 2, (nfL.consistDb + nfR.consistDb) / 2
+    );
+
+    lastNF = { L: nfL.floorDb, R: nfR.floorDb };
+  }
+
+  function drawNFTimeline(nfL, nfR, dur) {
+    const canvas = document.getElementById('nf-timeline');
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.offsetWidth || 900;
+    const H = 90;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    const dbTop = 0, dbBot = -100;
+    function yOf(db) { return H * (1 - (db - dbBot) / (dbTop - dbBot)); }
+
+    // Grid
+    ctx.strokeStyle = 'rgba(0,0,0,0.07)'; ctx.lineWidth = 0.5;
+    [-20,-40,-60,-80].forEach(db => {
+      const y = yOf(db);
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.font = '8px JetBrains Mono, monospace';
+      ctx.fillText(db + ' dB', 3, y - 2);
+    });
+
+    // Draw channel lines
+    function drawLine(wins, color) {
+      if (!wins.length) return;
+      ctx.beginPath();
+      ctx.strokeStyle = color; ctx.lineWidth = 1.2;
+      wins.forEach((db, i) => {
+        const x = (i / (wins.length - 1)) * W;
+        const y = yOf(Math.max(dbBot, db));
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    drawLine(nfL.windowRms, 'rgba(59,130,246,0.7)');
+    drawLine(nfR.windowRms, 'rgba(240,146,43,0.65)');
+
+    // Noise floor estimate lines (dashed)
+    function drawNFLine(db, color) {
+      if (!isFinite(db)) return;
+      const y = yOf(db);
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = color; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    drawNFLine(nfL.floorDb, 'rgba(59,130,246,0.9)');
+    drawNFLine(nfR.floorDb, 'rgba(240,146,43,0.9)');
+
+    // Time axis labels
+    const axis = document.getElementById('nf-time-axis');
+    axis.innerHTML = '';
+    const pts = 7;
+    for (let i = 0; i < pts; i++) {
+      const t = (dur * i / (pts - 1));
+      const m = Math.floor(t / 60);
+      const s = Math.floor(t % 60);
+      const span = document.createElement('span');
+      span.textContent = m + ':' + String(s).padStart(2, '0');
+      axis.appendChild(span);
+    }
+  }
+
+  function sendNFToSlider() {
+    const avg = (lastNF.L + lastNF.R) / 2;
+    const clamped = Math.max(-90, Math.min(-30, Math.round(avg)));
+    const sl = document.getElementById('sl-NF');
+    sl.value = clamped;
+    document.getElementById('sv-NF').textContent = clamped + ' dB';
+    onSlider();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function sendToMeters() {
+    if (!analysisResult) return;
+    const slL = document.getElementById('sl-L');
+    const slR = document.getElementById('sl-R');
+    slL.value = Math.max(-90, Math.min(0, Math.round(analysisResult.rmsL)));
+    slR.value = Math.max(-90, Math.min(0, Math.round(analysisResult.rmsR)));
+    document.getElementById('sv-L').textContent = slL.value + ' dB';
+    document.getElementById('sv-R').textContent = slR.value + ' dB';
+    onSlider();
+    // Switch to manual source
+    source = 'manual';
+    cancelAnimationFrame(animId);
+    document.querySelectorAll('.src-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.src-btn[data-src="manual"]').classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   // Init
