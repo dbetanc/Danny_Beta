@@ -1,1 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sound Meter — dBFS Scale</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+  :root {
+    --bg:       #0d0f12;
+    --bg2:      #13161b;
+    --bg3:      #1a1e26;
+    --border:   rgba(255,255,255,0.07);
+    --border2:  rgba(255,255,255,0.13);
+    --text:     #e2e4e9;
+    --muted:    #616a7a;
+    --dim:      #3a4050;
+
+    --red:    #e84040;
+    --orange: #f0922b;
+    --green:  #3dba6e;
+    --blue:   #3b82f6;
+    --purple: #7c6ef0;
+    --indigo: #4f5fc4;
+
+    --meter-w: 44px;
+    --h: 420px;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 24px 60px;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    width: 100%;
+    max-width: 900px;
+    margin-bottom: 36px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom: 0.5px solid var(--border2);
+    padding-bottom: 20px;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: var(--green);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo-icon svg { display: block; }
+  h1 {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--text);
+  }
+  .subtitle {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+  }
+  .badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--green);
+    border: 0.5px solid var(--green);
+    border-radius: 4px;
+    padding: 3px 9px;
+    letter-spacing: 0.06em;
+    opacity: 0.85;
+  }
+
+  /* ── Main grid ── */
+  .main-grid {
+    width: 100%;
+    max-width: 900px;
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+
+  /* ── Scale panel ── */
+  .scale-panel {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding-top: 2px;
+  }
+  .ruler-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--muted);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    letter-spacing: 0.12em;
+    margin-top: 4px;
+  }
+  #ruler {
+    position: relative;
+    height: var(--h);
+    width: 38px;
+  }
+  .tick {
+    position: absolute;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transform: translateY(-50%);
+  }
+  .tick-val {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-align: right;
+    width: 26px;
+  }
+  .tick-mark { height: 1px; }
+
+  /* Zone stripe bar */
+  #zone-bar {
+    position: relative;
+    width: 10px;
+    height: var(--h);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .zone-seg {
+    position: absolute;
+    left: 0; right: 0;
+  }
+
+  /* ── Meters panel ── */
+  .meters-panel {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  .meter-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .meter-readout {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: 0.02em;
+    min-width: 58px;
+    text-align: center;
+  }
+  .meter-ch {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+  }
+  .meter-track {
+    position: relative;
+    width: var(--meter-w);
+    height: var(--h);
+    background: var(--bg3);
+    border-radius: 5px;
+    border: 0.5px solid var(--border);
+    overflow: visible;
+  }
+  .meter-fill {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    border-radius: 0 0 4px 4px;
+    transition: height 0.07s linear;
+    overflow: hidden;
+  }
+  /* gradient fill inside the bar */
+  .meter-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      180deg,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.18) 3px,
+      rgba(0,0,0,0.18) 4px
+    );
+  }
+  .meter-peak {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    border-radius: 1px;
+    background: #fff;
+    opacity: 0.8;
+    transition: bottom 0.35s ease-out;
+  }
+  /* Zone divider lines */
+  .zone-line {
+    position: absolute;
+    left: -2px; right: -2px;
+    height: 1px;
+    opacity: 0.55;
+    pointer-events: none;
+    z-index: 3;
+  }
+  /* Noise floor dashed line */
+  .nf-dashed {
+    position: absolute;
+    left: -2px; right: -2px;
+    height: 0;
+    border-top: 1.5px dashed rgba(124, 110, 240, 0.7);
+    pointer-events: none;
+    z-index: 4;
+  }
+
+  /* Right-side zone labels (shown on meter R) */
+  .zone-tag {
+    position: absolute;
+    left: calc(var(--meter-w) + 8px);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 5;
+    transform: translateY(40%);
+  }
+
+  /* ── Info panel ── */
+  .info-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  /* Stat cards */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-card {
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px 12px;
+  }
+  .stat-val {
+    font-family: var(--font-mono);
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+  .stat-lbl {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .leg-swatch {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .leg-info {}
+  .leg-name {
+    font-size: 12px;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .leg-range {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  /* ── Controls ── */
+  .controls-panel {
+    width: 100%;
+    max-width: 900px;
+    margin-top: 28px;
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+  }
+
+  .ctrl-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .ctrl-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Source buttons */
+  .src-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .src-btn {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 5px 13px;
+    border: 0.5px solid var(--border2);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .src-btn:hover { color: var(--text); border-color: var(--dim); }
+  .src-btn.active {
+    background: var(--bg3);
+    color: var(--text);
+    border-color: var(--border2);
+  }
+
+  /* Sliders */
+  .sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+  }
+  .slider-row {
+    display: grid;
+    grid-template-columns: 140px 1fr 64px;
+    align-items: center;
+    gap: 14px;
+  }
+  .slider-lbl {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 3px;
+    background: var(--bg3);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    width: 100%;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--border2);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--bg);
+    cursor: pointer;
+  }
+  .slider-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text);
+    text-align: right;
+    letter-spacing: 0.03em;
+  }
+
+  /* ── Footer ── */
+  footer {
+    width: 100%; max-width: 900px;
+    margin-top: 28px;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .info-box {
+    flex: 1;
+    min-width: 200px;
+    background: var(--bg2);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .info-box h3 {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .info-box p {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.65;
+  }
+  .info-box strong { color: var(--text); font-weight: 500; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <rect x="3" y="5" width="2" height="8" rx="1" fill="#0d0f12"/>
+        <rect x="7" y="2" width="2" height="14" rx="1" fill="#0d0f12"/>
+        <rect x="11" y="4" width="2" height="10" rx="1" fill="#0d0f12"/>
+        <rect x="15" y="6" width="2" height="6" rx="1" fill="#0d0f12"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Sound Meter</h1>
+      <div class="subtitle">dBFS Scale · Logarithmic</div>
+    </div>
+  </div>
+  <span class="badge">LIVE</span>
+</header>
+
+<div class="main-grid">
+
+  <!-- Scale column -->
+  <div class="scale-panel">
+    <div class="ruler-label">dBFS</div>
+    <div id="ruler"></div>
+    <div id="zone-bar"></div>
+  </div>
+
+  <!-- Meters column -->
+  <div class="meters-panel">
+    <div class="meter-col">
+      <div class="meter-readout" id="val-L">−18.0</div>
+      <div id="meter-L" class="meter-track"></div>
+      <div class="meter-ch">L</div>
+    </div>
+    <div class="meter-col">
+      <div class="meter-readout" id="val-R">−20.0</div>
+      <div id="meter-R" class="meter-track"></div>
+      <div class="meter-ch">R</div>
+    </div>
+  </div>
+
+  <!-- Info column -->
+  <div class="info-panel">
+
+    <div>
+      <div class="section-label">Live readout</div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-val" id="ic-lufs">−19.0</div>
+          <div class="stat-lbl">LUFS integrated</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="ic-snr">41.0</div>
+          <div class="stat-lbl">S/N ratio (dB)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="ic-headroom">19.0</div>
+          <div class="stat-lbl">Headroom to 0 dBFS</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="ic-zone">Nominal</div>
+          <div class="stat-lbl">Current zone</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Scale zones</div>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="leg-swatch" style="background:var(--red)"></div>
+          <div class="leg-info">
+            <div class="leg-name">Clip / Distortion</div>
+            <div class="leg-range">0 dBFS and above</div>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="leg-swatch" style="background:var(--orange)"></div>
+          <div class="leg-info">
+            <div class="leg-name">Hot — near clip</div>
+            <div class="leg-range">−6 to 0 dBFS</div>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="leg-swatch" style="background:var(--green)"></div>
+          <div class="leg-info">
+            <div class="leg-name">Nominal loudness</div>
+            <div class="leg-range">−18 to −6 dBFS</div>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="leg-swatch" style="background:var(--blue)"></div>
+          <div class="leg-info">
+            <div class="leg-name">Low signal</div>
+            <div class="leg-range">−40 to −18 dBFS</div>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="leg-swatch" style="background:var(--purple)"></div>
+          <div class="leg-info">
+            <div class="leg-name">Noise floor region</div>
+            <div class="leg-range">−60 to −40 dBFS</div>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="leg-swatch" style="background:var(--bg3);border:0.5px solid var(--border2)"></div>
+          <div class="leg-info">
+            <div class="leg-name">Below noise floor</div>
+            <div class="leg-range">Below −60 dBFS</div>
+          </div>
+        </div>
+        <div class="legend-item">
+          <div class="leg-swatch" style="background:none;border-top:1.5px dashed var(--purple);border-radius:0;height:0;width:14px;margin-top:5px;"></div>
+          <div class="leg-info">
+            <div class="leg-name" style="color:var(--purple)">Noise floor line</div>
+            <div class="leg-range">Draggable — see controls</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /info-panel -->
+</div><!-- /main-grid -->
+
+<!-- Controls -->
+<div class="controls-panel">
+  <div class="ctrl-header">
+    <span class="ctrl-title">Signal Source</span>
+  </div>
+  <div class="src-row" id="src-row">
+    <button class="src-btn active" data-src="manual">Manual</button>
+    <button class="src-btn" data-src="sine">Sine tone</button>
+    <button class="src-btn" data-src="music">Music sim</button>
+    <button class="src-btn" data-src="noise">Noise floor</button>
+    <button class="src-btn" data-src="clip">Clip test</button>
+  </div>
+  <div class="sliders">
+    <div class="slider-row">
+      <span class="slider-lbl">Signal level L</span>
+      <input type="range" id="sl-L" min="-90" max="0" value="-18" step="1">
+      <span class="slider-val" id="sv-L">−18 dB</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-lbl">Signal level R</span>
+      <input type="range" id="sl-R" min="-90" max="0" value="-20" step="1">
+      <span class="slider-val" id="sv-R">−20 dB</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-lbl">Noise floor</span>
+      <input type="range" id="sl-NF" min="-90" max="-30" value="-60" step="1">
+      <span class="slider-val" id="sv-NF">−60 dB</span>
+    </div>
+  </div>
+</div>
+
+<!-- Footer explainer boxes -->
+<footer>
+  <div class="info-box">
+    <h3>Logarithmic scale</h3>
+    <p>Every <strong>+20 dB</strong> = ×10 more amplitude. So −20 dBFS is 10× quieter than 0 dBFS, and −60 dBFS is 1,000× quieter. That's why the dB scale feels "stretched" at the bottom.</p>
+  </div>
+  <div class="info-box">
+    <h3>Noise floor &amp; S/N ratio</h3>
+    <p>The <strong>noise floor</strong> is the baseline hiss from electronics and the room. The S/N ratio is the gap between your signal and that floor — aim for <strong>60 dB or more</strong> for clean audio.</p>
+  </div>
+  <div class="info-box">
+    <h3>Clipping &amp; distortion</h3>
+    <p>At <strong>0 dBFS</strong>, digital audio hits a hard ceiling. The waveform is sliced flat, producing harsh harmonic distortion. Unlike analog tape, digital clip sounds ugly — keep peaks below <strong>−3 dBFS</strong>.</p>
+  </div>
+</footer>
+
+<script>
+  const DB_MIN = -90, DB_MAX = 6, DB_RANGE = DB_MAX - DB_MIN;
+  const H = 420;
+
+  function dbToY(db) { return H * (1 - (db - DB_MIN) / DB_RANGE); }
+  function dbToPct(db) { return Math.max(0, Math.min(1, (db - DB_MIN) / DB_RANGE)) * 100; }
+
+  // ── Build ruler ──
+  const ruler = document.getElementById('ruler');
+  const ticks = [-90,-80,-70,-60,-50,-40,-30,-20,-18,-12,-6,-3,0,3,6];
+  ticks.forEach(db => {
+    const y = dbToY(db);
+    const important = [0,-6,-18,-60,-50,-3].includes(db);
+    const el = document.createElement('div');
+    el.className = 'tick';
+    el.style.cssText = `top:${y}px;right:0;`;
+    el.innerHTML = `
+      <span class="tick-val" style="color:${important?'#c8ccd5':'#616a7a'};font-weight:${important?500:300};">${db>0?'+'+db:db}</span>
+      <div class="tick-mark" style="width:${important?14:8}px;background:${important?'rgba(255,255,255,0.25)':'rgba(255,255,255,0.08)'}"></div>`;
+    ruler.appendChild(el);
+  });
+
+  // ── Zone bar ──
+  const zoneBar = document.getElementById('zone-bar');
+  const zones = [
+    { top:DB_MAX, bot:0,    col:'var(--red)' },
+    { top:0,      bot:-6,   col:'var(--orange)' },
+    { top:-6,     bot:-18,  col:'var(--green)' },
+    { top:-18,    bot:-40,  col:'var(--blue)' },
+    { top:-40,    bot:-60,  col:'var(--purple)' },
+    { top:-60,    bot:DB_MIN, col:'var(--bg3)' },
+  ];
+  zones.forEach(z => {
+    const yT = dbToY(z.top), yB = dbToY(z.bot);
+    const d = document.createElement('div');
+    d.className = 'zone-seg';
+    d.style.cssText = `top:${yT}px;height:${yB-yT}px;background:${z.col};`;
+    zoneBar.appendChild(d);
+  });
+
+  // ── Zone fill color function ──
+  function zoneColor(db) {
+    if (db >= 0)   return 'var(--red)';
+    if (db >= -6)  return 'var(--orange)';
+    if (db >= -18) return 'var(--green)';
+    if (db >= -40) return 'var(--blue)';
+    if (db >= -60) return 'var(--purple)';
+    return '#22262e';
+  }
+
+  // ── Build a meter ──
+  const lineZones = [
+    { db:0,   col:'var(--red)',    lbl:'0 dBFS — clip' },
+    { db:-6,  col:'var(--orange)', lbl:'−6 dB' },
+    { db:-18, col:'var(--green)',  lbl:'−18 dB  nominal' },
+    { db:-40, col:'var(--blue)',   lbl:'−40 dB' },
+  ];
+
+  function buildMeter(ch) {
+    const track = document.getElementById('meter-'+ch);
+    track.innerHTML = '';
+
+    const fill = document.createElement('div');
+    fill.className = 'meter-fill';
+    fill.id = 'fill-'+ch;
+    track.appendChild(fill);
+
+    const peak = document.createElement('div');
+    peak.className = 'meter-peak';
+    peak.id = 'peak-'+ch;
+    track.appendChild(peak);
+
+    lineZones.forEach(z => {
+      const pct = dbToPct(z.db);
+      const line = document.createElement('div');
+      line.className = 'zone-line';
+      line.style.cssText = `bottom:${pct}%;background:${z.col};`;
+      track.appendChild(line);
+      if (ch === 'R') {
+        const lbl = document.createElement('div');
+        lbl.className = 'zone-tag';
+        lbl.style.cssText = `bottom:${pct}%;color:${z.col};`;
+        lbl.textContent = z.lbl;
+        track.appendChild(lbl);
+      }
+    });
+
+    // noise floor line
+    const nfl = document.createElement('div');
+    nfl.className = 'nf-dashed';
+    nfl.id = 'nfl-'+ch;
+    track.appendChild(nfl);
+
+    if (ch === 'R') {
+      const nflbl = document.createElement('div');
+      nflbl.className = 'zone-tag';
+      nflbl.id = 'nf-lbl';
+      nflbl.style.color = 'var(--purple)';
+      track.appendChild(nflbl);
+    }
+  }
+
+  buildMeter('L'); buildMeter('R');
+
+  // ── Peak hold ──
+  let pkL = -90, pkR = -90, ptL, ptR;
+
+  function updateMeter(ch, db, nf) {
+    const pct = dbToPct(db);
+    const fill = document.getElementById('fill-'+ch);
+    fill.style.height = pct + '%';
+    fill.style.background = zoneColor(db);
+    fill.style.opacity = db < nf ? '0.25' : '1';
+
+    if (ch === 'L') {
+      if (db > pkL) { pkL = db; clearTimeout(ptL); ptL = setTimeout(() => pkL = -90, 1800); }
+      document.getElementById('peak-L').style.bottom = dbToPct(pkL) + '%';
+      document.getElementById('val-L').textContent = db.toFixed(1) + ' dB';
+    } else {
+      if (db > pkR) { pkR = db; clearTimeout(ptR); ptR = setTimeout(() => pkR = -90, 1800); }
+      document.getElementById('peak-R').style.bottom = dbToPct(pkR) + '%';
+      document.getElementById('val-R').textContent = db.toFixed(1) + ' dB';
+    }
+  }
+
+  function updateNFLine(nf) {
+    ['L','R'].forEach(ch => {
+      const pct = dbToPct(nf);
+      document.getElementById('nfl-'+ch).style.bottom = pct + '%';
+    });
+    const lbl = document.getElementById('nf-lbl');
+    if (lbl) {
+      lbl.style.bottom = dbToPct(nf) + '%';
+      lbl.textContent = nf + ' dB  noise floor';
+    }
+  }
+
+  function zoneName(db) {
+    if (db >= 0)   return 'Clipping';
+    if (db >= -6)  return 'Hot zone';
+    if (db >= -18) return 'Nominal';
+    if (db >= -40) return 'Low signal';
+    if (db >= -60) return 'Near noise flr';
+    return 'Sub-noise floor';
+  }
+
+  function updateCards(dbl, dbr, nf) {
+    const avg = (dbl + dbr) / 2;
+    document.getElementById('ic-lufs').textContent = avg.toFixed(1) + ' dB';
+    document.getElementById('ic-snr').textContent  = (avg - nf).toFixed(1) + ' dB';
+    document.getElementById('ic-headroom').textContent = (0 - avg).toFixed(1) + ' dB';
+    document.getElementById('ic-zone').textContent = zoneName(avg);
+  }
+
+  // ── Controls ──
+  let source = 'manual', animId, t = 0;
+
+  function getVals() {
+    return {
+      L:  parseFloat(document.getElementById('sl-L').value),
+      R:  parseFloat(document.getElementById('sl-R').value),
+      NF: parseFloat(document.getElementById('sl-NF').value),
+    };
+  }
+
+  function syncLabels() {
+    const { L, R, NF } = getVals();
+    document.getElementById('sv-L').textContent  = L  + ' dB';
+    document.getElementById('sv-R').textContent  = R  + ' dB';
+    document.getElementById('sv-NF').textContent = NF + ' dB';
+  }
+
+  function onSlider() {
+    syncLabels();
+    const { L, R, NF } = getVals();
+    updateMeter('L', L, NF);
+    updateMeter('R', R, NF);
+    updateNFLine(NF);
+    updateCards(L, R, NF);
+  }
+
+  document.querySelectorAll('input[type=range]').forEach(r => r.addEventListener('input', onSlider));
+
+  // Source buttons
+  document.getElementById('src-row').addEventListener('click', e => {
+    const btn = e.target.closest('.src-btn');
+    if (!btn) return;
+    document.querySelectorAll('.src-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    source = btn.dataset.src;
+    cancelAnimationFrame(animId);
+    if (source !== 'manual') startAnim();
+  });
+
+  function startAnim() {
+    function tick() {
+      t += 0.035;
+      const { NF } = getVals();
+      let dbl, dbr;
+      if (source === 'sine') {
+        dbl = -12 + Math.sin(t * 1.2) * 9;
+        dbr = -12 + Math.sin(t * 1.2 + 0.5) * 9;
+      } else if (source === 'music') {
+        dbl = -14 + Math.sin(t*.9)*7 + Math.sin(t*2.4)*3 + (Math.random()-.5)*5;
+        dbr = -14 + Math.sin(t*.9+.3)*7 + Math.sin(t*2.1)*3 + (Math.random()-.5)*5;
+      } else if (source === 'noise') {
+        dbl = NF + (Math.random()-.3)*9;
+        dbr = NF + (Math.random()-.3)*9;
+      } else if (source === 'clip') {
+        dbl = -1 + Math.sin(t*1.4)*5;
+        dbr = -1 + Math.sin(t*1.4+.2)*5;
+      }
+      dbl = Math.max(DB_MIN, Math.min(6, dbl));
+      dbr = Math.max(DB_MIN, Math.min(6, dbr));
+      updateMeter('L', dbl, NF);
+      updateMeter('R', dbr, NF);
+      updateNFLine(NF);
+      updateCards(dbl, dbr, NF);
+      animId = requestAnimationFrame(tick);
+    }
+    animId = requestAnimationFrame(tick);
+  }
+
+  // Init
+  onSlider();
+</script>
+</body>
+</html>
