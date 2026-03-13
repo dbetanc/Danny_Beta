@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>SOBA Session Checker v2.0.0</title>
+  <title>SOBA Session Checker v2.0.1</title>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
     :root {
@@ -993,7 +993,7 @@
   </div>
 
   <h1>
-    SOBA <span>🍺 Home Brewed Session Checker ✅</span> <span class="version">v2.0.0</span>
+    SOBA <span>🍺 Home Brewed Session Checker ✅</span> <span class="version">v2.0.1</span>
   </h1>
 
   <div class="requirements-wrapper">
@@ -1507,10 +1507,113 @@
         return tracks.map((track, i) => expected[i] && track !== expected[i] ? expected[i] : null);
       }
 
+      // Validate track names extracted from markers (when Track Listing is missing)
+      function validateTracksFromMarkers(markerTrackNames, sessionInfo){
+        if (!sessionInfo || !markerTrackNames || markerTrackNames.length === 0) {
+          return { errors: [] };
+        }
+
+        const errors = [];
+
+        if (sessionInfo.type === 'single') {
+          // Single character: expect "Talent 1_<speaker1>_<date>_<script>"
+          for (const trackName of markerTrackNames) {
+            const match = trackName.match(/^Talent 1_(.+?)_(\d{4})_(.+)$/);
+            if (!match) {
+              errors.push(`Track name format error: "${trackName}" should be "Talent 1_<speaker>_<date>_<script>"`);
+              continue;
+            }
+            
+            const [, speaker, date, script] = match;
+            
+            if (speaker !== sessionInfo.speaker1) {
+              errors.push(`Track "${trackName}" has wrong speaker ID "${speaker}", expected "${sessionInfo.speaker1}"`);
+            }
+            
+            // Script validation with -b variant support
+            const scriptBase = sessionInfo.script;
+            const scriptNoDash = scriptBase.replace(/-([bB]\d{3,4})$/, 'b$1');
+            if (script !== scriptBase && script !== scriptNoDash) {
+              errors.push(`Track "${trackName}" has wrong script "${script}", expected "${scriptBase}"`);
+            }
+          }
+        } else if (sessionInfo.type === 'dual') {
+          // Dual character: expect "Left_Talent X_<speaker1>_<date>_<script>" and "Right_Talent X_<speaker2>_<date>_<script>"
+          
+          const leftTracks = markerTrackNames.filter(t => t.toLowerCase().includes('left'));
+          const rightTracks = markerTrackNames.filter(t => t.toLowerCase().includes('right'));
+          
+          // Validate Left tracks
+          for (const trackName of leftTracks) {
+            const match = trackName.match(/^Left_Talent [12]_(.+?)_(\d{4})_(.+)$/);
+            if (!match) {
+              errors.push(`Track name format error: "${trackName}" should be "Left_Talent X_<speaker>_<date>_<script>"`);
+              continue;
+            }
+            
+            const [, speaker, date, script] = match;
+            
+            if (speaker !== sessionInfo.speaker1) {
+              errors.push(`Left track "${trackName}" has wrong speaker ID "${speaker}", expected "${sessionInfo.speaker1}"`);
+            }
+            
+            if (script !== sessionInfo.script) {
+              errors.push(`Left track "${trackName}" has wrong script "${script}", expected "${sessionInfo.script}"`);
+            }
+          }
+          
+          // Validate Right tracks
+          for (const trackName of rightTracks) {
+            const match = trackName.match(/^Right_Talent [12]_(.+?)_(\d{4})_(.+)$/);
+            if (!match) {
+              errors.push(`Track name format error: "${trackName}" should be "Right_Talent X_<speaker>_<date>_<script>"`);
+              continue;
+            }
+            
+            const [, speaker, date, script] = match;
+            
+            if (speaker !== sessionInfo.speaker2) {
+              errors.push(`Right track "${trackName}" has wrong speaker ID "${speaker}", expected "${sessionInfo.speaker2}"`);
+            }
+            
+            if (script !== sessionInfo.script) {
+              errors.push(`Right track "${trackName}" has wrong script "${script}", expected "${sessionInfo.script}"`);
+            }
+          }
+        }
+
+        return { errors };
+      }
+
       // NEW: Tracks section — clean when all pass, detailed only on fail
-      function renderTracksSection(tracks, expectedList){
-        const hasErrors = expectedList.some(e => e !== null);
+      function renderTracksSection(tracks, expectedList, isMissing, trackNamesFromMarkersErrors = []){
         let html = `<div class="section"><h2>Tracks</h2>`;
+
+        if (isMissing) {
+          html += `<div class="badge fail">MISSING SECTION</div>`;
+          
+          // Show track name validation errors from markers if any
+          if (trackNamesFromMarkersErrors && trackNamesFromMarkersErrors.length > 0) {
+            html += `<div class="note" style="color:#991b1b;font-weight:600;margin-top:10px;">
+              Track Listing section missing, but track name errors found in Markers:
+            </div>`;
+            html += `<div class="error-list">`;
+            trackNamesFromMarkersErrors.forEach(err => {
+              html += `<div class="error-item">${esc(err)}</div>`;
+            });
+            html += `</div>`;
+          } else {
+            html += `<div class="note" style="color:#991b1b;font-weight:600;margin-top:10px;">
+              "Track Listing" section not found in text file.<br>
+              Re-export from Pro Tools with all required options.
+            </div>`;
+          }
+          
+          html += `</div>`;
+          return html;
+        }
+
+        const hasErrors = expectedList.some(e => e !== null);
 
         // All tracks are correct → show PASSED badge with collapsible details
         if (!hasErrors) {
@@ -1638,6 +1741,9 @@
         // Expected first track based on t1lt2r/t2lt1r
         let expectedFirstTrack = null;
         
+        // Only validate track placement if trackNames is available
+        const canValidateTracks = trackNames !== null && Array.isArray(trackNames);
+        
         if (sessionInfo && sessionInfo.type === 'dual') {
           // Dualcharacter: Tracks 3 & 4 (edit tracks)
           allowedTrackIndices = [3, 4];
@@ -1655,9 +1761,26 @@
         }
 
         function getTrackIndexByName(trackName) {
-          if (!trackName || !Array.isArray(trackNames)) return -1;
-          const idx = trackNames.findIndex(t => t === trackName);
-          return idx === -1 ? -1 : idx + 1; // 1-based
+          if (!trackName) return -1;
+          
+          // If we have the track listing, use it to get exact index
+          if (canValidateTracks) {
+            const idx = trackNames.findIndex(t => t === trackName);
+            return idx === -1 ? -1 : idx + 1; // 1-based
+          }
+          
+          // Fallback: infer track index from track name pattern
+          // For dual character: Left = Track 3, Right = Track 4
+          // For single character: should be Track 2
+          if (sessionInfo && sessionInfo.type === 'dual') {
+            if (trackName.toLowerCase().includes('left')) return 3;
+            if (trackName.toLowerCase().includes('right')) return 4;
+          } else if (sessionInfo && sessionInfo.type === 'single') {
+            // Single character typically on track 2 (edit track)
+            return 2;
+          }
+          
+          return -1; // Unknown
         }
 
         for (const m of markers) {
@@ -1682,9 +1805,10 @@ if (!['line','lout','scene'].includes(m.token)) {
 
           // Enforce placement: line/lout must be on allowed tracks only
           if (['line','lout'].includes(m.token) && allowedTrackIndices.length) {
-            if (markerTrackIndex === -1) {
+            // Only report "unknown track" if we have the full track listing
+            if (canValidateTracks && markerTrackIndex === -1) {
               errors.push(`${fullName} is on unknown track '${markerTrackName}'`);
-            } else if (!allowedTrackIndices.includes(markerTrackIndex)) {
+            } else if (markerTrackIndex !== -1 && !allowedTrackIndices.includes(markerTrackIndex)) {
               errors.push(`${fullName} placed in disallowed track '${markerTrackName}'`);
             }
           }
@@ -1739,7 +1863,7 @@ if (!['line','lout','scene'].includes(m.token)) {
               
               // Dual character: check first turn track based on t1lt2r/t2lt1r
               if (sessionInfo && sessionInfo.type === 'dual' && isFirstPair && expectedFirstTrack !== null) {
-                if (open.trackIndex !== expectedFirstTrack) {
+                if (open.trackIndex !== -1 && open.trackIndex !== expectedFirstTrack) {
                   const actualTrack = open.trackIndex === 3 ? 'LEFT' : 'RIGHT';
                   const correctCode = open.trackIndex === 3 ? 't1lt2r' : 't2lt1r';
                   // Build corrected session name
@@ -2114,8 +2238,17 @@ if (!['line','lout','scene'].includes(m.token)) {
         return prefix + expectedCore + suffix;
       }
 
-      function renderAudioFilesSection(online, audioCheck){
+      function renderAudioFilesSection(online, audioCheck, isMissing){
         let html = `<div class="section"><h2>Audio Files</h2>`;
+
+        if (isMissing) {
+          html += `<div class="badge fail">MISSING SECTION</div>`;
+          html += `<div class="note" style="color:#991b1b;font-weight:600;margin-top:10px;">
+            "Online Files in Session" section not found in text file.<br>
+            Re-export from Pro Tools with all required options.
+          </div></div>`;
+          return html;
+        }
 
         if (online.err) {
           html += `<div class="badge fail">FAIL — ${esc(online.err)}</div></div>`;
@@ -2570,29 +2703,31 @@ if (!['line','lout','scene'].includes(m.token)) {
 const tracks = parseTracks(lines);
         const online = parseOnlineFiles(lines);
         
-        // Check for missing required sections
+        // Check for missing required sections but continue validation
         const missingTrackListing = tracks.length === 0;
         const missingOnlineFiles = online.err && online.err.includes("Couldn't find");
         
-        if (missingTrackListing || missingOnlineFiles) {
-          sessionError.innerHTML = `
-            <strong>INCOMPLETE FILE EXPORT</strong><br><br>
-            This file is missing required sections:
-            <ul style="margin: 10px 0; padding-left: 20px; text-align: left;">
-              ${missingTrackListing ? '<li><strong>Track Listing</strong> - needed to validate track names</li>' : ''}
-              ${missingOnlineFiles ? '<li><strong>Online Files in Session</strong> - needed to validate audio file names</li>' : ''}
-            </ul>
-            <br>
-            Please re-export from Pro Tools with all required options.<br>
-            <strong>Click "Requirements" above for export instructions.</strong>
-          `;
-          sessionError.style.display = "block";
-          output.innerHTML = "";
-          return;
+        // Validate tracks from Track Listing if available
+        const expectedList = missingTrackListing ? [] : validateTracks(tracks, sessionInfo);
+        
+        // If Track Listing is missing, validate track names from markers instead
+        let trackNamesFromMarkersErrors = [];
+        if (missingTrackListing) {
+          const parsedMarkers = parseMarkersSection(lines);
+          if (!parsedMarkers.err && parsedMarkers.data) {
+            // Extract unique track names from markers
+            const uniqueTrackNames = [...new Set(
+              parsedMarkers.data
+                .map(m => m.track)
+                .filter(t => t && t.trim())
+            )];
+            
+            const trackValidation = validateTracksFromMarkers(uniqueTrackNames, sessionInfo);
+            trackNamesFromMarkersErrors = trackValidation.errors;
+          }
         }
         
-        const expectedList = validateTracks(tracks, sessionInfo);
-        const tracksPass = expectedList.every(e => e === null);
+        const tracksPass = !missingTrackListing && expectedList.every(e => e === null);
 
         const audioCheck = online.err ? {pass:false, errors:[online.err]} : checkAudioFiles(sessionInfo, tracks, online.rows);
         const audioPass = !online.err && audioCheck.pass;
@@ -2603,7 +2738,7 @@ const tracks = parseTracks(lines);
           : validateMarkers(
               parsedMarkers.data.map(d => ({ ...extractMarker(d.name), line: d.line, track: d.track, units: d.units })),
               sessionInfo,
-              tracks
+              missingTrackListing ? null : tracks  // Pass null if tracks missing to skip track validation
             );
         const markersPass = markerErrors.length === 0;
 
@@ -2615,8 +2750,8 @@ const tracks = parseTracks(lines);
 
         output.innerHTML =
           renderFolderNameSection(sessionName, folderCheck) +
-          renderAudioFilesSection(online, audioCheck) +
-          renderTracksSection(tracks, expectedList) +
+          renderAudioFilesSection(online, audioCheck, missingOnlineFiles) +
+          renderTracksSection(tracks, expectedList, missingTrackListing, trackNamesFromMarkersErrors) +
           renderMarkersReport(markerErrors) +
           renderBouncedSection(sessionName, online, bounced);
 
