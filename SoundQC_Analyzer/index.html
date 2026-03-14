@@ -11,12 +11,12 @@
 [data-theme="dark"] {
   --bg:        #090c10;
   --bg2:       #0f1318;
-  --bg3:       #151b23;
-  --border:    rgba(255,255,255,0.07);
-  --border2:   rgba(255,255,255,0.15);
-  --text:      #f2f6ff;
-  --text2:     #a0abbe;
-  --text3:     #5e6e88;
+  --bg3:       #171e28;
+  --border:    rgba(255,255,255,0.08);
+  --border2:   rgba(255,255,255,0.18);
+  --text:      #f4f8ff;
+  --text2:     #b8c4d8;
+  --text3:     #7a8fa8;
   --shadow:    0 2px 24px rgba(0,0,0,0.55);
   --grid-line: rgba(255,255,255,0.024);
   --card-hover:rgba(255,255,255,0.028);
@@ -28,6 +28,8 @@
   --red-dim:   rgba(255,61,87,0.12);
   --blue:      #4da6ff;
   --blue-dim:  rgba(77,166,255,0.12);
+  --bar-track: rgba(255,255,255,0.18);
+  --bar-border: rgba(255,255,255,0.5);
 }
 
 /* ── LIGHT THEME ──────────────────────────────────── */
@@ -51,6 +53,8 @@
   --red-dim:   rgba(200,0,31,0.09);
   --blue:      #0e5fd0;
   --blue-dim:  rgba(14,95,208,0.1);
+  --bar-track: rgba(0,0,0,0.12);
+  --bar-border: rgba(0,0,0,0.28);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -499,7 +503,7 @@ h1 span { color: var(--green); }
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.1</div>
+      <div class="version-badge">v2.2</div>
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">DARK</span>
@@ -583,6 +587,19 @@ h1 span { color: var(--green); }
 
     <div class="cards-grid" id="cardsGrid">
 
+      <!-- Stereo RAW QA card — shown only for _RAW stereo file -->
+      <div class="result-card" id="rawStereoCard" style="display:none">
+        <div class="card-header">
+          <div style="min-width:0;flex:1">
+            <div class="card-type"><span class="card-type-qa">QA</span> — RAW Stereo</div>
+            <div class="card-filename" id="rawStereoCardName"></div>
+            <div class="card-meta"    id="rawStereoCardMeta"></div>
+          </div>
+          <div id="rawStereoNFBadge"></div>
+        </div>
+        <div class="card-body" id="rawStereoMetrics"></div>
+      </div>
+
       <div class="result-card" id="rawLCard" style="display:none">
         <div class="card-header">
           <div style="min-width:0;flex:1">
@@ -615,14 +632,14 @@ h1 span { color: var(--green); }
           <div id="rawPairDeltaTag"></div>
           <div style="flex:1;min-width:200px">
             <!-- L---C---R balance meter -->
-            <div style="position:relative;height:12px;background:var(--bg4,#1e2840);border-radius:6px;overflow:hidden;margin-bottom:6px">
+            <div style="position:relative;height:12px;background:var(--bar-track);border-radius:6px;overflow:hidden;margin-bottom:6px;box-shadow:inset 0 0 0 1.5px var(--bar-border)">
               <!-- center marker -->
-              <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--border2);transform:translateX(-50%)"></div>
+              <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:rgba(255,255,255,0.6);transform:translateX(-50%)"></div>
               <!-- fill extends from center toward L or R -->
               <div id="rawPairBalFill" style="position:absolute;top:0;bottom:0;border-radius:6px;transition:all .4s"></div>
             </div>
             <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:4px">
-              <span>L &nbsp; 1</span><span>C &nbsp; 50</span><span>100 &nbsp; R</span>
+              <span>L</span><span>C</span><span>R</span>
             </div>
             <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">
               Left RMS: <span id="rawPairLRms" style="color:var(--text2)"></span> &nbsp;·&nbsp;
@@ -721,6 +738,8 @@ function toggleTheme() {
 // ── File state ───────────────────────────────────────────────
 let eFile = null, mFile = null;
 let rawLeftFiles = [], rawRightFiles = [];
+let markersFile = null, markersData = null;
+let rawStereoFile = null;
 
 // ── Drag & Drop ──────────────────────────────────────────────
 const dz = document.getElementById('dropZone');
@@ -771,7 +790,18 @@ function classifyFiles(files) {
   const wavs = files.filter(f => f.name.toLowerCase().endsWith('.wav'));
   const rawAll = [], edits = [], mixes = [];
 
+  // Detect _RAW stereo file (single stereo WAV with _RAW suffix — dual-character stereo QA)
+  rawStereoFile = null;
+  const rawStereo = wavs.filter(f => /_raw\b/i.test(f.name));
+  if (rawStereo.length === 1) rawStereoFile = rawStereo[0];
+
+  // Detect markers .txt file (in Bounced Files or same folder as audio)
+  const txts = files.filter(f => f.name.toLowerCase().endsWith('.txt'));
+  if (txts.length) markersFile = txts[0];
+
   wavs.forEach(f => {
+    // Skip: handled separately as stereo RAW QA file
+    if (rawStereoFile && f === rawStereoFile) return;
     const folder = (f._folder || '').toLowerCase();
     const name   = f.name.toLowerCase();
     if (/audio.?file/i.test(folder)) {
@@ -816,6 +846,8 @@ function processFiles(files, autoRun) {
 
   eFile = null; mFile = null;
   rawLeftFiles = []; rawRightFiles = [];
+  markersFile = null; markersData = null;
+  rawStereoFile = null;
 
   const { rawL, rawR, edits, mixes } = classifyFiles(files);
   rawLeftFiles  = rawL;
@@ -832,7 +864,7 @@ function processFiles(files, autoRun) {
   }
 
   refreshSlots();
-  if (autoRun && (eFile || rawLeftFiles.length)) runAnalysis();
+  if (autoRun && (eFile || rawLeftFiles.length || rawStereoFile)) runAnalysis();
 }
 
 function fmtSize(b) { return b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(1)+' MB'; }
@@ -953,6 +985,13 @@ async function decodeFile(file) {
   await ctx.close(); return buf;
 }
 
+async function analyzeRawStereo(file) {
+  const buf = await decodeFile(file);
+  const base = analyzeBuffer(buf);
+  const stereo = computeStereoRawAnalysis(buf);
+  return { ...base, stereo, _isRawStereo: true };
+}
+
 async function analyzeGroup(files) {
   const results = [];
   for (const f of files) results.push(analyzeBuffer(await decodeFile(f)));
@@ -977,8 +1016,129 @@ function setProgress(txt, pct) {
   document.getElementById('progressFill').style.width = pct+'%';
 }
 
+// Stereo RAW analysis — per-channel speech + overlap detection
+function computeStereoRawAnalysis(buf) {
+  const sr = buf.sampleRate;
+  if (buf.numberOfChannels < 2) return null;
+  const ch0 = buf.getChannelData(0);
+  const ch1 = buf.getChannelData(1);
+
+  // Compute per-channel noise floor for threshold
+  const nf0 = analyzeChannel(ch0, sr).noiseFloorDb;
+  const nf1 = analyzeChannel(ch1, sr).noiseFloorDb;
+  const thresh0 = Math.pow(10, (nf0 + 12) / 20);
+  const thresh1 = Math.pow(10, (nf1 + 12) / 20);
+
+  const winSz = Math.floor(sr * 0.05); // 50ms windows
+  const GAP_WINDOWS = Math.ceil(0.425 / 0.05); // 425ms = 8.5 → 9 windows
+  const totalWin = Math.floor(ch0.length / winSz);
+
+  // Build per-window speech flags for each channel
+  const speech0 = new Uint8Array(totalWin);
+  const speech1 = new Uint8Array(totalWin);
+  for (let i = 0; i < totalWin; i++) {
+    let sq0 = 0, sq1 = 0;
+    for (let j = i * winSz; j < (i + 1) * winSz; j++) {
+      sq0 += ch0[j] * ch0[j];
+      sq1 += ch1[j] * ch1[j];
+    }
+    speech0[i] = Math.sqrt(sq0 / winSz) > thresh0 ? 1 : 0;
+    speech1[i] = Math.sqrt(sq1 / winSz) > thresh1 ? 1 : 0;
+  }
+
+  // Count speech, silence, overlaps
+  let sig0 = 0, sig1 = 0, bothSpeech = 0, gapOverlap = 0;
+
+  function anyInRange(arr, from, to) {
+    for (let k = from; k < to; k++) { if (arr[k]) return true; } return false;
+  }
+
+  for (let i = 0; i < totalWin; i++) {
+    if (speech0[i]) sig0++;
+    if (speech1[i]) sig1++;
+    // Direct overlap: both channels speaking at the same time
+    if (speech0[i] && speech1[i]) { bothSpeech++; continue; }
+    // Gap overlap: silence window within 425ms of a handoff between channels
+    if (!speech0[i] && !speech1[i]) {
+      const lo = Math.max(0, i - GAP_WINDOWS);
+      const hi = Math.min(totalWin, i + GAP_WINDOWS + 1);
+      const recentL  = anyInRange(speech0, lo, i);
+      const recentR  = anyInRange(speech1, lo, i);
+      const upcomingL = anyInRange(speech0, i + 1, hi);
+      const upcomingR = anyInRange(speech1, i + 1, hi);
+      if ((recentL && upcomingR) || (recentR && upcomingL)) gapOverlap++;
+    }
+  }
+
+  const overlapWin = bothSpeech + gapOverlap;
+  const speechL    = sig0 / totalWin * 100;
+  const speechR    = sig1 / totalWin * 100;
+  const speechBoth = (sig0 + sig1 - bothSpeech) / totalWin * 100; // union
+  const silencePct = Math.max(0, 100 - speechBoth);
+  const overlapPct = overlapWin / totalWin * 100;
+  const duration   = buf.duration;
+
+  return {
+    speechL, speechR, silencePct, overlapPct,
+    speechLDur:   duration * speechL    / 100,
+    speechRDur:   duration * speechR    / 100,
+    silenceDur:   duration * silencePct / 100,
+    overlapDur:   duration * overlapPct / 100,
+    directOverlapPct:  bothSpeech / totalWin * 100,
+    gapOverlapPct:     gapOverlap / totalWin * 100,
+  };
+}
+function parseMarkersFile(text) {
+  const linesMap = {}, loutsMap = {};
+  let sessionName = 'Unknown Session', sampleRate = 48000;
+  for (const raw of text.split('\n')) {
+    const cols = raw.split('\t').map(c => c.trim());
+    const snM = raw.match(/^SESSION NAME:\s+(.+)/);
+    if (snM) { sessionName = snM[1].trim(); continue; }
+    const srM = raw.match(/^SAMPLE RATE:\s+([\d.]+)/);
+    if (srM) { sampleRate = parseFloat(srM[1]); continue; }
+    if (cols.length < 5) continue;
+    const name = cols[4], samples = parseInt(cols[2]);
+    if (isNaN(samples)) continue;
+    const lineM = name.match(/^line(\d+)$/i);
+    const loutM = name.match(/^lout(\d+)$/i);
+    if (lineM) linesMap[parseInt(lineM[1])] = samples;
+    if (loutM) loutsMap[parseInt(loutM[1])] = samples;
+  }
+  const paired = Object.keys(linesMap).map(Number).filter(n => loutsMap[n] !== undefined);
+  let netSamples = 0;
+  for (const n of paired) {
+    const dur = loutsMap[n] - linesMap[n];
+    if (dur > 0) netSamples += dur;
+  }
+  const allLoutSamples = Object.values(loutsMap);
+  const lastLoutSample = allLoutSamples.length ? Math.max(...allLoutSamples) : 0;
+  return {
+    sessionName,
+    sampleRate,
+    pairs:        paired.length,
+    netSeconds:   netSamples / sampleRate,
+    grossSeconds: lastLoutSample / sampleRate,
+  };
+}
+
+function loadMarkersFile() {
+  if (!markersFile) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const result = parseMarkersFile(e.target.result);
+        resolve(result.pairs > 0 ? result : null);
+      } catch(_) { resolve(null); }
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsText(markersFile);
+  });
+}
+
 async function runAnalysis() {
-  const hasRaw = rawLeftFiles.length || rawRightFiles.length;
+  const hasRaw = rawLeftFiles.length || rawRightFiles.length || rawStereoFile;
   const hasQC  = eFile || mFile;
   if (!hasRaw && !hasQC) return;
 
@@ -987,9 +1147,10 @@ async function runAnalysis() {
   document.getElementById('progressWrap').removeAttribute('hidden');
   document.getElementById('results').setAttribute('hidden','');
   try {
-    let rawLA = null, rawRA = null, eA = null, mA = null;
+    let rawLA = null, rawRA = null, eA = null, mA = null, rawStereoA = null;
 
-    if (rawLeftFiles.length)  { setProgress('Analyzing RAW Left…',  15); rawLA = await analyzeGroup(rawLeftFiles); }
+    if (rawStereoFile) { setProgress('Analyzing RAW Stereo…', 10); rawStereoA = await analyzeRawStereo(rawStereoFile); }
+    if (rawLeftFiles.length)  { setProgress('Analyzing RAW Left…',  25); rawLA = await analyzeGroup(rawLeftFiles); }
     if (rawRightFiles.length) { setProgress('Analyzing RAW Right…', 40); rawRA = await analyzeGroup(rawRightFiles); }
     if (eFile) {
       setProgress('Decoding Edit WAV…',  60);
@@ -1003,11 +1164,19 @@ async function runAnalysis() {
     }
     if (mFile) { setProgress('Decoding Mixed WAV…', 80); mA = analyzeBuffer(await decodeFile(mFile)); }
 
+    // Load markers .txt if present
+    if (markersFile) { setProgress('Reading markers…', 92); markersData = await loadMarkersFile(); }
+
     setProgress('Building report…', 95);
     await new Promise(r=>setTimeout(r,100));
     document.getElementById('progressWrap').setAttribute('hidden','');
-    renderResults(rawLA, rawRA, eA, mA);
     document.getElementById('results').removeAttribute('hidden');
+    try {
+      renderResults(rawLA, rawRA, eA, mA, rawStereoA);
+    } catch(renderErr) {
+      document.getElementById('cardsGrid').innerHTML =
+        '<div style="grid-column:1/-1;padding:16px;color:var(--red);font-family:monospace;font-size:12px;background:var(--red-dim);border:1px solid var(--red);border-radius:8px"><strong>Render error:</strong> ' + renderErr.message + '<br><small>' + (renderErr.stack||'').split('\n').slice(0,3).join('<br>') + '</small></div>';
+    }
     btn.textContent = '↺  Re-Analyze';
     setTimeout(()=>document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'}), 80);
   } catch(err) {
@@ -1054,18 +1223,19 @@ function nfBarHTML(nf, rms, peak) {
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 
   const nfCol  = nf > -50  ? (isDark ? '#ff4060' : '#d4001a')
-               : nf < -60  ? (isDark ? '#cc44ff' : '#7700cc')
+               : nf < -60  ? (isDark ? '#dd44ff' : '#7700cc')
                             : (isDark ? '#ffaa00' : '#c06000');
-  const rmsCol = isDark ? '#00e060' : '#007a30';
+  const rmsCol = isDark ? '#00ff88' : '#00aa55';
   const pkCol  = isDark ? '#ff2040' : '#cc0020';
+  const valCol = isDark ? '#ffffff' : '#0f1a2a';
 
   const trackBg   = isDark ? '#2a3348' : '#c8d0dc';
   const trackBdr  = isDark ? '#3d4f6a' : '#a0aab8';
-  const tickMinor = isDark ? '#4a5e7a' : '#8090a8';
-  const tickMajor = isDark ? '#8aa0c0' : '#3a4a60';
-  const labelCol  = isDark ? '#d0e0ff' : '#1a2a40';
-  const th60Col   = isDark ? '#00e87a' : '#006e36';
-  const th50Col   = isDark ? '#ff3050' : '#c20018';
+  const tickMinor = isDark ? '#5a7090' : '#8090a8';
+  const tickMajor = isDark ? '#a8c0e0' : '#3a4a60';
+  const labelCol  = isDark ? '#e8f2ff' : '#1a2a40';
+  const th60Col   = isDark ? '#00ff88' : '#009944';
+  const th50Col   = isDark ? '#ff3050' : '#cc0018';
 
   // Use system monospace — Safari doesn't load Google Fonts in SVG attrs
   const FONT = 'Courier New, Courier, monospace';
@@ -1148,17 +1318,17 @@ function nfBarHTML(nf, rms, peak) {
       <div class="ruler-legend-item">
         <div class="ruler-legend-swatch" style="background:${nfCol};height:4px;border-radius:2px"></div>
         <span style="color:${nfCol};font-weight:700">Noise Floor</span>
-        <span style="color:${isDark?'#e0eaff':'#1a2a40'}">${nf.toFixed(1)} dBFS</span>
+        <span style="color:${valCol};font-weight:600">${nf.toFixed(1)} dBFS</span>
       </div>
       <div class="ruler-legend-item">
         <div class="ruler-legend-swatch" style="background:${rmsCol};height:4px;border-radius:2px"></div>
         <span style="color:${rmsCol};font-weight:700">RMS</span>
-        <span style="color:${isDark?'#e0eaff':'#1a2a40'}">${rms.toFixed(1)} dBFS</span>
+        <span style="color:${valCol};font-weight:600">${rms.toFixed(1)} dBFS</span>
       </div>
       <div class="ruler-legend-item">
         <div class="ruler-legend-swatch" style="background:${pkCol};height:4px;border-radius:2px"></div>
         <span style="color:${pkCol};font-weight:700">Peak</span>
-        <span style="color:${isDark?'#e0eaff':'#1a2a40'}">${peak.toFixed(1)} dBFS</span>
+        <span style="color:${valCol};font-weight:600">${peak.toFixed(1)} dBFS</span>
       </div>
     </div>
   </div>`;
@@ -1184,9 +1354,40 @@ function buildMetrics(a, showSignal, hideDeltas) {
           <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
         </div>
       </div>
-      <div style="height:8px;background:var(--bg4,#1e2840);border-radius:4px;overflow:hidden">
-        <div style="height:100%;width:${a.signalPct.toFixed(1)}%;background:var(--green);opacity:.85"></div>
+      <div style="height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1.5px var(--bar-border);margin-bottom:${markersData ? '12px' : '0'}">
+        <div style="height:100%;width:${a.signalPct.toFixed(1)}%;background:#00ff88;border-radius:3px"></div>
       </div>
+      ${markersData ? (() => {
+        const MARKER_OFFSET_S = 0.385; // 100ms line pre-roll + 285ms lout post-roll per pair
+        const correctedNet = Math.max(0, markersData.netSeconds - markersData.pairs * MARKER_OFFSET_S);
+        const mSpeechPct = (correctedNet / markersData.grossSeconds * 100);
+        const mSilencePct = 100 - mSpeechPct;
+        const diff = a.signalPct - mSpeechPct;
+        const diffCol = Math.abs(diff) < 3 ? 'var(--green)' : Math.abs(diff) < 8 ? 'var(--amber)' : 'var(--red)';
+        return `<div style="border-top:1px solid var(--border);padding-top:10px">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Markers Analysis <span style="font-weight:400;font-size:9px">(${markersData.pairs} line/lout pairs)</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div style="background:var(--bg3);border-radius:6px;padding:8px 12px">
+              <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:3px">MARKERS TIME</div>
+              <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:var(--blue)">${mSpeechPct.toFixed(1)}%</div>
+              <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(correctedNet)} <span style="color:var(--text3)">(−${(markersData.pairs * MARKER_OFFSET_S).toFixed(1)}s / ${(markersData.pairs * MARKER_OFFSET_S / markersData.grossSeconds * 100).toFixed(1)}% offset)</span></div>
+            </div>
+            <div style="background:var(--bg3);border-radius:6px;padding:8px 12px">
+              <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:3px">SESSION GROSS</div>
+              <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:var(--text2)">${fmtDur(markersData.grossSeconds)}</div>
+              <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${markersData.pairs} pairs</div>
+            </div>
+          </div>
+          <div style="height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1.5px var(--bar-border);margin-bottom:8px">
+            <div style="height:100%;width:${mSpeechPct.toFixed(1)}%;background:#2080ff;border-radius:3px"></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-family:'Share Tech Mono',monospace;font-size:11px;padding:8px 10px;background:var(--bg3);border-radius:6px">
+            <span style="color:var(--text3)">Audio vs Markers Δ</span>
+            <span style="font-size:15px;font-weight:700;color:${diffCol}">${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%</span>
+            <span style="color:var(--text3);font-size:10px">${Math.abs(diff) < 3 ? 'Consistent' : Math.abs(diff) < 8 ? 'Minor gap' : 'Significant gap'}</span>
+          </div>
+        </div>`;
+      })() : ''}
     </div>`] : [];
   return [
     nfBarHTML(a.noiseFloorDb, a.rmsDb, a.peakDb),
@@ -1199,24 +1400,80 @@ function buildMetrics(a, showSignal, hideDeltas) {
       mRow('L / R Delta',    lrVal, '', a.lrDelta!==null&&a.lrDelta>3?'hl-red':''),
       mRow('Acoustic Δ',     lrVal, rTag, ''),
     ]),
-    ...sigRow,
     ...(a.ch1 ? [
       mRow('L / R RMS',   a.ch0.rmsDb.toFixed(1)+' / '+a.ch1.rmsDb.toFixed(1)+' dBFS', '', ''),
       mRow('L / R Noise', a.ch0.noiseFloorDb.toFixed(1)+' / '+a.ch1.noiseFloorDb.toFixed(1)+' dBFS', '', ''),
     ] : []),
+    ...sigRow,
   ].join('');
 }
 
-function renderResults(rawLA, rawRA, eA, mA) {
+function buildStereoRawSection(a) {
+  if (!a.stereo) return '';
+  const s = a.stereo;
+  // Combined speech = union of both channels (windows where either is speaking)
+  const speechPct  = 100 - s.silencePct;
+  const silencePct = s.silencePct;
+  const overlapCol = s.overlapPct < 5 ? 'var(--green)' : s.overlapPct < 15 ? 'var(--amber)' : 'var(--red)';
+  const overlapRating = s.overlapPct < 5 ? 'Low' : s.overlapPct < 15 ? 'Moderate' : 'High';
+  return `<div style="padding:10px 20px 12px;border-bottom:1px solid var(--border)">
+    <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB · either channel)</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div style="background:var(--bg3);border-radius:6px;padding:8px 12px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:3px">SPEECH</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:var(--green)">${speechPct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(a.duration * speechPct / 100)}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:6px;padding:8px 12px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:3px">SILENCE</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:var(--text2)">${silencePct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(s.silenceDur)}</div>
+      </div>
+    </div>
+    <div style="height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1.5px var(--bar-border);margin-bottom:12px">
+      <div style="height:100%;width:${speechPct.toFixed(1)}%;background:#00ff88;border-radius:3px"></div>
+    </div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(simultaneous + gap &lt; 425ms)</span></div>
+    <div style="display:flex;align-items:center;gap:14px;background:var(--bg3);border-radius:8px;padding:10px 14px">
+      <div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:${overlapCol};line-height:1">${s.overlapPct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2);margin-top:2px">${fmtDur(s.overlapDur)}</div>
+      </div>
+      <div style="flex:1">
+        <div style="height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1.5px var(--bar-border);margin-bottom:6px">
+          <div style="height:100%;width:${Math.min(100,s.overlapPct).toFixed(1)}%;background:${overlapCol};border-radius:3px"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3)">
+          <span>Simultaneous: <span style="color:var(--text2)">${s.directOverlapPct.toFixed(1)}%</span></span>
+          <span>Near-gap: <span style="color:var(--text2)">${s.gapOverlapPct.toFixed(1)}%</span></span>
+          <span style="color:${overlapCol};font-weight:700">${overlapRating}</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderResults(rawLA, rawRA, eA, mA, rawStereoA) {
   const hasRawL = !!rawLA, hasRawR = !!rawRA;
   const hasEdit = !!eA,    hasMix  = !!mA;
   const hasRaw  = hasRawL || hasRawR;
   const hasQC   = hasEdit  || hasMix;
+  const hasStereoRaw = !!rawStereoA;
 
   // How many visible cards determines grid layout
-  const visibleCount = [hasRawL,hasRawR,hasEdit,hasMix].filter(Boolean).length;
+  const visibleCount = [hasStereoRaw,hasRawL,hasRawR,hasEdit,hasMix].filter(Boolean).length;
   const grid = document.getElementById('cardsGrid');
   grid.style.gridTemplateColumns = visibleCount === 1 ? '1fr' : '1fr 1fr';
+
+  // Stereo RAW card
+  document.getElementById('rawStereoCard').style.display = hasStereoRaw ? '' : 'none';
+  if (hasStereoRaw) {
+    document.getElementById('rawStereoCardName').textContent = rawStereoFile.name;
+    document.getElementById('rawStereoCardMeta').textContent =
+      fmtSize(rawStereoFile.size) + ' · ' + rawStereoA.sampleRate/1000 + ' kHz · Stereo · ' + fmtDur(rawStereoA.duration);
+    document.getElementById('rawStereoNFBadge').innerHTML = nfBadgeHTML(rawStereoA.noiseFloorDb);
+    document.getElementById('rawStereoMetrics').innerHTML = buildMetrics(rawStereoA, false, true) + buildStereoRawSection(rawStereoA);
+  }
 
   // RAW Left card
   document.getElementById('rawLCard').style.display = hasRawL ? '' : 'none';
@@ -1260,7 +1517,7 @@ function renderResults(rawLA, rawRA, eA, mA) {
     // halfPct: how far from center, max 50 = full deflection
     const halfPct = Math.abs(deviation);
     const fill = document.getElementById('rawPairBalFill');
-    fill.style.background = col;
+    fill.style.background = '#00ff88';
     if (deviation <= 0) {
       // Left is dominant → fill extends leftward from center
       fill.style.left  = (50 - halfPct).toFixed(1) + '%';
@@ -1286,7 +1543,9 @@ function renderResults(rawLA, rawRA, eA, mA) {
   }
 
   // Edit card
-  document.getElementById('editCard').style.display = hasEdit ? '' : 'none';
+  // Edit card — hide when only stereo RAW QA file present
+  const showQC = hasEdit && !hasStereoRaw || (hasStereoRaw && (hasRawL || hasRawR || hasEdit));
+  document.getElementById('editCard').style.display = (hasEdit && !hasStereoRaw) ? '' : 'none';
   if (hasEdit) {
     document.getElementById('editCardType').innerHTML = '<span class="card-type-qc">QC</span> — Edit WAV';
     document.getElementById('editCardName').textContent = eFile.name;
@@ -1296,7 +1555,7 @@ function renderResults(rawLA, rawRA, eA, mA) {
   }
 
   // Mix card
-  document.getElementById('mixCard').style.display = hasMix ? '' : 'none';
+  document.getElementById('mixCard').style.display = (hasMix && !hasStereoRaw) ? '' : 'none';
   if (hasMix) {
     document.getElementById('mixCardName').textContent = mFile.name;
     document.getElementById('mixCardMeta').textContent = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration);
@@ -1322,7 +1581,7 @@ function renderResults(rawLA, rawRA, eA, mA) {
   }
 
   // Overall badge
-  const allA = [rawLA, rawRA, eA, mA].filter(Boolean);
+  const allA = [rawStereoA, rawLA, rawRA, eA, mA].filter(Boolean);
   const anyFail = allA.some(a => a.noiseFloorDb > -50 || a.noiseFloorDb <= -90);
   const allPass = allA.every(a => a.noiseFloorDb < -60 && a.noiseFloorDb > -90);
   const overall = anyFail ? 'FAIL' : allPass ? 'PASS' : 'WARN';
@@ -1332,7 +1591,7 @@ function renderResults(rawLA, rawRA, eA, mA) {
 
   // Alerts
   let alerts = '';
-  [{lbl:'RAW Left',a:rawLA},{lbl:'RAW Right',a:rawRA},{lbl:'Edit WAV',a:eA},{lbl:'Mixed WAV',a:mA}].forEach(({lbl,a}) => {
+  [{lbl:'RAW Stereo',a:rawStereoA},{lbl:'RAW Left',a:rawLA},{lbl:'RAW Right',a:rawRA},{lbl:'Edit WAV',a:eA},{lbl:'Mixed WAV',a:mA}].forEach(({lbl,a}) => {
     if (!a) return;
     if (a.noiseFloorDb > -50)  alerts += `<div class="alert alert-fail"><div class="alert-icon">!</div><div><strong>${lbl}</strong> noise floor ${a.noiseFloorDb.toFixed(1)} dBFS exceeds −50 dBFS.</div></div>`;
     if (a.noiseFloorDb <= -90) alerts += `<div class="alert alert-fail"><div class="alert-icon">!</div><div><strong>${lbl}</strong> noise floor ${a.noiseFloorDb.toFixed(1)} dBFS — below −90 dBFS. No room tone detected.</div></div>`;
