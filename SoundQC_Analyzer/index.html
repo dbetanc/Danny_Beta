@@ -616,9 +616,10 @@ h1 span { color: var(--green); }
       <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:200px">
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Noise Floor Threshold</div>
         <div class="legend-nf">
-          <div class="legend-nf-item"><span class="nf-chip nf-pass">PASS</span>&lt; −60 dBFS</div>
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">PASS</span>−70 to −60 dBFS</div>
           <div class="legend-nf-item"><span class="nf-chip nf-warn">WARN</span>−60 to −50 dBFS</div>
-          <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>&gt; −50 dBFS</div>
+          <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>&gt; −50 dBFS &nbsp;<span style="color:var(--text3)">too noisy</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>&lt; −70 dBFS &nbsp;<span style="color:var(--text3)">no room tone</span></div>
         </div>
       </div>
 
@@ -822,13 +823,15 @@ async function runAnalysis() {
 
 // ── Render ───────────────────────────────────────────────────
 function nfBadgeHTML(db) {
-  if (db > -50) return '<div class="nf-badge nf-fail">FAIL</div>';
-  if (db < -60) return '<div class="nf-badge nf-pass">PASS</div>';
-  return '<div class="nf-badge nf-warn">WARN</div>';
+  if (db > -50)              return '<div class="nf-badge nf-fail">FAIL</div>';          // too noisy
+  if (db >= -60 && db <= -50) return '<div class="nf-badge nf-warn">WARN</div>';          // borderline
+  if (db > -70 && db < -60)  return '<div class="nf-badge nf-pass">PASS</div>';          // good room tone
+  return '<div class="nf-badge nf-fail" title="No room tone detected">FAIL — No Room Tone</div>'; // < -70 = dead silent
 }
 function nfColorCls(db) {
-  if (db > -50) return 'hl-red';
-  if (db < -60) return 'hl-green';
+  if (db > -50)  return 'hl-red';
+  if (db <= -70) return 'hl-red';
+  if (db < -60)  return 'hl-green';
   return 'hl-amber';
 }
 function deltaRating(d) {
@@ -1027,21 +1030,28 @@ function renderResults(eA, mA) {
     </div>`).join('');
   }
 
-  // Overall badge
+  // Overall badge — FAIL if too noisy (>-50) OR no room tone (<=-70)
   const files = single ? [eA] : [eA, mA];
-  const anyFail = files.some(a => a.noiseFloorDb > -50);
-  const allPass = files.every(a => a.noiseFloorDb < -60);
-  const overall = !anyFail ? (allPass ? 'PASS' : 'WARN') : 'FAIL';
+  const anyFail = files.some(a => a.noiseFloorDb > -50 || a.noiseFloorDb <= -70);
+  const allPass = files.every(a => a.noiseFloorDb < -60 && a.noiseFloorDb > -70);
+  const overall = anyFail ? 'FAIL' : allPass ? 'PASS' : 'WARN';
   const cls = overall==='PASS'?'pass':overall==='FAIL'?'fail':'warn';
   document.getElementById('overallBadge').innerHTML =
     `<div class="overall-badge ${cls}"><div class="badge-dot"></div>${overall}</div>`;
 
   // Alert banners
   let alerts = '';
-  const eFail = eA.noiseFloorDb > -50;
-  const mFail = !single && mA.noiseFloorDb > -50;
+  const eFail      = eA.noiseFloorDb > -50;
+  const eNoRoom    = eA.noiseFloorDb <= -70;
+  const mFail      = !single && mA.noiseFloorDb > -50;
+  const mNoRoom    = !single && mA.noiseFloorDb <= -70;
+
   if (eFail || mFail)
     alerts += `<div class="alert alert-fail"><div class="alert-icon">!</div><div>${eFail?`<strong>${single?'File':'Edit WAV'}</strong> noise floor ${eA.noiseFloorDb.toFixed(1)} dBFS exceeds −50 dBFS threshold. `:''} ${mFail?`<strong>Mixed WAV</strong> noise floor ${mA.noiseFloorDb.toFixed(1)} dBFS exceeds −50 dBFS threshold.`:''}</div></div>`;
+
+  if (eNoRoom || mNoRoom)
+    alerts += `<div class="alert alert-fail"><div class="alert-icon">!</div><div>${eNoRoom?`<strong>${single?'File':'Edit WAV'}</strong> noise floor ${eA.noiseFloorDb.toFixed(1)} dBFS — below −70 dBFS. No room tone detected. `:''} ${mNoRoom?`<strong>Mixed WAV</strong> noise floor ${mA.noiseFloorDb.toFixed(1)} dBFS — below −70 dBFS. No room tone detected.`:''}</div></div>`;
+
   if ((eA.lrDelta!==null&&eA.lrDelta>3)||(!single&&mA.lrDelta!==null&&mA.lrDelta>3))
     alerts += `<div class="alert alert-warn"><div class="alert-icon">△</div><div>${eA.lrDelta>3?`<strong>${single?'File':'Edit WAV'}</strong> L/R imbalance ${eA.lrDelta.toFixed(2)} dB — check channel routing. `:''} ${!single&&mA.lrDelta>3?`<strong>Mixed WAV</strong> L/R imbalance ${mA.lrDelta.toFixed(2)} dB — check channel routing.`:''}</div></div>`;
   document.getElementById('alertsWrap').innerHTML = alerts;
