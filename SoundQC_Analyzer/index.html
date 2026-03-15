@@ -359,9 +359,12 @@ h1 span { color: var(--green); }
   letter-spacing: 1.2px; text-transform: uppercase;
   padding: 5px 11px; border-radius: 5px; flex-shrink: 0; white-space: nowrap;
 }
-.nf-pass { background: var(--green-dim); color: var(--green); border: 1.5px solid var(--green); }
-.nf-fail { background: var(--red-dim);   color: var(--red);   border: 1.5px solid var(--red); }
-.nf-warn { background: var(--amber-dim); color: var(--amber); border: 1.5px solid var(--amber); }
+.nf-pass   { background: var(--green-dim); color: var(--green); border: 1.5px solid var(--green); }
+.nf-fail   { background: var(--red-dim);   color: var(--red);   border: 1.5px solid var(--red); }
+.nf-warn   { background: var(--amber-dim); color: var(--amber); border: 1.5px solid var(--amber); }
+.nf-orange { background: rgba(255,120,0,0.12); color: #ff7800; border: 1.5px solid #ff7800; }
+.nf-purple { background: rgba(160,80,255,0.12); color: #a050ff; border: 1.5px solid #a050ff; }
+.nf-blue   { background: var(--blue-dim);  color: var(--blue);  border: 1.5px solid var(--blue); }
 
 .card-body { padding: 4px 0; }
 
@@ -388,10 +391,11 @@ h1 span { color: var(--green); }
   font-size: 15px; font-weight: 600;
   color: var(--text); text-align: right;
 }
-.metric-value.hl-green { color: var(--green); }
-.metric-value.hl-red   { color: var(--red); }
-.metric-value.hl-amber { color: var(--amber); }
-.metric-value.hl-blue  { color: var(--blue); }
+.metric-value.hl-green  { color: var(--green); }
+.metric-value.hl-red    { color: var(--red); }
+.metric-value.hl-amber  { color: var(--amber); }
+.metric-value.hl-blue   { color: var(--blue); }
+.metric-value.hl-purple { color: #a050ff; }
 
 .rating-tag {
   font-family: 'Share Tech Mono', monospace;
@@ -427,7 +431,7 @@ h1 span { color: var(--green); }
   font-size: 12px; color: var(--text2);
   text-transform: uppercase; letter-spacing: 1.2px;
 }
-.compare-grid { display: grid; grid-template-columns: repeat(4,1fr); }
+.compare-grid { display: grid; grid-template-columns: repeat(5,1fr); }
 .compare-cell { padding: 16px 20px; border-right: 1px solid var(--border); }
 .compare-cell:last-child { border-right: none; }
 .compare-cell-label {
@@ -464,7 +468,7 @@ h1 span { color: var(--green); }
 .legend-item  { display: flex; align-items: center; gap: 6px; font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); }
 .legend-dot   { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .divider-l    { width: 1px; height: 18px; background: var(--border2); margin: 0 6px; }
-.legend-nf    { display: flex; flex-wrap: wrap; gap: 14px; }
+.legend-nf    { display: flex; flex-direction: column; gap: 6px; }
 .legend-nf-item { display: flex; align-items: center; gap: 7px; font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); }
 .nf-chip      { font-family: 'Share Tech Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: .6px; padding: 2px 7px; border-radius: 3px; }
 
@@ -478,7 +482,7 @@ h1 span { color: var(--green); }
 /* ── RESPONSIVE ────────────────────────────────────── */
 @media(max-width:660px){
   .cards-grid,.file-slots{grid-template-columns:1fr;}
-  .compare-grid{grid-template-columns:repeat(2,1fr);}
+  .compare-grid{grid-template-columns:repeat(3,1fr);}
   .compare-cell:nth-child(2){border-right:none;}
   .compare-cell:nth-child(3),.compare-cell:nth-child(4){border-top:1px solid var(--border);}
   .compare-cell:nth-child(4){border-right:none;}
@@ -503,7 +507,7 @@ h1 span { color: var(--green); }
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.2</div>
+      <div class="version-badge">v2.3</div>
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">DARK</span>
@@ -580,10 +584,7 @@ h1 span { color: var(--green); }
   <!-- RESULTS -->
   <div id="results" hidden style="margin-top:1.75rem">
 
-    <div class="results-header">
-      <div class="results-title">Analysis Report</div>
-      <div id="overallBadge"></div>
-    </div>
+    <div id="overallBadge" style="display:none"></div>
 
     <div class="cards-grid" id="cardsGrid">
 
@@ -684,17 +685,38 @@ h1 span { color: var(--green); }
       <div class="compare-grid" id="compareGrid"></div>
     </div>
 
+    <!-- QC Session Analysis card — Speech/Silence, Markers, Overlaps -->
+    <div class="result-card" id="sessionAnalysisCard" style="display:none;margin-bottom:14px">
+      <div class="card-header">
+        <div style="min-width:0;flex:1">
+          <div class="card-type"><span class="card-type-qc">QC</span> — Session Analysis</div>
+          <div class="card-meta" id="sessionAnalysisMeta"></div>
+        </div>
+      </div>
+      <div class="card-body" id="sessionAnalysisMetrics"></div>
+    </div>
+
+    <!-- Recommendations card -->
+    <div class="result-card" id="recsCard" style="display:none;margin-bottom:14px">
+      <div class="card-header">
+        <div style="min-width:0;flex:1">
+          <div class="card-type">⚡ Recommendations</div>
+        </div>
+      </div>
+      <div class="card-body" id="recsBody"></div>
+    </div>
+
     <div id="alertsWrap"></div>
 
     <div class="legend">
 
-      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:220px">
+      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:200px">
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Acoustic Delta L/R</div>
-        <div class="legend-items">
-          <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>&lt; 1 dB &nbsp;<span style="color:var(--text3)">Excellent</span></div>
-          <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>1–2 dB &nbsp;<span style="color:var(--text3)">Acceptable</span></div>
-          <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>2–3 dB &nbsp;<span style="color:var(--text3)">Noticeable</span></div>
-          <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>&gt; 3 dB &nbsp;<span style="color:var(--text3)">Problem</span></div>
+        <div class="legend-nf">
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">EXCELLENT</span>&lt; 1 dB</div>
+          <div class="legend-nf-item"><span class="nf-chip nf-blue">ACCEPTABLE</span>1–2 dB</div>
+          <div class="legend-nf-item"><span class="nf-chip nf-warn">NOTICEABLE</span>2–3 dB</div>
+          <div class="legend-nf-item"><span class="nf-chip nf-fail">PROBLEM</span>&gt; 3 dB</div>
         </div>
       </div>
 
@@ -703,10 +725,22 @@ h1 span { color: var(--green); }
       <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:200px">
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Noise Floor Threshold</div>
         <div class="legend-nf">
-          <div class="legend-nf-item"><span class="nf-chip nf-pass">PASS</span>−90 to −60 dBFS</div>
-          <div class="legend-nf-item"><span class="nf-chip nf-warn">WARN</span>−60 to −50 dBFS</div>
           <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>&gt; −50 dBFS &nbsp;<span style="color:var(--text3)">too noisy</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>&lt; −90 dBFS &nbsp;<span style="color:var(--text3)">no room tone</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-orange">WARN</span>−50 to −57 dBFS &nbsp;<span style="color:var(--text3)">trending noisy</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">PASS</span>−57 to −68 dBFS &nbsp;<span style="color:var(--text3)">sweet spot</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-warn">WARN</span>−68 to −80 dBFS &nbsp;<span style="color:var(--text3)">trending quiet</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-purple">FAIL</span>&lt; −80 dBFS &nbsp;<span style="color:var(--text3)">no room tone</span></div>
+        </div>
+      </div>
+
+      <div class="divider-l"></div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:200px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Integrated LUFS</div>
+        <div class="legend-nf">
+          <div class="legend-nf-item"><span class="nf-chip nf-fail">LOUD</span>&gt; −14 LUFS &nbsp;<span style="color:var(--text3)">too loud</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">TARGET</span>−14 to −23 LUFS &nbsp;<span style="color:var(--text3)">delivery range</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-purple">QUIET</span>&lt; −23 LUFS &nbsp;<span style="color:var(--text3)">too quiet</span></div>
         </div>
       </div>
 
@@ -783,6 +817,15 @@ async function readDir(dir) {
 function getTalentCode(name) {
   const base = name.replace(/\.wav$/i, '').replace(/^(left|right)_talent\s*\d*_?/i, '');
   return base.split('_')[0].toLowerCase();
+}
+
+function getStudioLocation(talentCode) {
+  // Format: [2 lang][2 location][2 studio][talent initials]
+  // e.g. engblyjsom → location=gb, studio=ly
+  if (!talentCode || talentCode.length < 6) return null;
+  const location = talentCode.substring(2, 4).toUpperCase();
+  const studio   = talentCode.substring(4, 6).toUpperCase();
+  return { studio, location };
 }
 
 // ── File classification ───────────────────────────────────────
@@ -947,6 +990,100 @@ function analyzeBuffer(buf) {
            rmsDb, peakDb, noiseFloorDb, snr, dynamicRange, lrDelta, ch0, ch1 };
 }
 
+// ── Integrated LUFS (ITU-R BS.1770-4) ───────────────────────
+function computeIntegratedLUFS(buf) {
+  const sr = buf.sampleRate;
+  const nc = Math.min(buf.numberOfChannels, 2);
+
+  // ── Stage 1: K-weighting pre-filter (high-shelf) ──────────
+  // Coefficients for 48kHz; scaled for other sample rates via bilinear transform
+  function preFilterCoeffs(fs) {
+    // Pre-filter: high-shelf +4dB above ~1500 Hz
+    const db   =  4.0;
+    const f0   =  1681.974450955533;
+    const Q    =  0.7071752369554196;
+    const K    = Math.tan(Math.PI * f0 / fs);
+    const Vh   = Math.pow(10, db / 20);
+    const Vb   = Math.pow(Vh, 0.4996667741545416);
+    const a0   = 1 + K / Q + K * K;
+    return {
+      b0: (Vh + Vb * K / Q + K * K) / a0,
+      b1: 2 * (K * K - Vh) / a0,
+      b2: (Vh - Vb * K / Q + K * K) / a0,
+      a1: 2 * (K * K - 1) / a0,
+      a2: (1 - K / Q + K * K) / a0,
+    };
+  }
+
+  // ── Stage 2: RLB weighting filter (high-pass) ─────────────
+  function rlbFilterCoeffs(fs) {
+    const f0 = 38.13547087602444;
+    const Q  = 0.5003270373238773;
+    const K  = Math.tan(Math.PI * f0 / fs);
+    return {
+      b0:  1,
+      b1: -2,
+      b2:  1,
+      a1:  2 * (K * K - 1) / (1 + K / Q + K * K),
+      a2:  (1 - K / Q + K * K) / (1 + K / Q + K * K),
+    };
+  }
+
+  function applyBiquad(data, c) {
+    const out = new Float32Array(data.length);
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < data.length; i++) {
+      const x0 = data[i];
+      const y0 = c.b0*x0 + c.b1*x1 + c.b2*x2 - c.a1*y1 - c.a2*y2;
+      out[i] = y0; x2 = x1; x1 = x0; y2 = y1; y1 = y0;
+    }
+    return out;
+  }
+
+  const pc = preFilterCoeffs(sr);
+  const rc = rlbFilterCoeffs(sr);
+
+  // Apply both filter stages to each channel
+  const filtered = [];
+  for (let c = 0; c < nc; c++) {
+    const raw  = buf.getChannelData(c);
+    const stage1 = applyBiquad(raw, pc);
+    filtered.push(applyBiquad(stage1, rc));
+  }
+
+  // ── Gated loudness measurement ────────────────────────────
+  const blockSize  = Math.round(sr * 0.4);  // 400ms blocks
+  const hopSize    = Math.round(sr * 0.1);  // 100ms hop (75% overlap)
+  const nSamples   = filtered[0].length;
+  const blockMeans = [];
+
+  for (let start = 0; start + blockSize <= nSamples; start += hopSize) {
+    let sum = 0;
+    for (let c = 0; c < nc; c++) {
+      let bsum = 0;
+      for (let i = start; i < start + blockSize; i++) bsum += filtered[c][i] ** 2;
+      sum += bsum / blockSize;
+    }
+    blockMeans.push(sum / nc);
+  }
+
+  if (!blockMeans.length) return null;
+
+  // Absolute gate: -70 LUFS
+  const absGateLin = Math.pow(10, (-70 + 0.691) / 10);
+  const gated1 = blockMeans.filter(m => m > absGateLin);
+  if (!gated1.length) return null;
+
+  // Relative gate: -10 LU below ungated mean
+  const ungatedMean = gated1.reduce((s, v) => s + v, 0) / gated1.length;
+  const relGateLin  = ungatedMean * Math.pow(10, -10 / 10);
+  const gated2 = blockMeans.filter(m => m > relGateLin);
+  if (!gated2.length) return null;
+
+  const integratedMean = gated2.reduce((s, v) => s + v, 0) / gated2.length;
+  return -0.691 + 10 * Math.log10(integratedMean);
+}
+
 function computeSignalSilence(buf) {
   const sr = buf.sampleRate;
   const noiseFloorDb = analyzeChannel(buf.getChannelData(0), sr).noiseFloorDb;
@@ -1017,7 +1154,7 @@ function setProgress(txt, pct) {
 }
 
 // Stereo RAW analysis — per-channel speech + overlap detection
-function computeStereoRawAnalysis(buf) {
+function computeStereoRawAnalysis(buf, simultaneousOnly) {
   const sr = buf.sampleRate;
   if (buf.numberOfChannels < 2) return null;
   const ch0 = buf.getChannelData(0);
@@ -1058,8 +1195,8 @@ function computeStereoRawAnalysis(buf) {
     if (speech1[i]) sig1++;
     // Direct overlap: both channels speaking at the same time
     if (speech0[i] && speech1[i]) { bothSpeech++; continue; }
-    // Gap overlap: silence window within 425ms of a handoff between channels
-    if (!speech0[i] && !speech1[i]) {
+    // Gap overlap: silence window within 425ms of a handoff (RAW stereo only)
+    if (!simultaneousOnly && !speech0[i] && !speech1[i]) {
       const lo = Math.max(0, i - GAP_WINDOWS);
       const hi = Math.min(totalWin, i + GAP_WINDOWS + 1);
       const recentL  = anyInRange(speech0, lo, i);
@@ -1156,13 +1293,20 @@ async function runAnalysis() {
       setProgress('Decoding Edit WAV…',  60);
       const eBuf = await decodeFile(eFile);
       eA = analyzeBuffer(eBuf);
+      eA.lufs = computeIntegratedLUFS(eBuf);
       // Speech vs Silence only on Edit — contains both talents mixed, so silence is meaningful
       const ss = computeSignalSilence(eBuf);
       eA.signalPct  = ss.signalPct;  eA.silencePct  = ss.silencePct;
       eA.signalDur  = ss.signalDur;  eA.silenceDur  = ss.silenceDur;
       eA.thresholdDb = ss.thresholdDb;
+      eA.stereo = computeStereoRawAnalysis(eBuf, true);
     }
-    if (mFile) { setProgress('Decoding Mixed WAV…', 80); mA = analyzeBuffer(await decodeFile(mFile)); }
+    if (mFile) {
+      setProgress('Decoding Mixed WAV…', 80);
+      const mBuf = await decodeFile(mFile);
+      mA = analyzeBuffer(mBuf);
+      mA.lufs = computeIntegratedLUFS(mBuf);
+    }
 
     // Load markers .txt if present
     if (markersFile) { setProgress('Reading markers…', 92); markersData = await loadMarkersFile(); }
@@ -1190,15 +1334,17 @@ async function runAnalysis() {
 // ── Render ───────────────────────────────────────────────────
 function nfBadgeHTML(db) {
   if (db > -50)              return '<div class="nf-badge nf-fail">FAIL</div>';
-  if (db >= -60 && db <= -50) return '<div class="nf-badge nf-warn">WARN</div>';
-  if (db > -90 && db < -60)  return '<div class="nf-badge nf-pass">PASS</div>';
-  return '<div class="nf-badge nf-fail">FAIL — No Room Tone</div>';
+  if (db > -57)              return '<div class="nf-badge nf-orange">WARN</div>';
+  if (db >= -68)             return '<div class="nf-badge nf-pass">PASS</div>';
+  if (db > -80)              return '<div class="nf-badge nf-warn">WARN</div>';
+  return                            '<div class="nf-badge nf-purple">NO RT</div>';
 }
 function nfColorCls(db) {
   if (db > -50)  return 'hl-red';
-  if (db <= -90) return 'hl-red';
-  if (db < -60)  return 'hl-green';
-  return 'hl-amber';
+  if (db > -57)  return 'hl-amber';
+  if (db >= -68) return 'hl-green';
+  if (db > -80)  return 'hl-amber';
+  return 'hl-red';
 }
 function deltaRating(d) {
   if (d === null) return { label:'N/A — Mono', cls:'' };
@@ -1223,8 +1369,10 @@ function nfBarHTML(nf, rms, peak) {
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 
   const nfCol  = nf > -50  ? (isDark ? '#ff4060' : '#d4001a')
-               : nf < -60  ? (isDark ? '#dd44ff' : '#7700cc')
-                            : (isDark ? '#ffaa00' : '#c06000');
+               : nf > -57  ? (isDark ? '#ff7800' : '#cc5500')
+               : nf >= -68 ? (isDark ? '#00ff88' : '#009944')
+               : nf > -80  ? (isDark ? '#ffaa00' : '#c06000')
+                            : (isDark ? '#a050ff' : '#6600cc');
   const rmsCol = isDark ? '#00ff88' : '#00aa55';
   const pkCol  = isDark ? '#ff2040' : '#cc0020';
   const valCol = isDark ? '#ffffff' : '#0f1a2a';
@@ -1234,14 +1382,15 @@ function nfBarHTML(nf, rms, peak) {
   const tickMinor = isDark ? '#5a7090' : '#8090a8';
   const tickMajor = isDark ? '#a8c0e0' : '#3a4a60';
   const labelCol  = isDark ? '#e8f2ff' : '#1a2a40';
-  const th60Col   = isDark ? '#00ff88' : '#009944';
-  const th50Col   = isDark ? '#ff3050' : '#cc0018';
+  // Threshold guides: -57 (orange, noisy WARN boundary) and -68 (amber, quiet WARN boundary)
+  const th57Col   = isDark ? '#ff7800' : '#cc5500';
+  const th68Col   = isDark ? '#ffaa00' : '#c06000';
 
   // Use system monospace — Safari doesn't load Google Fonts in SVG attrs
   const FONT = 'Courier New, Courier, monospace';
 
   const nfX  = px(nf),  rmsX = px(rms), pkX = px(peak);
-  const th60 = px(-60), th50 = px(-50);
+  const th57 = px(-57), th68 = px(-68);
   const TY = 44, TH = 13;
 
   // Labels: sparse on left (-70,-60,-50,-40), every 6dB from -36, then -3, 0
@@ -1290,15 +1439,15 @@ function nfBarHTML(nf, rms, peak) {
 
       <rect x="0" y="${TY}" width="${nfX.toFixed(1)}" height="${TH}" rx="3" fill="${nfCol}" opacity="0.55"/>
 
-      <line x1="${th60.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th60.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
-            stroke="${th60Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
-      <text x="${th60.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
-            font-family="${FONT}" font-size="12" font-weight="bold" fill="${th60Col}">-60</text>
+      <line x1="${th57.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th57.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
+            stroke="${th57Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="${th57.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
+            font-family="${FONT}" font-size="12" font-weight="bold" fill="${th57Col}">-57</text>
 
-      <line x1="${th50.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th50.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
-            stroke="${th50Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
-      <text x="${th50.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
-            font-family="${FONT}" font-size="12" font-weight="bold" fill="${th50Col}">-50</text>
+      <line x1="${th68.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th68.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
+            stroke="${th68Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="${th68.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
+            font-family="${FONT}" font-size="12" font-weight="bold" fill="${th68Col}">-68</text>
 
       <line x1="${pkX.toFixed(1)}" y1="${(TY-4).toFixed(1)}" x2="${pkX.toFixed(1)}" y2="${(TY+TH+4).toFixed(1)}"
             stroke="${pkCol}" stroke-width="7" stroke-linecap="round"/>
@@ -1333,124 +1482,410 @@ function nfBarHTML(nf, rms, peak) {
     </div>
   </div>`;
 }
-function buildMetrics(a, showSignal, hideDeltas) {
+function lrBalanceBarHTML(lrDelta, ch0rms, ch1rms) {
+  if (lrDelta === null) return '';
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const linL = Math.pow(10, ch0rms / 20);
+  const linR = Math.pow(10, ch1rms / 20);
+  const position = linR / (linL + linR) * 100;
+  const deviation = position - 50;
+  const halfPct = Math.abs(deviation).toFixed(1);
+  const side = deviation < -1 ? 'L' : deviation > 1 ? 'R' : 'C';
+  // Fill direction
+  const fillStyle = deviation <= 0
+    ? `left:${(50 - Math.abs(deviation)).toFixed(1)}%;right:50%`
+    : `left:50%;right:${(50 - Math.abs(deviation)).toFixed(1)}%`;
+  const green = isDark ? '#00ff88' : '#009944';
+  const centerCol = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.35)';
+  return `<div style="padding:6px 20px 10px;border-bottom:1px solid var(--border)">
+    <div style="position:relative;height:10px;background:var(--bar-track);border-radius:5px;overflow:hidden;box-shadow:inset 0 0 0 1.5px var(--bar-border)">
+      <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:${centerCol};transform:translateX(-50%)"></div>
+      <div style="position:absolute;top:0;bottom:0;border-radius:5px;background:${green};${fillStyle}"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-top:3px">
+      <span>L</span>
+      <span style="color:${green}">${side === 'C' ? 'CENTER' : side + ' ' + halfPct + '%'}</span>
+      <span>R</span>
+    </div>
+  </div>`;
+}
+
+function dbBarHTML(db, type) {
+  const MIN = -80, RANGE = 80;
+  const pct = v => Math.max(0, Math.min(100, (v - MIN) / RANGE * 100));
+  const fillPct = pct(db);
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const lblCol = isDark ? 'var(--text2)' : 'var(--text3)';
+
+  let fillCol, markers = '';
+
+  if (type === 'nf') {
+    fillCol = db > -50 ? 'var(--red)'
+            : db > -57 ? (isDark ? '#ff7800' : '#cc5500')
+            : db >= -68 ? 'var(--green)'
+            : db > -80  ? 'var(--amber)'
+            : '#a050ff';
+    const z57 = pct(-57), z68 = pct(-68);
+    const mc = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)';
+    markers = `<div style="position:absolute;top:0;bottom:0;left:${z57.toFixed(1)}%;width:1px;background:${mc}"></div>
+               <div style="position:absolute;top:0;bottom:0;left:${z68.toFixed(1)}%;width:1px;background:${mc}"></div>`;
+  } else if (type === 'rms') {
+    fillCol = isDark ? '#00ff88' : '#009944';
+  } else {
+    fillCol = db > -3 ? 'var(--red)' : isDark ? '#ff2040' : '#cc0020';
+  }
+
+  const ticks = [-80, -60, -40, -20, 0];
+  const ticksHTML = ticks.map(t => {
+    const left = pct(t).toFixed(1);
+    const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
+    const tx = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
+    return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${lblCol}">${t}</span>`;
+  }).join('');
+
+  return `<div style="padding:2px 20px 14px;border-bottom:1px solid var(--border)">
+    <div style="position:relative;height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
+      ${markers}
+      <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${fillCol};border-radius:3px"></div>
+    </div>
+    <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
+      ${ticksHTML}
+    </div>
+  </div>`;
+}
+
+function lufsBarHTML(lufs, target) {
+  // target: 'edit' (-21 to -24) or 'mixed' (-18 to -20), default edit
+  const MIN = -80, RANGE = 80;
+  const pct = v => Math.max(0, Math.min(100, (v - MIN) / RANGE * 100));
+  const fillPct = pct(lufs);
+  const isDark  = document.documentElement.getAttribute('data-theme') !== 'light';
+  const lblCol  = isDark ? 'var(--text2)' : 'var(--text3)';
+
+  // Target zone boundaries
+  const isMixed  = target === 'mixed';
+  const zoneHigh = isMixed ? -18 : -21;
+  const zoneLow  = isMixed ? -20 : -24;
+  const zoneLPct = pct(zoneLow);
+  const zoneRPct = pct(zoneHigh);
+  const zoneW    = zoneRPct - zoneLPct;
+
+  // Fill color
+  const fillCol = lufs > zoneHigh ? 'var(--red)' : lufs < zoneLow ? '#a050ff' : 'var(--green)';
+  const zoneBg  = isDark ? 'rgba(0,255,136,0.30)' : 'rgba(0,140,74,0.22)';
+  const zoneCol = isDark ? 'rgba(0,255,136,0.8)'  : 'rgba(0,140,74,0.9)';
+
+  const ticks = isMixed
+    ? [-80, -60, -40, -20, 0]
+    : [-80, -60, -40, -20, 0];
+
+  const ticksHTML = ticks.map(t => {
+    const left   = pct(t).toFixed(1);
+    const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
+    const tx     = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
+    return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${lblCol}">${t}</span>`;
+  }).join('');
+
+  return `<div style="padding:2px 20px 14px;border-bottom:1px solid var(--border)">
+    <div style="position:relative;height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
+      <div style="position:absolute;top:0;bottom:0;left:${zoneLPct.toFixed(1)}%;width:${zoneW.toFixed(1)}%;background:${zoneBg}"></div>
+      <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${fillCol};border-radius:4px;opacity:0.9"></div>
+    </div>
+    <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
+      ${ticksHTML}
+    </div>
+  </div>`;
+}
+
+function snrDrBarHTML(nf, rms, peak) {
+  const MIN = -80, RANGE = 80;
+  const pct = v => Math.max(0, Math.min(100, (v - MIN) / RANGE * 100));
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const lblCol = isDark ? 'var(--text2)' : 'var(--text3)';
+
+  const nfPct   = pct(nf);
+  const rmsPct  = pct(rms);
+  const pkPct   = pct(peak);
+  const snr     = (rms - nf).toFixed(1);
+  const dr      = (peak - nf).toFixed(1);
+
+  // Colors
+  const nfCol  = isDark ? '#a050ff' : '#6600cc';  // purple dot = NF anchor
+  const snrCol = isDark ? '#00ff88' : '#009944';  // green span = SNR
+  const pkCol  = isDark ? '#ff2040' : '#cc0020';  // red dot = Peak
+  const drCol  = isDark ? 'rgba(255,32,64,0.35)' : 'rgba(204,0,32,0.2)'; // red span = DR
+
+  const ticks = [-80, -60, -40, -20, 0];
+  const ticksHTML = ticks.map(t => {
+    const left = pct(t).toFixed(1);
+    const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
+    const tx = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
+    return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${lblCol}">${t}</span>`;
+  }).join('');
+
+  return `<div style="padding:6px 20px 10px;border-bottom:1px solid var(--border)">
+    <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:6px">
+      <span>SNR <span style="color:${snrCol};font-weight:700">${snr} dB</span></span>
+      <span>Dynamic Range <span style="color:${pkCol};font-weight:700">${dr} dB</span></span>
+    </div>
+    <!-- Dynamic Range bar (behind SNR) -->
+    <div style="position:relative;height:10px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:2px">
+      <!-- DR span: NF → Peak -->
+      <div style="position:absolute;top:0;bottom:0;left:${nfPct.toFixed(1)}%;width:${(pkPct - nfPct).toFixed(1)}%;background:${drCol}"></div>
+      <!-- SNR span: NF → RMS -->
+      <div style="position:absolute;top:0;bottom:0;left:${nfPct.toFixed(1)}%;width:${(rmsPct - nfPct).toFixed(1)}%;background:${snrCol};opacity:0.85;border-radius:0 3px 3px 0"></div>
+      <!-- NF anchor dot -->
+      <div style="position:absolute;top:1px;bottom:1px;left:${nfPct.toFixed(1)}%;width:3px;background:${nfCol};border-radius:2px"></div>
+      <!-- Peak dot -->
+      <div style="position:absolute;top:1px;bottom:1px;left:${(pkPct - 0.3).toFixed(1)}%;width:3px;background:${pkCol};border-radius:2px"></div>
+      <!-- RMS dot -->
+      <div style="position:absolute;top:1px;bottom:1px;left:${(rmsPct - 0.3).toFixed(1)}%;width:3px;background:${isDark?'#ffffff':'#000000'};opacity:0.6;border-radius:2px"></div>
+    </div>
+    <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
+      ${ticksHTML}
+    </div>
+    <div style="display:flex;gap:14px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-top:3px">
+      <span><span style="display:inline-block;width:8px;height:8px;background:${nfCol};border-radius:2px;vertical-align:middle;margin-right:3px"></span>Noise Floor</span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:${snrCol};border-radius:2px;vertical-align:middle;margin-right:3px"></span>SNR → RMS</span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:${pkCol};border-radius:2px;vertical-align:middle;margin-right:3px"></span>Peak</span>
+    </div>
+  </div>`;
+}
+
+function buildMetrics(a, showSignal, hideDeltas, lufsTarget) {
   const dr = deltaRating(a.lrDelta);
   const lrVal = a.lrDelta !== null ? a.lrDelta.toFixed(2)+' dB' : 'N/A — Mono';
   const rTag  = dr.cls
     ? `<span class="rating-tag ${dr.cls}">${dr.label}</span>`
     : `<span style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">${dr.label}</span>`;
-  const sigRow = (showSignal && a.signalPct !== undefined) ? [`
-    <div style="padding:10px 20px 8px;border-bottom:1px solid var(--border)">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-        <div style="background:var(--bg3);border-radius:6px;padding:8px 12px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:3px">SPEECH</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(a.signalDur)}</div>
-        </div>
-        <div style="background:var(--bg3);border-radius:6px;padding:8px 12px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:3px">SILENCE</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
-        </div>
-      </div>
-      <div style="height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1.5px var(--bar-border);margin-bottom:${markersData ? '12px' : '0'}">
-        <div style="height:100%;width:${a.signalPct.toFixed(1)}%;background:#00ff88;border-radius:3px"></div>
-      </div>
-      ${markersData ? (() => {
-        const MARKER_OFFSET_S = 0.385; // 100ms line pre-roll + 285ms lout post-roll per pair
-        const correctedNet = Math.max(0, markersData.netSeconds - markersData.pairs * MARKER_OFFSET_S);
-        const mSpeechPct = (correctedNet / markersData.grossSeconds * 100);
-        const mSilencePct = 100 - mSpeechPct;
-        const diff = a.signalPct - mSpeechPct;
-        const diffCol = Math.abs(diff) < 3 ? 'var(--green)' : Math.abs(diff) < 8 ? 'var(--amber)' : 'var(--red)';
-        return `<div style="border-top:1px solid var(--border);padding-top:10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Markers Analysis <span style="font-weight:400;font-size:9px">(${markersData.pairs} line/lout pairs)</span></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div style="background:var(--bg3);border-radius:6px;padding:8px 12px">
-              <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:3px">MARKERS TIME</div>
-              <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:var(--blue)">${mSpeechPct.toFixed(1)}%</div>
-              <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(correctedNet)} <span style="color:var(--text3)">(−${(markersData.pairs * MARKER_OFFSET_S).toFixed(1)}s / ${(markersData.pairs * MARKER_OFFSET_S / markersData.grossSeconds * 100).toFixed(1)}% offset)</span></div>
-            </div>
-            <div style="background:var(--bg3);border-radius:6px;padding:8px 12px">
-              <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:3px">SESSION GROSS</div>
-              <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:var(--text2)">${fmtDur(markersData.grossSeconds)}</div>
-              <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${markersData.pairs} pairs</div>
-            </div>
-          </div>
-          <div style="height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1.5px var(--bar-border);margin-bottom:8px">
-            <div style="height:100%;width:${mSpeechPct.toFixed(1)}%;background:#2080ff;border-radius:3px"></div>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;font-family:'Share Tech Mono',monospace;font-size:11px;padding:8px 10px;background:var(--bg3);border-radius:6px">
-            <span style="color:var(--text3)">Audio vs Markers Δ</span>
-            <span style="font-size:15px;font-weight:700;color:${diffCol}">${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%</span>
-            <span style="color:var(--text3);font-size:10px">${Math.abs(diff) < 3 ? 'Consistent' : Math.abs(diff) < 8 ? 'Minor gap' : 'Significant gap'}</span>
-          </div>
-        </div>`;
-      })() : ''}
-    </div>`] : [];
   return [
-    nfBarHTML(a.noiseFloorDb, a.rmsDb, a.peakDb),
     mRow('Noise Floor',    a.noiseFloorDb.toFixed(1)+' dBFS', nfBadgeHTML(a.noiseFloorDb), nfColorCls(a.noiseFloorDb)),
+    dbBarHTML(a.noiseFloorDb, 'nf'),
+    ...(a.lufs != null ? [
+      mRow('Integrated LUFS', a.lufs.toFixed(1)+' LUFS', '', a.lufs > -14 ? 'hl-red' : a.lufs < -23 ? 'hl-purple' : 'hl-green'),
+      lufsBarHTML(a.lufs, lufsTarget),
+    ] : []),
     mRow('RMS Level',      a.rmsDb.toFixed(1)+' dBFS', '', ''),
+    dbBarHTML(a.rmsDb, 'rms'),
     mRow('Peak Level',     a.peakDb.toFixed(1)+' dBFS', '', ''),
-    mRow('Signal / Noise', a.snr.toFixed(1)+' dB', '', a.snr>40?'hl-green':a.snr>20?'':'hl-amber'),
-    mRow('Dynamic Range',  a.dynamicRange.toFixed(1)+' dB', '', ''),
+    dbBarHTML(a.peakDb, 'peak'),
+    snrDrBarHTML(a.noiseFloorDb, a.rmsDb, a.peakDb),
     ...(hideDeltas ? [] : [
-      mRow('L / R Delta',    lrVal, '', a.lrDelta!==null&&a.lrDelta>3?'hl-red':''),
       mRow('Acoustic Δ',     lrVal, rTag, ''),
+      (a.lrDelta !== null && a.ch0 && a.ch1) ? lrBalanceBarHTML(a.lrDelta, a.ch0.rmsDb, a.ch1.rmsDb) : '',
     ]),
     ...(a.ch1 ? [
       mRow('L / R RMS',   a.ch0.rmsDb.toFixed(1)+' / '+a.ch1.rmsDb.toFixed(1)+' dBFS', '', ''),
       mRow('L / R Noise', a.ch0.noiseFloorDb.toFixed(1)+' / '+a.ch1.noiseFloorDb.toFixed(1)+' dBFS', '', ''),
     ] : []),
-    ...sigRow,
   ].join('');
 }
 
-function buildStereoRawSection(a) {
+function buildSpeechBlock(a) {
+  if (a.signalPct === undefined) return '';
+
+  // Markers column (if available)
+  let markersCol = '';
+  if (markersData) {
+    const MARKER_OFFSET_S = 0.385;
+    const correctedNet = Math.max(0, markersData.netSeconds - markersData.pairs * MARKER_OFFSET_S);
+    const mSpeechPct = correctedNet / markersData.grossSeconds * 100;
+    const diff = a.signalPct - mSpeechPct;
+    const diffCol = Math.abs(diff) < 3 ? 'var(--green)' : Math.abs(diff) < 8 ? 'var(--amber)' : 'var(--red)';
+    const offsetPct = (markersData.pairs * MARKER_OFFSET_S / markersData.grossSeconds * 100).toFixed(1);
+    markersCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Markers Analysis <span style="font-weight:400;font-size:9px">(${markersData.pairs} pairs)</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">MARKERS TIME</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--blue)">${mSpeechPct.toFixed(1)}%</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(correctedNet)}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">−${offsetPct}% offset</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SESSION GROSS</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${fmtDur(markersData.grossSeconds)}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${markersData.pairs} pairs</div>
+        </div>
+      </div>
+      <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:5px">
+        <div style="height:100%;width:${mSpeechPct.toFixed(1)}%;background:#2080ff;border-radius:3px"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 8px;background:var(--bg3);border-radius:5px">
+        <span style="color:var(--text3)">Audio vs Markers Δ</span>
+        <span style="font-weight:700;color:${diffCol}">${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%</span>
+        <span style="color:var(--text3);font-size:9px">${Math.abs(diff) < 3 ? 'Consistent' : Math.abs(diff) < 8 ? 'Minor gap' : 'Significant gap'}</span>
+      </div>
+    </div>`;
+  }
+
+  // Overlaps column (if stereo data available)
+  let overlapCol = '';
+  if (a.stereo) {
+    const s = a.stereo;
+    const oc = s.overlapPct < 5 ? 'var(--green)' : s.overlapPct < 15 ? 'var(--amber)' : 'var(--red)';
+    const or = s.overlapPct < 5 ? 'Low' : s.overlapPct < 15 ? 'Moderate' : 'High';
+    overlapCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(simultaneous only)</span></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:${oc};line-height:1">${s.overlapPct.toFixed(1)}%</div>
+        <div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(s.overlapDur)}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;color:${oc}">${or}</div>
+        </div>
+      </div>
+      <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
+        <div style="height:100%;width:${Math.min(100,s.overlapPct).toFixed(1)}%;background:${oc};border-radius:3px"></div>
+      </div>
+    </div>`;
+  }
+
+  return `<div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:0;align-items:flex-start">
+    <!-- Speech vs Silence column -->
+    <div style="flex:1;min-width:0;padding-right:14px">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.signalDur)}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
+        </div>
+      </div>
+      <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
+        <div style="height:100%;width:${a.signalPct.toFixed(1)}%;background:#00ff88;border-radius:3px"></div>
+      </div>
+    </div>
+    ${markersCol}
+    ${overlapCol}
+  </div>`;
+}
+
+function buildStereoRawSection(a, skipSpeech) {
   if (!a.stereo) return '';
   const s = a.stereo;
-  // Combined speech = union of both channels (windows where either is speaking)
-  const speechPct  = 100 - s.silencePct;
-  const silencePct = s.silencePct;
-  const overlapCol = s.overlapPct < 5 ? 'var(--green)' : s.overlapPct < 15 ? 'var(--amber)' : 'var(--red)';
-  const overlapRating = s.overlapPct < 5 ? 'Low' : s.overlapPct < 15 ? 'Moderate' : 'High';
-  return `<div style="padding:10px 20px 12px;border-bottom:1px solid var(--border)">
-    <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB · either channel)</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-      <div style="background:var(--bg3);border-radius:6px;padding:8px 12px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:3px">SPEECH</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:var(--green)">${speechPct.toFixed(1)}%</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(a.duration * speechPct / 100)}</div>
+  const speechPct = 100 - s.silencePct;
+  const oc = s.overlapPct < 5 ? 'var(--green)' : s.overlapPct < 15 ? 'var(--amber)' : 'var(--red)';
+  const or = s.overlapPct < 5 ? 'Low' : s.overlapPct < 15 ? 'Moderate' : 'High';
+  const overlapLabel = skipSpeech ? '(simultaneous only)' : '(simultaneous + gap &lt; 425ms)';
+
+  const speechSection = skipSpeech ? '' : `<div style="flex:1;min-width:0;padding-right:14px">
+    <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+      <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--green)">${speechPct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.duration * speechPct / 100)}</div>
       </div>
-      <div style="background:var(--bg3);border-radius:6px;padding:8px 12px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:3px">SILENCE</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:var(--text2)">${silencePct.toFixed(1)}%</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(s.silenceDur)}</div>
+      <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${s.silencePct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(s.silenceDur)}</div>
       </div>
     </div>
-    <div style="height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1.5px var(--bar-border);margin-bottom:12px">
+    <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
       <div style="height:100%;width:${speechPct.toFixed(1)}%;background:#00ff88;border-radius:3px"></div>
     </div>
-    <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(simultaneous + gap &lt; 425ms)</span></div>
-    <div style="display:flex;align-items:center;gap:14px;background:var(--bg3);border-radius:8px;padding:10px 14px">
-      <div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:${overlapCol};line-height:1">${s.overlapPct.toFixed(1)}%</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2);margin-top:2px">${fmtDur(s.overlapDur)}</div>
-      </div>
-      <div style="flex:1">
-        <div style="height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1.5px var(--bar-border);margin-bottom:6px">
-          <div style="height:100%;width:${Math.min(100,s.overlapPct).toFixed(1)}%;background:${overlapCol};border-radius:3px"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3)">
-          <span>Simultaneous: <span style="color:var(--text2)">${s.directOverlapPct.toFixed(1)}%</span></span>
-          <span>Near-gap: <span style="color:var(--text2)">${s.gapOverlapPct.toFixed(1)}%</span></span>
-          <span style="color:${overlapCol};font-weight:700">${overlapRating}</span>
+  </div>`;
+
+  return `<div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:0;align-items:flex-start">
+    ${speechSection}
+    <div style="flex:1;min-width:0;${skipSpeech ? '' : 'padding:0 14px;border-left:1px solid var(--border)'}">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">${overlapLabel}</span></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:${oc};line-height:1">${s.overlapPct.toFixed(1)}%</div>
+        <div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(s.overlapDur)}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;color:${oc}">${or}</div>
         </div>
       </div>
+      <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:${skipSpeech ? '0' : '5px'}">
+        <div style="height:100%;width:${Math.min(100,s.overlapPct).toFixed(1)}%;background:${oc};border-radius:3px"></div>
+      </div>
+      ${skipSpeech ? '' : `<div style="display:flex;gap:12px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3)">
+        <span>Simultaneous: <span style="color:var(--text2)">${s.directOverlapPct.toFixed(1)}%</span></span>
+        <span>Near-gap: <span style="color:var(--text2)">${s.gapOverlapPct.toFixed(1)}%</span></span>
+      </div>`}
     </div>
   </div>`;
+}
+
+function buildRecommendations(rawLA, rawRA, eA, mA) {
+  const recs = [];
+
+  function rec(level, title, action) {
+    const col = level === 'fail' ? 'var(--red)' : 'var(--amber)';
+    const bg  = level === 'fail' ? 'var(--red-dim)' : 'var(--amber-dim)';
+    const bdr = level === 'fail' ? 'var(--red)' : 'var(--amber)';
+    const icon = level === 'fail' ? '🔴' : '🟠';
+    recs.push(`<div style="display:flex;align-items:baseline;gap:10px;padding:9px 14px;background:${bg};border:1px solid ${bdr};border-radius:7px;margin-bottom:6px">
+      <span style="font-size:13px;flex-shrink:0">${icon}</span>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:11px">
+        <span style="color:${col};font-weight:700;text-transform:uppercase;letter-spacing:.6px">${title}</span>
+        <span style="color:var(--text3);margin:0 6px">·</span>
+        <span style="color:var(--text2)">${action}</span>
+      </div>
+    </div>`);
+  }
+
+  // ── RAW Noise Floor (Left + Right combined) ───────────────
+  const rawArr = [rawLA, rawRA].filter(Boolean);
+  const rawNoisy   = rawArr.filter(a => a.noiseFloorDb > -50);
+  const rawNoRT    = rawArr.filter(a => a.noiseFloorDb <= -80);
+
+  if (rawNoRT.length === 2)
+    rec('fail', 'RAW — No Room Tone', 'Both tracks below −80 dBFS. Request re-recording.');
+  else if (rawNoRT.length === 1)
+    rec('fail', (rawNoRT[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — No Room Tone',
+      rawNoRT[0].noiseFloorDb.toFixed(1) + ' dBFS. Request re-recording.');
+
+  if (rawNoisy.length === 2)
+    rec('fail', 'RAW — Too Noisy', 'Both tracks exceed −50 dBFS. Request re-recording.');
+  else if (rawNoisy.length === 1)
+    rec('fail', (rawNoisy[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — Too Noisy',
+      rawNoisy[0].noiseFloorDb.toFixed(1) + ' dBFS. Request re-recording.');
+
+  // ── Edit: unauthorized processing ────────────────────────
+  if (eA && rawArr.length) {
+    const rawNF = rawArr.reduce((s, a) => s + a.noiseFloorDb, 0) / rawArr.length;
+    const drop  = eA.noiseFloorDb - rawNF;
+    if (drop < -6)
+      rec('fail', 'Edit — Unauthorized Processing',
+        'NF dropped ' + Math.abs(drop).toFixed(1) + ' dB vs RAW. Re-deliver without noise reduction.');
+  }
+
+  // ── Edit LUFS: −21 to −24 ─────────────────────────────────
+  if (eA && eA.lufs != null) {
+    if (eA.lufs > -21)
+      rec('warn', 'Edit LUFS Too High',
+        eA.lufs.toFixed(1) + ' LUFS · ↓ Reduce clip gain by ' + (eA.lufs - (-21)).toFixed(1) + ' dB.');
+    else if (eA.lufs < -24)
+      rec('warn', 'Edit LUFS Too Low',
+        eA.lufs.toFixed(1) + ' LUFS · ↑ Raise clip gain by ' + ((-24) - eA.lufs).toFixed(1) + ' dB.');
+  }
+
+  // ── Mixed LUFS: −18 to −20 ───────────────────────────────
+  if (mA && mA.lufs != null) {
+    if (mA.lufs > -18)
+      rec('warn', 'Mixed LUFS Too High',
+        mA.lufs.toFixed(1) + ' LUFS · ↓ Reduce output gain by ' + (mA.lufs - (-18)).toFixed(1) + ' dB.');
+    else if (mA.lufs < -20)
+      rec('warn', 'Mixed LUFS Too Low',
+        mA.lufs.toFixed(1) + ' LUFS · ↑ Raise output gain by ' + ((-20) - mA.lufs).toFixed(1) + ' dB.');
+  }
+
+  // ── Acoustic Δ > 3 dB ────────────────────────────────────
+  if (eA && eA.lrDelta !== null && eA.lrDelta > 3) {
+    const louder = eA.ch0.rmsDb > eA.ch1.rmsDb ? 'Left' : 'Right';
+    rec('warn', 'Edit — Channel Imbalance',
+      eA.lrDelta.toFixed(2) + ' dB · ↓ Trim ' + louder + ' by ' + eA.lrDelta.toFixed(1) + ' dB.');
+  }
+
+  return recs;
 }
 
 function renderResults(rawLA, rawRA, eA, mA, rawStereoA) {
@@ -1479,7 +1914,8 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA) {
   document.getElementById('rawLCard').style.display = hasRawL ? '' : 'none';
   if (hasRawL) {
     document.getElementById('rawLCardName').textContent = rawLA._talentCode + ' (' + rawLA._fileCount + ' file' + (rawLA._fileCount>1?'s':'') + ')';
-    document.getElementById('rawLCardMeta').textContent = rawLA.sampleRate/1000+' kHz · '+(rawLA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawLA.duration)+' total';
+    const rawLSL = getStudioLocation(rawLA._talentCode);
+    document.getElementById('rawLCardMeta').textContent = (rawLSL ? 'Studio: ' + rawLSL.studio + ' (' + rawLSL.location + ') · ' : '') + rawLA.sampleRate/1000+' kHz · '+(rawLA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawLA.duration)+' total';
     document.getElementById('rawLNFBadge').innerHTML    = nfBadgeHTML(rawLA.noiseFloorDb);
     document.getElementById('rawLMetrics').innerHTML    = buildMetrics(rawLA, false, true);
   }
@@ -1488,7 +1924,8 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA) {
   document.getElementById('rawRCard').style.display = hasRawR ? '' : 'none';
   if (hasRawR) {
     document.getElementById('rawRCardName').textContent = rawRA._talentCode + ' (' + rawRA._fileCount + ' file' + (rawRA._fileCount>1?'s':'') + ')';
-    document.getElementById('rawRCardMeta').textContent = rawRA.sampleRate/1000+' kHz · '+(rawRA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawRA.duration)+' total';
+    const rawRSL = getStudioLocation(rawRA._talentCode);
+    document.getElementById('rawRCardMeta').textContent = (rawRSL ? 'Studio: ' + rawRSL.studio + ' (' + rawRSL.location + ') · ' : '') + rawRA.sampleRate/1000+' kHz · '+(rawRA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawRA.duration)+' total';
     document.getElementById('rawRNFBadge').innerHTML    = nfBadgeHTML(rawRA.noiseFloorDb);
     document.getElementById('rawRMetrics').innerHTML    = buildMetrics(rawRA, false, true);
   }
@@ -1542,16 +1979,17 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA) {
     rawPairPanel.style.display = 'none';
   }
 
-  // Edit card
   // Edit card — hide when only stereo RAW QA file present
-  const showQC = hasEdit && !hasStereoRaw || (hasStereoRaw && (hasRawL || hasRawR || hasEdit));
-  document.getElementById('editCard').style.display = (hasEdit && !hasStereoRaw) ? '' : 'none';
+  const editCardEl = document.getElementById('editCard');
+  editCardEl.style.display = (hasEdit && !hasStereoRaw) ? '' : 'none';
+  // If any RAW cards are present, force Edit to start on column 1 (new row)
+  editCardEl.style.gridColumn = hasRaw ? '1' : '';
   if (hasEdit) {
     document.getElementById('editCardType').innerHTML = '<span class="card-type-qc">QC</span> — Edit WAV';
     document.getElementById('editCardName').textContent = eFile.name;
     document.getElementById('editCardMeta').textContent = fmtSize(eFile.size)+' · '+eA.sampleRate/1000+' kHz · '+(eA.channels===1?'Mono':'Stereo')+' · '+fmtDur(eA.duration);
     document.getElementById('editNFBadge').innerHTML    = nfBadgeHTML(eA.noiseFloorDb);
-    document.getElementById('editMetrics').innerHTML    = buildMetrics(eA, true);
+    document.getElementById('editMetrics').innerHTML    = buildMetrics(eA, false, false, 'edit');
   }
 
   // Mix card
@@ -1560,44 +1998,67 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA) {
     document.getElementById('mixCardName').textContent = mFile.name;
     document.getElementById('mixCardMeta').textContent = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration);
     document.getElementById('mixNFBadge').innerHTML    = nfBadgeHTML(mA.noiseFloorDb);
-    document.getElementById('mixMetrics').innerHTML    = buildMetrics(mA, false);
+    document.getElementById('mixMetrics').innerHTML    = buildMetrics(mA, false, false, 'mixed');
   }
 
-  // Compare panel — Edit vs Mixed only
+  // Compare panel — Edit vs Mixed
   const cp = document.getElementById('comparePanel');
   cp.style.display = (hasEdit && hasMix) ? '' : 'none';
   if (hasEdit && hasMix) {
     const sign = v => v > 0 ? '+' : '';
-    const nfD = eA.noiseFloorDb - mA.noiseFloorDb;
-    const rmsD= eA.rmsDb - mA.rmsDb;
-    const snrD= eA.snr   - mA.snr;
-    const drD = eA.dynamicRange - mA.dynamicRange;
-    document.getElementById('compareGrid').innerHTML = [
-      ['Noise Floor Δ',nfD],['RMS Δ',rmsD],['SNR Δ',snrD],['Dyn. Range Δ',drD],
-    ].map(([l,v])=>`<div class="compare-cell">
-      <div class="compare-cell-label">${l}</div>
-      <div class="compare-val ${v>0.1?'pos':v<-0.1?'neg':''}">${sign(v)}${v.toFixed(1)} dB</div>
-    </div>`).join('');
+    const nfD   = eA.noiseFloorDb - mA.noiseFloorDb;
+    const rmsD  = eA.rmsDb - mA.rmsDb;
+    const snrD  = eA.snr   - mA.snr;
+    const drD   = eA.dynamicRange - mA.dynamicRange;
+    const lufsD = (eA.lufs != null && mA.lufs != null) ? eA.lufs - mA.lufs : null;
+    const cells = [
+      ['Noise Floor Δ', nfD, 'dB'],
+      ['RMS Δ',         rmsD, 'dB'],
+      ['SNR Δ',         snrD, 'dB'],
+      ['Dyn. Range Δ',  drD,  'dB'],
+    ];
+    if (lufsD !== null) cells.push(['LUFS Δ', lufsD, 'LU']);
+    document.getElementById('compareGrid').innerHTML = cells.map(([l,v,u]) =>
+      `<div class="compare-cell">
+        <div class="compare-cell-label">${l}</div>
+        <div class="compare-val ${v>0.1?'pos':v<-0.1?'neg':''}">${sign(v)}${v.toFixed(1)} ${u}</div>
+      </div>`
+    ).join('');
+  }
+
+  // QC Session Analysis card — Speech/Silence + Markers + Overlaps from Edit WAV
+  const sac = document.getElementById('sessionAnalysisCard');
+  if (hasEdit && eA.signalPct !== undefined) {
+    sac.style.display = '';
+    document.getElementById('sessionAnalysisMeta').textContent =
+      'Based on Edit WAV · ' + fmtDur(eA.duration);
+    document.getElementById('sessionAnalysisMetrics').innerHTML =
+      buildSpeechBlock(eA);
+  } else {
+    sac.style.display = 'none';
   }
 
   // Overall badge
   const allA = [rawStereoA, rawLA, rawRA, eA, mA].filter(Boolean);
-  const anyFail = allA.some(a => a.noiseFloorDb > -50 || a.noiseFloorDb <= -90);
-  const allPass = allA.every(a => a.noiseFloorDb < -60 && a.noiseFloorDb > -90);
+  const anyFail = allA.some(a => a.noiseFloorDb > -50 || a.noiseFloorDb <= -80);
+  const allPass = allA.every(a => a.noiseFloorDb <= -57 && a.noiseFloorDb >= -68);
   const overall = anyFail ? 'FAIL' : allPass ? 'PASS' : 'WARN';
   const cls = overall==='PASS'?'pass':overall==='FAIL'?'fail':'warn';
   document.getElementById('overallBadge').innerHTML =
     `<div class="overall-badge ${cls}"><div class="badge-dot"></div>${overall}</div>`;
 
-  // Alerts
-  let alerts = '';
-  [{lbl:'RAW Stereo',a:rawStereoA},{lbl:'RAW Left',a:rawLA},{lbl:'RAW Right',a:rawRA},{lbl:'Edit WAV',a:eA},{lbl:'Mixed WAV',a:mA}].forEach(({lbl,a}) => {
-    if (!a) return;
-    if (a.noiseFloorDb > -50)  alerts += `<div class="alert alert-fail"><div class="alert-icon">!</div><div><strong>${lbl}</strong> noise floor ${a.noiseFloorDb.toFixed(1)} dBFS exceeds −50 dBFS.</div></div>`;
-    if (a.noiseFloorDb <= -90) alerts += `<div class="alert alert-fail"><div class="alert-icon">!</div><div><strong>${lbl}</strong> noise floor ${a.noiseFloorDb.toFixed(1)} dBFS — below −90 dBFS. No room tone detected.</div></div>`;
-    if (a.lrDelta !== null && a.lrDelta > 3) alerts += `<div class="alert alert-warn"><div class="alert-icon">△</div><div><strong>${lbl}</strong> L/R imbalance ${a.lrDelta.toFixed(2)} dB — check channel routing.</div></div>`;
-  });
-  document.getElementById('alertsWrap').innerHTML = alerts;
+  document.getElementById('alertsWrap').innerHTML = '';
+
+  // Recommendations card
+  const recs = buildRecommendations(rawLA, rawRA, eA, mA);
+  const recsCard = document.getElementById('recsCard');
+  if (recs.length > 0) {
+    recsCard.style.display = '';
+    document.getElementById('recsBody').innerHTML =
+      '<div style="padding:12px 16px">' + recs.join('') + '</div>';
+  } else {
+    recsCard.style.display = 'none';
+  }
 }
 </script>
 </body>
