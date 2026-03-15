@@ -331,6 +331,11 @@ h1 span { color: var(--green); }
   border-bottom: 1px solid var(--border2);
   display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
 }
+.card-header-qa { background: color-mix(in srgb, var(--bg3) 100%, rgba(61,176,255,0.0));
+  background: var(--bg3); position:relative; }
+.card-header-qa::after { content:''; position:absolute; inset:0; background:rgba(61,176,255,0.08); pointer-events:none; }
+.card-header-qc { background: var(--bg3); position:relative; }
+.card-header-qc::after { content:''; position:absolute; inset:0; background:rgba(245,166,35,0.08); pointer-events:none; }
 
 .card-type {
   font-family: 'Syne', sans-serif;
@@ -507,7 +512,7 @@ h1 span { color: var(--green); }
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.3</div>
+      <div class="version-badge">v2.4</div>
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">DARK</span>
@@ -590,7 +595,7 @@ h1 span { color: var(--green); }
 
       <!-- Stereo RAW QA card — shown only for _RAW stereo file -->
       <div class="result-card" id="rawStereoCard" style="display:none">
-        <div class="card-header">
+        <div class="card-header card-header-qa">
           <div style="min-width:0;flex:1">
             <div class="card-type"><span class="card-type-qa">QA</span> — RAW Stereo</div>
             <div class="card-filename" id="rawStereoCardName"></div>
@@ -602,7 +607,7 @@ h1 span { color: var(--green); }
       </div>
 
       <div class="result-card" id="rawLCard" style="display:none">
-        <div class="card-header">
+        <div class="card-header card-header-qa">
           <div style="min-width:0;flex:1">
             <div class="card-type"><span class="card-type-qa">QA</span> — RAW Left</div>
             <div class="card-filename" id="rawLCardName"></div>
@@ -614,7 +619,7 @@ h1 span { color: var(--green); }
       </div>
 
       <div class="result-card" id="rawRCard" style="display:none">
-        <div class="card-header">
+        <div class="card-header card-header-qa">
           <div style="min-width:0;flex:1">
             <div class="card-type"><span class="card-type-qa">QA</span> — RAW Right</div>
             <div class="card-filename" id="rawRCardName"></div>
@@ -626,32 +631,36 @@ h1 span { color: var(--green); }
       </div>
 
       <!-- RAW Pair Acoustic Delta — shown only when both RAW tracks present -->
-      <div id="rawPairPanel" style="display:none;grid-column:1/-1;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:14px 20px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);margin-bottom:12px">QA — RAW Pair Acoustic Delta (Left vs Right)</div>
-        <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
-          <div id="rawPairDeltaVal" style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;line-height:1"></div>
+      <div id="rawPairPanel" style="display:none;grid-column:1/-1;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
+        <div class="card-header card-header-qa">
+          <div style="min-width:0;flex:1">
+            <div class="card-type"><span class="card-type-qa">QA</span> — RAW Pair Acoustic Delta</div>
+          </div>
           <div id="rawPairDeltaTag"></div>
-          <div style="flex:1;min-width:200px">
-            <!-- L---C---R balance meter -->
-            <div style="position:relative;height:12px;background:var(--bar-track);border-radius:6px;overflow:hidden;margin-bottom:6px;box-shadow:inset 0 0 0 1.5px var(--bar-border)">
-              <!-- center marker -->
-              <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:rgba(255,255,255,0.6);transform:translateX(-50%)"></div>
-              <!-- fill extends from center toward L or R -->
-              <div id="rawPairBalFill" style="position:absolute;top:0;bottom:0;border-radius:6px;transition:all .4s"></div>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:4px">
-              <span>L</span><span>C</span><span>R</span>
-            </div>
-            <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">
-              Left RMS: <span id="rawPairLRms" style="color:var(--text2)"></span> &nbsp;·&nbsp;
-              Right RMS: <span id="rawPairRRms" style="color:var(--text2)"></span>
+        </div>
+        <div class="card-body" style="padding:14px 20px">
+          <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+            <div id="rawPairDeltaVal" style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;line-height:1"></div>
+            <div style="flex:1;min-width:200px">
+              <!-- L---C---R balance meter -->
+              <div style="position:relative;height:12px;background:var(--bar-track);border-radius:6px;overflow:hidden;margin-bottom:6px;box-shadow:inset 0 0 0 1.5px var(--bar-border)">
+                <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:rgba(255,255,255,0.6);transform:translateX(-50%)"></div>
+                <div id="rawPairBalFill" style="position:absolute;top:0;bottom:0;border-radius:6px;transition:all .4s"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:4px">
+                <span>L</span><span>C</span><span>R</span>
+              </div>
+              <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">
+                Left RMS: <span id="rawPairLRms" style="color:var(--text2)"></span> &nbsp;·&nbsp;
+                Right RMS: <span id="rawPairRRms" style="color:var(--text2)"></span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       <div class="result-card" id="editCard">
-        <div class="card-header">
+        <div class="card-header card-header-qc">
           <div style="min-width:0;flex:1">
             <div class="card-type" id="editCardType"><span class="card-type-qc">QC</span> — Edit WAV</div>
             <div class="card-filename" id="editCardName"></div>
@@ -663,7 +672,7 @@ h1 span { color: var(--green); }
       </div>
 
       <div class="result-card" id="mixCard">
-        <div class="card-header">
+        <div class="card-header card-header-qc">
           <div style="min-width:0;flex:1">
             <div class="card-type"><span class="card-type-qc">QC</span> — Mixed WAV</div>
             <div class="card-filename" id="mixCardName"></div>
@@ -687,7 +696,7 @@ h1 span { color: var(--green); }
 
     <!-- QC Session Analysis card — Speech/Silence, Markers, Overlaps -->
     <div class="result-card" id="sessionAnalysisCard" style="display:none;margin-bottom:14px">
-      <div class="card-header">
+      <div class="card-header card-header-qc">
         <div style="min-width:0;flex:1">
           <div class="card-type"><span class="card-type-qc">QC</span> — Session Analysis</div>
           <div class="card-meta" id="sessionAnalysisMeta"></div>
@@ -698,7 +707,7 @@ h1 span { color: var(--green); }
 
     <!-- Recommendations card -->
     <div class="result-card" id="recsCard" style="display:none;margin-bottom:14px">
-      <div class="card-header">
+      <div class="card-header card-header-qc">
         <div style="min-width:0;flex:1">
           <div class="card-type">⚡ Recommendations</div>
         </div>
@@ -1131,9 +1140,15 @@ async function analyzeRawStereo(file) {
 
 async function analyzeGroup(files) {
   const results = [];
-  for (const f of files) results.push(analyzeBuffer(await decodeFile(f)));
+  for (const f of files) {
+    const buf = await decodeFile(f);
+    const a = analyzeBuffer(buf);
+    a.lufs = computeIntegratedLUFS(buf);
+    results.push(a);
+  }
   const n = results.length;
   const avg = k => results.reduce((s,r) => s+r[k], 0) / n;
+  const lufsArr = results.filter(r => r.lufs != null);
   const lrArr = results.filter(r => r.lrDelta !== null);
   return {
     _fileCount: n, _talentCode: getTalentCode(files[0].name),
@@ -1143,6 +1158,7 @@ async function analyzeGroup(files) {
     noiseFloorDb:  avg('noiseFloorDb'), snr:       avg('snr'),
     dynamicRange:  avg('dynamicRange'),
     lrDelta:       lrArr.length ? lrArr.reduce((s,r)=>s+r.lrDelta,0)/lrArr.length : null,
+    lufs:          lufsArr.length ? lufsArr.reduce((s,r)=>s+r.lufs,0)/lufsArr.length : null,
     ch0: null, ch1: null,
   };
 }
@@ -1563,15 +1579,18 @@ function lufsBarHTML(lufs, target) {
   const lblCol  = isDark ? 'var(--text2)' : 'var(--text3)';
 
   // Target zone boundaries
-  const isMixed  = target === 'mixed';
+  const isRaw   = target === 'raw';
+  const isMixed = target === 'mixed';
   const zoneHigh = isMixed ? -18 : -21;
   const zoneLow  = isMixed ? -20 : -24;
-  const zoneLPct = pct(zoneLow);
-  const zoneRPct = pct(zoneHigh);
-  const zoneW    = zoneRPct - zoneLPct;
+  const zoneLPct = isRaw ? 0 : pct(zoneLow);
+  const zoneRPct = isRaw ? 0 : pct(zoneHigh);
+  const zoneW    = isRaw ? 0 : zoneRPct - zoneLPct;
 
-  // Fill color
-  const fillCol = lufs > zoneHigh ? 'var(--red)' : lufs < zoneLow ? '#a050ff' : 'var(--green)';
+  // Fill color — RAW uses generic coloring, Edit/Mixed use zone-relative coloring
+  const fillCol = isRaw
+    ? (isDark ? '#00ff88' : '#009944')
+    : (lufs > zoneHigh ? 'var(--red)' : lufs < zoneLow ? '#a050ff' : 'var(--green)');
   const zoneBg  = isDark ? 'rgba(0,255,136,0.30)' : 'rgba(0,140,74,0.22)';
   const zoneCol = isDark ? 'rgba(0,255,136,0.8)'  : 'rgba(0,140,74,0.9)';
 
@@ -1662,7 +1681,11 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget) {
     mRow('Noise Floor',    a.noiseFloorDb.toFixed(1)+' dBFS', nfBadgeHTML(a.noiseFloorDb), nfColorCls(a.noiseFloorDb)),
     dbBarHTML(a.noiseFloorDb, 'nf'),
     ...(a.lufs != null ? [
-      mRow('Integrated LUFS', a.lufs.toFixed(1)+' LUFS', '', a.lufs > -14 ? 'hl-red' : a.lufs < -23 ? 'hl-purple' : 'hl-green'),
+      mRow('Integrated LUFS', a.lufs.toFixed(1)+' LUFS', '',
+        lufsTarget === 'raw' ? 'hl-green'
+        : a.lufs > (lufsTarget === 'mixed' ? -18 : -21) ? 'hl-red'
+        : a.lufs < (lufsTarget === 'mixed' ? -20 : -24) ? 'hl-purple'
+        : 'hl-green'),
       lufsBarHTML(a.lufs, lufsTarget),
     ] : []),
     mRow('RMS Level',      a.rmsDb.toFixed(1)+' dBFS', '', ''),
@@ -1833,10 +1856,14 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
   }
 
   // ── RAW Noise Floor (Left + Right combined) ───────────────
-  const rawArr = [rawLA, rawRA].filter(Boolean);
-  const rawNoisy   = rawArr.filter(a => a.noiseFloorDb > -50);
-  const rawNoRT    = rawArr.filter(a => a.noiseFloorDb <= -80);
+  const rawArr   = [rawLA, rawRA].filter(Boolean);
+  const rawOnly  = rawArr.length > 0 && !eA && !mA;
+  const rawNoisy = rawArr.filter(a => a.noiseFloorDb > -50);
+  const rawNoRT  = rawArr.filter(a => a.noiseFloorDb <= -80);
+  const rawWarnNoisy = rawArr.filter(a => a.noiseFloorDb > -57 && a.noiseFloorDb <= -50);
+  const rawWarnQuiet = rawArr.filter(a => a.noiseFloorDb > -80 && a.noiseFloorDb <= -68);
 
+  // Hard fails — always shown
   if (rawNoRT.length === 2)
     rec('fail', 'RAW — No Room Tone', 'Both tracks below −80 dBFS. Request re-recording.');
   else if (rawNoRT.length === 1)
@@ -1848,6 +1875,21 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
   else if (rawNoisy.length === 1)
     rec('fail', (rawNoisy[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — Too Noisy',
       rawNoisy[0].noiseFloorDb.toFixed(1) + ' dBFS. Request re-recording.');
+
+  // Warn zones — only shown in RAW-only QA workflow
+  if (rawOnly) {
+    if (rawWarnNoisy.length === 2)
+      rec('warn', 'RAW — Trending Noisy', 'Both tracks in −50 to −57 dBFS range. Monitor before editing.');
+    else if (rawWarnNoisy.length === 1)
+      rec('warn', (rawWarnNoisy[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — Trending Noisy',
+        rawWarnNoisy[0].noiseFloorDb.toFixed(1) + ' dBFS. Monitor before editing.');
+
+    if (rawWarnQuiet.length === 2)
+      rec('warn', 'RAW — Trending Quiet', 'Both tracks in −68 to −80 dBFS range. Verify room tone is present.');
+    else if (rawWarnQuiet.length === 1)
+      rec('warn', (rawWarnQuiet[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — Trending Quiet',
+        rawWarnQuiet[0].noiseFloorDb.toFixed(1) + ' dBFS. Verify room tone is present.');
+  }
 
   // ── Edit: unauthorized processing ────────────────────────
   if (eA && rawArr.length) {
@@ -1907,7 +1949,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA) {
     document.getElementById('rawStereoCardMeta').textContent =
       fmtSize(rawStereoFile.size) + ' · ' + rawStereoA.sampleRate/1000 + ' kHz · Stereo · ' + fmtDur(rawStereoA.duration);
     document.getElementById('rawStereoNFBadge').innerHTML = nfBadgeHTML(rawStereoA.noiseFloorDb);
-    document.getElementById('rawStereoMetrics').innerHTML = buildMetrics(rawStereoA, false, true) + buildStereoRawSection(rawStereoA);
+    document.getElementById('rawStereoMetrics').innerHTML = buildMetrics(rawStereoA, false, true, 'raw') + buildStereoRawSection(rawStereoA);
   }
 
   // RAW Left card
@@ -1917,7 +1959,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA) {
     const rawLSL = getStudioLocation(rawLA._talentCode);
     document.getElementById('rawLCardMeta').textContent = (rawLSL ? 'Studio: ' + rawLSL.studio + ' (' + rawLSL.location + ') · ' : '') + rawLA.sampleRate/1000+' kHz · '+(rawLA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawLA.duration)+' total';
     document.getElementById('rawLNFBadge').innerHTML    = nfBadgeHTML(rawLA.noiseFloorDb);
-    document.getElementById('rawLMetrics').innerHTML    = buildMetrics(rawLA, false, true);
+    document.getElementById('rawLMetrics').innerHTML    = buildMetrics(rawLA, false, true, 'raw');
   }
 
   // RAW Right card
@@ -1927,7 +1969,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA) {
     const rawRSL = getStudioLocation(rawRA._talentCode);
     document.getElementById('rawRCardMeta').textContent = (rawRSL ? 'Studio: ' + rawRSL.studio + ' (' + rawRSL.location + ') · ' : '') + rawRA.sampleRate/1000+' kHz · '+(rawRA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawRA.duration)+' total';
     document.getElementById('rawRNFBadge').innerHTML    = nfBadgeHTML(rawRA.noiseFloorDb);
-    document.getElementById('rawRMetrics').innerHTML    = buildMetrics(rawRA, false, true);
+    document.getElementById('rawRMetrics').innerHTML    = buildMetrics(rawRA, false, true, 'raw');
   }
 
   // RAW Pair Acoustic Delta — between Left and Right mono tracks
