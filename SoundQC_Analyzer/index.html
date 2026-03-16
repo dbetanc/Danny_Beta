@@ -512,7 +512,7 @@ h1 span { color: var(--green); }
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.4</div>
+      <div class="version-badge">v2.5</div>
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">DARK</span>
@@ -630,33 +630,14 @@ h1 span { color: var(--green); }
         <div class="card-body" id="rawRMetrics"></div>
       </div>
 
-      <!-- RAW Pair Acoustic Delta — shown only when both RAW tracks present -->
+      <!-- QA — Recording Quality card -->
       <div id="rawPairPanel" style="display:none;grid-column:1/-1;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
         <div class="card-header card-header-qa">
           <div style="min-width:0;flex:1">
-            <div class="card-type"><span class="card-type-qa">QA</span> — RAW Pair Acoustic Delta</div>
-          </div>
-          <div id="rawPairDeltaTag"></div>
-        </div>
-        <div class="card-body" style="padding:14px 20px">
-          <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
-            <div id="rawPairDeltaVal" style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;line-height:1"></div>
-            <div style="flex:1;min-width:200px">
-              <!-- L---C---R balance meter -->
-              <div style="position:relative;height:12px;background:var(--bar-track);border-radius:6px;overflow:hidden;margin-bottom:6px;box-shadow:inset 0 0 0 1.5px var(--bar-border)">
-                <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:rgba(255,255,255,0.6);transform:translateX(-50%)"></div>
-                <div id="rawPairBalFill" style="position:absolute;top:0;bottom:0;border-radius:6px;transition:all .4s"></div>
-              </div>
-              <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:4px">
-                <span>L</span><span>C</span><span>R</span>
-              </div>
-              <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">
-                Left RMS: <span id="rawPairLRms" style="color:var(--text2)"></span> &nbsp;·&nbsp;
-                Right RMS: <span id="rawPairRRms" style="color:var(--text2)"></span>
-              </div>
-            </div>
+            <div class="card-type"><span class="card-type-qa">QA</span> — Recording Quality</div>
           </div>
         </div>
+        <div class="card-body" id="rawQualityBody" style="padding:0"></div>
       </div>
 
       <div class="result-card" id="editCard">
@@ -1305,6 +1286,13 @@ async function runAnalysis() {
     if (rawStereoFile) { setProgress('Analyzing RAW Stereo…', 10); rawStereoA = await analyzeRawStereo(rawStereoFile); }
     if (rawLeftFiles.length)  { setProgress('Analyzing RAW Left…',  25); rawLA = await analyzeGroup(rawLeftFiles); }
     if (rawRightFiles.length) { setProgress('Analyzing RAW Right…', 40); rawRA = await analyzeGroup(rawRightFiles); }
+
+    // Artifact scan — only when both RAW tracks present
+    let artifactData = null;
+    if (rawLeftFiles.length && rawRightFiles.length) {
+      setProgress('Scanning for artifacts…', 50);
+      artifactData = await runArtifactScan(rawLeftFiles, rawRightFiles);
+    }
     if (eFile) {
       setProgress('Decoding Edit WAV…',  60);
       const eBuf = await decodeFile(eFile);
@@ -1332,7 +1320,7 @@ async function runAnalysis() {
     document.getElementById('progressWrap').setAttribute('hidden','');
     document.getElementById('results').removeAttribute('hidden');
     try {
-      renderResults(rawLA, rawRA, eA, mA, rawStereoA);
+      renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData);
     } catch(renderErr) {
       document.getElementById('cardsGrid').innerHTML =
         '<div style="grid-column:1/-1;padding:16px;color:var(--red);font-family:monospace;font-size:12px;background:var(--red-dim);border:1px solid var(--red);border-radius:8px"><strong>Render error:</strong> ' + renderErr.message + '<br><small>' + (renderErr.stack||'').split('\n').slice(0,3).join('<br>') + '</small></div>';
@@ -1911,6 +1899,472 @@ function buildStereoRawSection(a, skipSpeech) {
   </div>`;
 }
 
+// ── QA ARTIFACT DETECTION ────────────────────────────────────
+
+// Pair Left and Right files by take suffix (last _NN before .wav)
+function pairRawFiles(leftFiles, rightFiles) {
+  const getSuffix = f => {
+    const m = f.name.match(/_(\d+)\.wav$/i);
+    return m ? m[1] : f.name;
+  };
+  const rightMap = {};
+  rightFiles.forEach(f => { rightMap[getSuffix(f)] = f; });
+  const pairs = [];
+  leftFiles.forEach(f => {
+    const s = getSuffix(f);
+    if (rightMap[s]) pairs.push({ left: f, right: rightMap[s], suffix: s });
+  });
+  return pairs;
+}
+
+// Extract first N seconds of PCM from a decoded buffer channel
+function sliceSamples(buf, ch, seconds) {
+  const n = Math.min(buf.getChannelData(ch).length, Math.floor(buf.sampleRate * seconds));
+  return buf.getChannelData(ch).subarray(0, n);
+}
+
+// Cross-correlation coefficient (Pearson) between two equal-length arrays
+function pearsonCorr(a, b) {
+  const n = Math.min(a.length, b.length);
+  let sa = 0, sb = 0, sab = 0, sa2 = 0, sb2 = 0;
+  for (let i = 0; i < n; i++) { sa += a[i]; sb += b[i]; }
+  const ma = sa/n, mb = sb/n;
+  for (let i = 0; i < n; i++) {
+    const da = a[i]-ma, db = b[i]-mb;
+    sab += da*db; sa2 += da*da; sb2 += db*db;
+  }
+  const denom = Math.sqrt(sa2*sb2);
+  return denom < 1e-12 ? 0 : sab/denom;
+}
+
+// Detect bleed: correlation of Right during Left speech windows
+function detectBleed(leftData, rightData, sr, nfDb) {
+  const winSz  = Math.floor(sr * 0.05); // 50ms windows
+  const thresh = Math.pow(10, (nfDb + 12) / 20);
+  let corrSum = 0, count = 0;
+  for (let i = 0; i + winSz <= leftData.length; i += winSz) {
+    // Check if Left is speaking in this window
+    let lSq = 0;
+    for (let j = i; j < i+winSz; j++) lSq += leftData[j]*leftData[j];
+    if (Math.sqrt(lSq/winSz) < thresh) continue;
+    // Left is speaking — measure correlation with Right
+    const la = leftData.subarray(i, i+winSz);
+    const ra = rightData.subarray(i, i+winSz);
+    corrSum += Math.abs(pearsonCorr(la, ra));
+    count++;
+  }
+  return count > 0 ? (corrSum / count * 100) : 0; // % avg correlation
+}
+
+// FFT — returns magnitude spectrum
+function computeFFT(data, sr) {
+  // Use power-of-2 size up to 8192 samples
+  const N = 8192;
+  const slice = data.subarray(0, Math.min(N, data.length));
+  const re = new Float32Array(N), im = new Float32Array(N);
+  for (let i = 0; i < slice.length; i++) re[i] = slice[i];
+  // Hanning window
+  for (let i = 0; i < N; i++) re[i] *= 0.5*(1 - Math.cos(2*Math.PI*i/(N-1)));
+  // Cooley-Tukey FFT
+  for (let step = 1; step < N; step <<= 1) {
+    const jump = step << 1;
+    const delta = -Math.PI / step;
+    for (let group = 0; group < step; group++) {
+      const wr = Math.cos(delta*group), wi = Math.sin(delta*group);
+      for (let pair = group; pair < N; pair += jump) {
+        const match = pair+step;
+        const rr = wr*re[match]-wi*im[match];
+        const ri = wr*im[match]+wi*re[match];
+        re[match] = re[pair]-rr; im[match] = im[pair]-ri;
+        re[pair] += rr; im[pair] += ri;
+      }
+    }
+  }
+  const mag = new Float32Array(N/2);
+  for (let i = 0; i < N/2; i++) mag[i] = Math.sqrt(re[i]*re[i]+im[i]*im[i]) / N;
+  const binHz = sr / N;
+  return { mag, binHz };
+}
+
+// Detect hum: check energy at 50/60Hz and harmonics in silence windows
+function detectHum(data, sr, nfDb) {
+  const winSz  = Math.floor(sr * 0.2); // 200ms silence windows for FFT
+  const thresh = Math.pow(10, (nfDb + 8) / 20);
+  const silenceWindows = [];
+  for (let i = 0; i + winSz <= data.length; i += winSz) {
+    let sq = 0;
+    for (let j = i; j < i+winSz; j++) sq += data[j]*data[j];
+    if (Math.sqrt(sq/winSz) < thresh) silenceWindows.push(i);
+    if (silenceWindows.length >= 5) break;
+  }
+  if (!silenceWindows.length) return { detected: false, freq: null, strength: 0 };
+
+  // Average FFT across silence windows
+  const { binHz } = computeFFT(data.subarray(0, winSz), sr);
+  const avgMag = new Float32Array(4096);
+  silenceWindows.forEach(start => {
+    const { mag } = computeFFT(data.subarray(start, start+winSz), sr);
+    for (let i = 0; i < avgMag.length; i++) avgMag[i] += mag[i] / silenceWindows.length;
+  });
+
+  // Check energy at 50Hz and 60Hz harmonics (up to 5th harmonic)
+  const noiseFloor = avgMag.slice().sort((a,b)=>a-b)[Math.floor(avgMag.length*0.5)];
+  function checkHum(fundamental) {
+    let score = 0, hits = 0;
+    for (let h = 1; h <= 5; h++) {
+      const targetHz = fundamental * h;
+      const bin = Math.round(targetHz / binHz);
+      if (bin >= avgMag.length) break;
+      // Narrow peak check: must be higher than neighboring bins (sharp spike, not broad hump)
+      const peak    = avgMag[bin];
+      const sideAvg = (avgMag[Math.max(0,bin-4)] + avgMag[Math.min(avgMag.length-1,bin+4)]) / 2;
+      const isSharp = peak > sideAvg * 3;  // must be 3x sharper than neighbors
+      if (isSharp && peak > noiseFloor * 20) { score += peak / noiseFloor; hits++; }
+    }
+    return { score: hits >= 3 ? score : 0, hits };
+  }
+
+  const h50 = checkHum(50), h60 = checkHum(60);
+  if (h50.score === 0 && h60.score === 0) return { detected: false, freq: null, strength: 0 };
+  // Require one to clearly dominate — if both score similarly it's broadband room tone
+  const dominant = h50.score > h60.score ? h50 : h60;
+  const other    = h50.score > h60.score ? h60 : h50;
+  if (dominant.score < other.score * 2) return { detected: false, freq: null, strength: 0 };
+  const freq = h50.score > h60.score ? 50 : 60;
+  const strength = Math.max(h50.score, h60.score);
+  return { detected: true, freq, strength };
+}
+
+// Detect transients: short bursts above threshold with optional freq band filter
+// Detect mic pops using LP-dominance + abrupt amplitude jump
+// A real pop: low-freq burst (LP/Full ratio > 0.85) immediately followed
+// by a sudden full-band onset jump of ≥10 dB within 15ms
+function detectPops(data, sr, nfDb) {
+  const wsz = Math.floor(sr * 0.005); // 5ms windows
+  const speechThresh = Math.pow(10, -45 / 20);
+
+  // New calibrated thresholds: LP/Full > 0.85, abrupt jump >= 12 dB
+  const LP_THRESH   = 0.85;
+  const JUMP_THRESH = 12;
+  // RC = 1/(2π*80), alpha = dt/(RC+dt) where dt=1/sr
+  const RC = 1 / (2 * Math.PI * 80);
+  const dt = 1 / sr;
+  const alpha = dt / (RC + dt);
+  const lp = new Float32Array(data.length);
+  lp[0] = data[0];
+  for (let i = 1; i < data.length; i++) lp[i] = alpha * data[i] + (1 - alpha) * lp[i - 1];
+
+  // Envelope per 5ms window
+  const n = Math.floor(data.length / wsz);
+  const lpEnv   = new Float32Array(n);
+  const fullEnv = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let sq = 0, sqL = 0;
+    for (let j = i * wsz; j < (i + 1) * wsz; j++) {
+      sq  += data[j] * data[j];
+      sqL += lp[j]   * lp[j];
+    }
+    fullEnv[i] = Math.sqrt(sq / wsz);
+    lpEnv[i]   = Math.sqrt(sqL / wsz);
+  }
+
+  const candidates = [];
+  for (let i = 1; i < n - 3; i++) {
+    const ratio = lpEnv[i] / (fullEnv[i] + 1e-12);
+    if (ratio < LP_THRESH)      continue; // not LP-dominant
+    if (fullEnv[i] < speechThresh) continue; // below speech level
+
+    // Check for abrupt amplitude jump in next 3 windows (15ms)
+    const burstDb  = 20 * Math.log10(Math.max(fullEnv[i], 1e-9));
+    const followDb = Math.max(
+      20 * Math.log10(Math.max(fullEnv[i + 1], 1e-9)),
+      20 * Math.log10(Math.max(fullEnv[i + 2], 1e-9)),
+      20 * Math.log10(Math.max(fullEnv[i + 3], 1e-9))
+    );
+    const jump = followDb - burstDb;
+    if (jump < JUMP_THRESH) continue; // no abrupt onset = regular P consonant
+
+    candidates.push({ t: i * 0.005, jump });
+  }
+
+  // Merge events within 50ms, keep strongest
+  const merged = [];
+  for (const p of candidates) {
+    if (merged.length && p.t - merged[merged.length - 1].t < 0.05) {
+      if (p.jump > merged[merged.length - 1].jump) merged[merged.length - 1] = p;
+    } else {
+      merged.push(p);
+    }
+  }
+  return { events: merged.length, pct: 0 };
+}
+
+function detectTransients(data, sr, nfDb, opts = {}) {
+  const { minHz = 0, maxHz = 24000, minDurMs = 5, maxDurMs = 150, silenceOnly = false } = opts;
+  const winSz    = Math.floor(sr * 0.01); // 10ms windows
+  const nfLin    = Math.pow(10, nfDb / 20);
+  const thresh   = nfLin * opts.threshMult || nfLin * 30;
+  const silThresh = Math.pow(10, (nfDb + 10) / 20);
+  let events = 0, windows = 0, inEvent = false, eventLen = 0;
+
+  // Simple bandpass via envelope — for low-freq check subsample, for high-freq check diff
+  function bandEnergy(start) {
+    let sq = 0;
+    for (let j = start; j < start+winSz && j < data.length; j++) {
+      let s = data[j];
+      if (maxHz < 500) {
+        // Low-freq: use sample directly (low-pass by decimation)
+        const decimated = data[Math.min(data.length-1, j + Math.floor(sr/maxHz/2))];
+        s = (s + decimated) / 2;
+      } else if (minHz > 500) {
+        // High-freq: use first difference (high-pass)
+        s = j > 0 ? data[j] - data[j-1] : data[j];
+      }
+      sq += s*s;
+    }
+    return Math.sqrt(sq/winSz);
+  }
+
+  for (let i = 0; i + winSz <= data.length; i += winSz) {
+    windows++;
+    const env = bandEnergy(i);
+    const isSilent = env < silThresh;
+    if (silenceOnly && !isSilent) { inEvent = false; continue; }
+    if (env > thresh) {
+      if (!inEvent) { inEvent = true; eventLen = 1; }
+      else eventLen++;
+    } else {
+      if (inEvent) {
+        const durMs = eventLen * 10;
+        if (durMs >= minDurMs && durMs <= maxDurMs) events++;
+        inEvent = false; eventLen = 0;
+      }
+    }
+  }
+  return { events, pct: windows > 0 ? events / windows * 100 : 0 };
+}
+
+async function runArtifactScan(leftFiles, rightFiles) {
+  const TAKES = 5, SECS = 10;
+  const pairs = pairRawFiles(leftFiles, rightFiles);
+  const scanTakes = pairs.slice(0, TAKES);
+
+  // Clip label: "L-02" or "R-02" from filename suffix
+  const clipLabel = (file, side) => {
+    const m = file.name.match(/_(\d+)\.wav$/i);
+    return `Clip ${side}-${m ? m[1] : '?'}`;
+  };
+
+  let bleedSum = 0, humDetected = false, humFreq = null;
+  let popsL = 0, popsR = 0, clicksL = 0, clicksR = 0, impactL = 0, impactR = 0;
+  // Per-take clip lists for each artifact
+  const bleedClips = [], humClips = [];
+  const popClipsL = [], popClipsR = [];
+  const clickClipsL = [], clickClipsR = [];
+  const impactClipsL = [], impactClipsR = [];
+  let n = 0;
+
+  for (const pair of scanTakes) {
+    const [lBuf, rBuf] = await Promise.all([decodeFile(pair.left), decodeFile(pair.right)]);
+    const lData = sliceSamples(lBuf, 0, SECS);
+    const rData = sliceSamples(rBuf, 0, SECS);
+    const sr    = lBuf.sampleRate;
+    const lNF   = analyzeChannel(lData, sr).noiseFloorDb;
+    const rNF   = analyzeChannel(rData, sr).noiseFloorDb;
+    const lClip = clipLabel(pair.left,  'L');
+    const rClip = clipLabel(pair.right, 'R');
+
+    // Bleed
+    const bleedPct = detectBleed(lData, rData, sr, lNF);
+    bleedSum += bleedPct;
+    if (bleedPct >= 5) bleedClips.push({ label: rClip, file: pair.right.name });
+
+    // Hum
+    const hum = detectHum(lData, sr, lNF);
+    if (hum.detected) {
+      humDetected = true; humFreq = hum.freq;
+      humClips.push({ label: lClip, file: pair.left.name });
+    }
+
+    // Pops
+    const pL = detectPops(lData, sr, lNF);
+    const pR = detectPops(rData, sr, rNF);
+    popsL += pL.events; popsR += pR.events;
+    if (pL.events > 0) popClipsL.push({ label: lClip, file: pair.left.name,  count: pL.events });
+    if (pR.events > 0) popClipsR.push({ label: rClip, file: pair.right.name, count: pR.events });
+
+    // Clicks
+    const cL = detectTransients(lData, sr, lNF, { minHz:2000, minDurMs:5, maxDurMs:30, threshMult:40, silenceOnly:true });
+    const cR = detectTransients(rData, sr, rNF, { minHz:2000, minDurMs:5, maxDurMs:30, threshMult:40, silenceOnly:true });
+    clicksL += cL.events; clicksR += cR.events;
+    if (cL.events > 0) clickClipsL.push({ label: lClip, file: pair.left.name,  count: cL.events });
+    if (cR.events > 0) clickClipsR.push({ label: rClip, file: pair.right.name, count: cR.events });
+
+    // Stand impacts
+    const iL = detectTransients(lData, sr, lNF, { maxHz:80, minDurMs:50, maxDurMs:200, threshMult:50, silenceOnly:true });
+    const iR = detectTransients(rData, sr, rNF, { maxHz:80, minDurMs:50, maxDurMs:200, threshMult:50, silenceOnly:true });
+    impactL += iL.events; impactR += iR.events;
+    if (iL.events > 0) impactClipsL.push({ label: lClip, file: pair.left.name,  count: iL.events });
+    if (iR.events > 0) impactClipsR.push({ label: rClip, file: pair.right.name, count: iR.events });
+
+    n++;
+  }
+
+  return {
+    takesAnalyzed: n,
+    bleedPct:    n > 0 ? bleedSum / n : 0,
+    bleedClips,
+    hum:         { detected: humDetected, freq: humFreq, clips: humClips },
+    pops:        { left: popsL, right: popsR, clipsL: popClipsL,    clipsR: popClipsR },
+    clicks:      { left: clicksL, right: clicksR, clipsL: clickClipsL, clipsR: clickClipsR },
+    impacts:     { left: impactL, right: impactR, clipsL: impactClipsL, clipsR: impactClipsR },
+  };
+}
+
+function renderQualityCard(rawLA, rawRA, artifactData) {
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+
+  // ── Acoustic Delta row ─────────────────────────────────
+  const delta   = rawLA && rawRA ? Math.abs(rawLA.rmsDb - rawRA.rmsDb) : null;
+  const dr      = deltaRating(delta);
+  const louder  = rawLA && rawRA && rawLA.rmsDb > rawRA.rmsDb ? 'Left' : 'Right';
+
+  // Linear energy position for balance meter
+  let balanceHTML = '';
+  if (rawLA && rawRA) {
+    const linL = Math.pow(10, rawLA.rmsDb / 20);
+    const linR = Math.pow(10, rawRA.rmsDb / 20);
+    const pos  = linR / (linL + linR) * 100;
+    const dev  = pos - 50;
+    const fillStyle = dev <= 0
+      ? `left:${(50+dev).toFixed(1)}%;right:50%`
+      : `left:50%;right:${(50-dev).toFixed(1)}%`;
+    const green = isDark ? '#00ff88' : '#009944';
+    balanceHTML = `<div style="position:relative;height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin:4px 0 2px">
+      <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:rgba(255,255,255,0.5);transform:translateX(-50%)"></div>
+      <div style="position:absolute;top:0;bottom:0;border-radius:4px;background:${green};${fillStyle}"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)"><span>L</span><span>R</span></div>`;
+  }
+
+  // ── Collapsible clip list ──────────────────────────────
+  let _collapseId = 0;
+  function clipListHTML(clips) {
+    if (!clips || !clips.length) return '';
+    const id = 'qa-clips-' + (++_collapseId);
+    const items = clips.map(c =>
+      `<div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);padding:2px 0">
+        <span style="color:var(--green);font-weight:700">${c.label}</span>
+        <span style="color:var(--text3);margin-left:8px">${c.file}${c.count != null ? ' · ' + c.count + ' event' + (c.count>1?'s':'') : ''}</span>
+      </div>`
+    ).join('');
+    return `<div style="margin-top:4px">
+      <span onclick="const el=document.getElementById('${id}');const open=el.style.display!=='none';el.style.display=open?'none':'block';this.textContent=open?'▶ Problem in:':'▼ Problem in:'"
+        style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);cursor:pointer;user-select:none">▶ Problem in:</span>
+      <div id="${id}" style="display:none;margin-top:4px;padding:6px 10px;background:var(--bg3);border-radius:5px;border:1px solid var(--border)">
+        ${items}
+      </div>
+    </div>`;
+  }
+
+  // ── Artifact row helper ────────────────────────────────
+  function aRow(label, status, detail, level, clips) {
+    const col = level === 'fail' ? 'var(--red)' : level === 'warn' ? 'var(--amber)' : 'var(--green)';
+    const chip = level === 'fail'
+      ? `<span class="nf-chip nf-fail" style="font-size:9px;padding:1px 6px">${status}</span>`
+      : level === 'warn'
+      ? `<span class="nf-chip nf-warn" style="font-size:9px;padding:1px 6px">${status}</span>`
+      : `<span class="nf-chip nf-pass" style="font-size:9px;padding:1px 6px">${status}</span>`;
+    const clipsHTML = clips && clips.length ? clipListHTML(clips) : '';
+    return `<div style="display:grid;grid-template-columns:130px 90px 1fr;align-items:start;gap:10px;padding:8px 20px;border-bottom:1px solid var(--border)">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);padding-top:2px">${label}</div>
+      <div style="padding-top:2px">${chip}</div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${detail}${clipsHTML}</div>
+    </div>`;
+  }
+
+  const a = artifactData;
+  const rows = [];
+
+  // Acoustic Δ
+  const deltaVal = delta !== null ? delta.toFixed(2) + ' dB' : 'N/A';
+  const deltaLevel = delta === null ? '' : delta < 1 ? 'pass' : delta < 3 ? 'warn' : 'fail';
+  const deltaDetail = delta !== null
+    ? `${dr.label} &nbsp;·&nbsp; ${louder} louder &nbsp;·&nbsp; ${balanceHTML}`
+    : 'Single track only';
+  rows.push(aRow('Acoustic Δ', deltaVal, deltaDetail, deltaLevel));
+
+  // Bleed
+  const bleedPct = a.bleedPct.toFixed(1);
+  const bleedLevel = a.bleedPct < 5 ? 'pass' : a.bleedPct < 15 ? 'warn' : 'fail';
+  rows.push(aRow('Bleed', bleedPct + '%', a.bleedPct < 5 ? 'No significant bleed detected' : 'Cross-talk detected between mics', bleedLevel, a.bleedClips));
+
+  // Hum
+  const humLevel = a.hum.detected ? 'fail' : 'pass';
+  rows.push(aRow('Hum / Buzz', a.hum.detected ? 'DETECTED' : 'Clean',
+    a.hum.detected ? `${a.hum.freq}Hz electrical interference` : 'No 50/60Hz detected', humLevel, a.hum.clips));
+
+  // Pops
+  const popTotal = a.pops.left + a.pops.right;
+  const popLevel = popTotal === 0 ? 'pass' : popTotal <= 3 ? 'warn' : 'fail';
+  const popDetail = popTotal === 0 ? '0 events' :
+    [a.pops.left ? `Left: ${a.pops.left}` : '', a.pops.right ? `Right: ${a.pops.right}` : ''].filter(Boolean).join(' · ');
+  rows.push(aRow('Mic Pops', popTotal === 0 ? 'Clean' : popTotal + ' events', popDetail, popLevel,
+    [...(a.pops.clipsL||[]), ...(a.pops.clipsR||[])]));
+
+  // Clicks
+  const clickTotal = a.clicks.left + a.clicks.right;
+  const clickLevel = clickTotal === 0 ? 'pass' : clickTotal <= 5 ? 'warn' : 'fail';
+  const clickDetail = clickTotal === 0 ? '0 events' :
+    [a.clicks.left ? `Left: ${a.clicks.left}` : '', a.clicks.right ? `Right: ${a.clicks.right}` : ''].filter(Boolean).join(' · ');
+  rows.push(aRow('Mouth Clicks', clickTotal === 0 ? 'Clean' : clickTotal + ' events', clickDetail, clickLevel,
+    [...(a.clicks.clipsL||[]), ...(a.clicks.clipsR||[])]));
+
+  // Stand impacts
+  const impTotal = a.impacts.left + a.impacts.right;
+  const impLevel = impTotal === 0 ? 'pass' : impTotal <= 2 ? 'warn' : 'fail';
+  const impDetail = impTotal === 0 ? '0 events' :
+    [a.impacts.left ? `Left: ${a.impacts.left}` : '', a.impacts.right ? `Right: ${a.impacts.right}` : ''].filter(Boolean).join(' · ');
+  rows.push(aRow('Stand Impact', impTotal === 0 ? 'Clean' : impTotal + ' events', impDetail, impLevel,
+    [...(a.impacts.clipsL||[]), ...(a.impacts.clipsR||[])]));
+
+  // ── QA Recommendations ────────────────────────────────
+  const qaRecs = [];
+  function qaRec(level, title, action) {
+    const col = level === 'fail' ? 'var(--red)' : 'var(--amber)';
+    const bg  = level === 'fail' ? 'var(--red-dim)' : 'var(--amber-dim)';
+    const bdr = level === 'fail' ? 'var(--red)' : 'var(--amber)';
+    const icon = level === 'fail' ? '🔴' : '🟠';
+    qaRecs.push(`<div style="display:flex;align-items:baseline;gap:10px;padding:7px 12px;background:${bg};border:1px solid ${bdr};border-radius:6px;margin-bottom:5px">
+      <span style="font-size:12px;flex-shrink:0">${icon}</span>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:11px">
+        <span style="color:${col};font-weight:700;text-transform:uppercase;letter-spacing:.6px">${title}</span>
+        <span style="color:var(--text3);margin:0 6px">·</span>
+        <span style="color:var(--text2)">${action}</span>
+      </div>
+    </div>`);
+  }
+
+  if (delta !== null && delta > 3) qaRec('fail', 'Acoustic Δ', `${louder} is ${delta.toFixed(1)} dB louder. Check mic placement and gain staging.`);
+  if (a.bleedPct >= 5) qaRec(a.bleedPct >= 15 ? 'fail' : 'warn', 'Bleed', `${a.bleedPct.toFixed(1)}% cross-talk detected. Lower headphone monitoring levels.`);
+  if (a.hum.detected) qaRec('fail', 'Hum / Buzz', `${a.hum.freq}Hz detected. Check power supply, cables, and grounding.`);
+  if (popTotal > 0) qaRec(popTotal > 3 ? 'fail' : 'warn', 'Mic Pops', `${popTotal} event${popTotal>1?'s':''} detected. Add or reposition pop filter.`);
+  if (clickTotal > 0) qaRec(clickTotal > 5 ? 'fail' : 'warn', 'Mouth Clicks', `${clickTotal} event${clickTotal>1?'s':''} detected. Ask talent to hydrate.`);
+  if (impTotal > 0) qaRec(impTotal > 2 ? 'fail' : 'warn', 'Stand Impact', `${impTotal} event${impTotal>1?'s':''} detected. Check mic stand isolation.`);
+
+  const recsHTML = qaRecs.length
+    ? `<div style="padding:10px 20px 12px;border-top:1px solid var(--border2);background:var(--bg3)">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">QA Recommendations</div>
+        ${qaRecs.join('')}
+      </div>` : '';
+
+  const footerNote = `<div style="padding:6px 20px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);border-top:1px solid var(--border)">
+    Artifact scan · first ${a.takesAnalyzed} paired take${a.takesAnalyzed>1?'s':''} · 10s per take
+  </div>`;
+
+  return rows.join('') + recsHTML + footerNote;
+}
+
 function buildRecommendations(rawLA, rawRA, eA, mA) {
   const recs = [];
 
@@ -2006,7 +2460,7 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
   return recs;
 }
 
-function renderResults(rawLA, rawRA, eA, mA, rawStereoA) {
+function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   const hasRawL = !!rawLA, hasRawR = !!rawRA;
   const hasEdit = !!eA,    hasMix  = !!mA;
   const hasRaw  = hasRawL || hasRawR;
@@ -2050,49 +2504,10 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA) {
 
   // RAW Pair Acoustic Delta — between Left and Right mono tracks
   const rawPairPanel = document.getElementById('rawPairPanel');
-  if (hasRawL && hasRawR) {
+  if (hasRawL && hasRawR && artifactData) {
     rawPairPanel.style.display = '';
-    const delta = Math.abs(rawLA.rmsDb - rawRA.rmsDb);
-    const dr = deltaRating(delta);
-    const colMap = { 'rt-excellent':'var(--green)', 'rt-acceptable':'var(--blue)', 'rt-noticeable':'var(--amber)', 'rt-problem':'var(--red)' };
-    const col = colMap[dr.cls] || 'var(--text2)';
-
-    document.getElementById('rawPairDeltaVal').style.color = col;
-    document.getElementById('rawPairDeltaVal').textContent = delta.toFixed(2) + ' dB';
-    document.getElementById('rawPairDeltaTag').innerHTML = dr.cls
-      ? `<span class="rating-tag ${dr.cls}">${dr.label}</span>`
-      : `<span style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">${dr.label}</span>`;
-
-    // L-C-R balance using linear proportion (1=full left, 50=center, 100=full right)
-    const linL = Math.pow(10, rawLA.rmsDb / 20);
-    const linR = Math.pow(10, rawRA.rmsDb / 20);
-    const position = linR / (linL + linR) * 100; // 0–100, 50 = center
-    const deviation = position - 50;              // negative = left, positive = right
-
-    // halfPct: how far from center, max 50 = full deflection
-    const halfPct = Math.abs(deviation);
-    const fill = document.getElementById('rawPairBalFill');
-    fill.style.background = '#00ff88';
-    if (deviation <= 0) {
-      // Left is dominant → fill extends leftward from center
-      fill.style.left  = (50 - halfPct).toFixed(1) + '%';
-      fill.style.right = '50%';
-      fill.style.width = '';
-    } else {
-      // Right is dominant → fill extends rightward from center
-      fill.style.left  = '50%';
-      fill.style.right = (50 - halfPct).toFixed(1) + '%';
-      fill.style.width = '';
-    }
-
-    // Show position label
-    const side = deviation < -2 ? ' (Left)' : deviation > 2 ? ' (Right)' : ' (Center)';
-    document.getElementById('rawPairLRms').textContent = rawLA.rmsDb.toFixed(1) + ' dBFS  —  ' + (100 - position).toFixed(0) + '% energy' + (deviation < -2 ? ' ←' : '');
-    document.getElementById('rawPairRRms').textContent = rawRA.rmsDb.toFixed(1) + ' dBFS  —  ' + position.toFixed(0) + '% energy' + (deviation > 2 ? ' →' : '');
-
-    // Position readout
-    document.getElementById('rawPairDeltaVal').style.color = col;
-    document.getElementById('rawPairDeltaVal').textContent = delta.toFixed(2) + ' dB' + side;
+    document.getElementById('rawQualityBody').innerHTML =
+      renderQualityCard(rawLA, rawRA, artifactData);
   } else {
     rawPairPanel.style.display = 'none';
   }
