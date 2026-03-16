@@ -842,7 +842,7 @@ function classifyFiles(files) {
   function isValidTalentFile(f) {
     const name = f.name.toLowerCase();
     // Must be dualcharacter or singlecharacter session
-    if (!/dualcharacter|singlecharacter/i.test(name)) return false;
+    if (!/dualcharacter|dualemotioncharacter|singlecharacter/i.test(name)) return false;
     // Must NOT be a room tone file
     if (/roomtone|room.?tone|\brt_/i.test(name)) return false;
     // Must NOT be an edit or mix bounce
