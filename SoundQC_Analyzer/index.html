@@ -2043,8 +2043,8 @@ function detectPops(data, sr, nfDb) {
   const wsz = Math.floor(sr * 0.005); // 5ms windows
   const speechThresh = Math.pow(10, -45 / 20);
 
-  // New calibrated thresholds: LP/Full > 0.85, abrupt jump >= 12 dB
-  const LP_THRESH   = 0.85;
+  // Calibrated thresholds: LP/Full > 0.95, abrupt jump >= 12 dB
+  const LP_THRESH   = 0.95;
   const JUMP_THRESH = 12;
   // RC = 1/(2π*80), alpha = dt/(RC+dt) where dt=1/sr
   const RC = 1 / (2 * Math.PI * 80);
@@ -2308,8 +2308,9 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const popTotal = a.pops.left + a.pops.right;
   const popLevel = popTotal === 0 ? 'pass' : popTotal <= 3 ? 'warn' : 'fail';
   const popDetail = popTotal === 0 ? '0 events' :
-    [a.pops.left ? `Left: ${a.pops.left}` : '', a.pops.right ? `Right: ${a.pops.right}` : ''].filter(Boolean).join(' · ');
-  rows.push(aRow('Mic Pops', popTotal === 0 ? 'Clean' : popTotal + ' events', popDetail, popLevel,
+    [a.pops.left ? `Left: ${a.pops.left}` : '', a.pops.right ? `Right: ${a.pops.right}` : ''].filter(Boolean).join(' · ') +
+    ' <span style="color:var(--text3);font-style:italic">· verify by ear</span>';
+  rows.push(aRow('Mic Pops', popTotal === 0 ? 'Clean' : `~${popTotal} possible`, popDetail, popLevel,
     [...(a.pops.clipsL||[]), ...(a.pops.clipsR||[])]));
 
   // Clicks
@@ -2345,12 +2346,24 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     </div>`);
   }
 
-  if (delta !== null && delta > 3) qaRec('fail', 'Acoustic Δ', `${louder} is ${delta.toFixed(1)} dB louder. Check mic placement and gain staging.`);
-  if (a.bleedPct >= 5) qaRec(a.bleedPct >= 15 ? 'fail' : 'warn', 'Bleed', `${a.bleedPct.toFixed(1)}% cross-talk detected. Lower headphone monitoring levels.`);
-  if (a.hum.detected) qaRec('fail', 'Hum / Buzz', `${a.hum.freq}Hz detected. Check power supply, cables, and grounding.`);
-  if (popTotal > 0) qaRec(popTotal > 3 ? 'fail' : 'warn', 'Mic Pops', `${popTotal} event${popTotal>1?'s':''} detected. Add or reposition pop filter.`);
-  if (clickTotal > 0) qaRec(clickTotal > 5 ? 'fail' : 'warn', 'Mouth Clicks', `${clickTotal} event${clickTotal>1?'s':''} detected. Ask talent to hydrate.`);
-  if (impTotal > 0) qaRec(impTotal > 2 ? 'fail' : 'warn', 'Stand Impact', `${impTotal} event${impTotal>1?'s':''} detected. Check mic stand isolation.`);
+  if (delta !== null && delta > 3) {
+    const quieter = louder === 'Left' ? 'Right' : 'Left';
+    qaRec('warn', 'Acoustic Δ', `${louder} is ${delta.toFixed(1)} dB louder. Engineer: reduce ${louder} gain by ${delta.toFixed(1)} dB (or raise ${quieter} by ${delta.toFixed(1)} dB).`);
+  }
+  // Bleed — engineer covers with room tone clip
+  if (a.bleedPct >= 5) qaRec('warn', 'Bleed', `${a.bleedPct.toFixed(1)}% cross-talk detected. Cover affected regions with room tone clip.`);
+  // Hum — equipment issue, may need re-record
+  if (a.hum.detected) qaRec('fail', 'Hum / Buzz', `${a.hum.freq}Hz detected. Check power supply, cables and grounding. Re-record if not resolved.`);
+  // Pops — room tone if in silence gap, RX if in speech
+  if (popTotal > 0) qaRec(popTotal > 3 ? 'fail' : 'warn', 'Mic Pops', popTotal > 3
+    ? `~${popTotal} possible pops — verify by ear. Fix with room tone (silence gaps) or RX (speech). Request re-record if excessive.`
+    : `~${popTotal} possible pop${popTotal>1?'s':''} — verify by ear. Fix with room tone (silence gaps) or RX (speech).`);
+  // Clicks — room tone if in silence gap, RX if in speech
+  if (clickTotal > 0) qaRec('warn', 'Mouth Clicks', `${clickTotal} event${clickTotal>1?'s':''} detected. Fix with room tone (silence gaps) or RX (speech). Ask talent to hydrate.`);
+  // Stand impacts — room tone if in silence gap, RX if in speech
+  if (impTotal > 0) qaRec(impTotal > 2 ? 'fail' : 'warn', 'Stand Impact', impTotal > 2
+    ? `${impTotal} impacts detected. Fix with room tone (silence gaps) or RX (speech). Check mic stand isolation.`
+    : `${impTotal} impact${impTotal>1?'s':''} detected. Fix with room tone (silence gaps) or RX (speech).`);
 
   const recsHTML = qaRecs.length
     ? `<div style="padding:10px 20px 12px;border-top:1px solid var(--border2);background:var(--bg3)">
