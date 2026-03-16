@@ -494,6 +494,16 @@ h1 span { color: var(--green); }
 }
 [hidden]{display:none!important;}
 </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    @media print {
+      header, .drop-section, .file-list-section, #analyzeBtn, #exportBtn, #progressWrap, .theme-toggle, .version-badge { display: none !important; }
+      body { background: white !important; }
+      #results { display: block !important; margin: 0 !important; }
+      .result-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ccc !important; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
 </head>
 <body>
 <div class="app">
@@ -512,6 +522,8 @@ h1 span { color: var(--green); }
       </div>
     </div>
     <div class="header-right">
+      <button id="exportQABtn" onclick="exportQAReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QA Report</button>
+      <button id="exportQCBtn" onclick="exportQCReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QC Report</button>
       <div class="version-badge">v2.5</div>
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
@@ -575,7 +587,9 @@ h1 span { color: var(--green); }
   </div>
 
   <!-- ANALYZE BUTTON (manual / re-analyze) -->
-  <button class="btn-analyze" id="analyzeBtn" hidden onclick="runAnalysis()">▶ &nbsp; Run Analysis</button>
+  <div style="display:flex;gap:10px;align-items:center;justify-content:center">
+    <button class="btn-analyze" id="analyzeBtn" hidden onclick="runAnalysis()">▶ &nbsp; Run Analysis</button>
+  </div>
 
   <!-- PROGRESS -->
   <div class="progress-wrap" id="progressWrap" hidden>
@@ -849,7 +863,7 @@ function classifyFiles(files) {
     if (/_edit\b|_edit\.wav|_mix\b|_mixed\b/i.test(name)) return false;
     // Must start with talent code pattern or explicit Left/Right prefix
     const talentCode = /^[a-z]{8,12}_/.test(name);
-    const explicitPrefix = /^(left_talent|right_talent)/i.test(name);
+    const explicitPrefix = /^(left_talent|right_talent|talent\s*1_)/i.test(name);
     return talentCode || explicitPrefix;
   }
 
@@ -887,7 +901,7 @@ function classifyFiles(files) {
   // Group RAW by talent code alphabetically
   const rawL = [], rawR = [];
   if (rawAll.length) {
-    const explicitL = rawAll.filter(f => /^left_talent/i.test(f.name));
+    const explicitL = rawAll.filter(f => /^(left_talent|talent\s*1_)/i.test(f.name));
     const explicitR = rawAll.filter(f => /^right_talent/i.test(f.name));
     if (explicitL.length || explicitR.length) {
       rawL.push(...explicitL); rawR.push(...explicitR);
@@ -1358,6 +1372,11 @@ async function runAnalysis() {
     await new Promise(r=>setTimeout(r,100));
     document.getElementById('progressWrap').setAttribute('hidden','');
     document.getElementById('results').removeAttribute('hidden');
+
+    // Store globally for export
+    window._qaData = { rawLA, rawRA, artifactData, rawLeftFiles, rawRightFiles };
+    window._qcData = { eA, mA, eFile, mFile };
+
     try {
       renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData);
     } catch(renderErr) {
@@ -1365,6 +1384,10 @@ async function runAnalysis() {
         '<div style="grid-column:1/-1;padding:16px;color:var(--red);font-family:monospace;font-size:12px;background:var(--red-dim);border:1px solid var(--red);border-radius:8px"><strong>Render error:</strong> ' + renderErr.message + '<br><small>' + (renderErr.stack||'').split('\n').slice(0,3).join('<br>') + '</small></div>';
     }
     btn.textContent = '↺  Re-Analyze';
+
+    // Show relevant export buttons
+    if (rawLA || rawRA) document.getElementById('exportQABtn').style.display = 'inline-block';
+    if (eA || mA)       document.getElementById('exportQCBtn').style.display = 'inline-block';
     setTimeout(()=>document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'}), 80);
   } catch(err) {
     document.getElementById('progressWrap').setAttribute('hidden','');
@@ -1976,6 +1999,90 @@ function pearsonCorr(a, b) {
   return denom < 1e-12 ? 0 : sab/denom;
 }
 
+// Detect HPF: compare 10-20Hz energy vs 80-120Hz energy in silence windows
+// HPF OFF (natural): 10-20Hz within ~25 dB of 80-120Hz (diff > -25 dB)
+// HPF ON:            10-20Hz drops 45+ dB below 80-120Hz (diff < -25 dB)
+// Calibrated: HPF ON = -45 to -76 dB, HPF OFF = -14 to +26 dB, false positive at -21 dB excluded
+function detectHPF(data, sr, nfDb) {
+  const wsz      = Math.floor(sr * 2);
+  const silThresh = Math.pow(10, (nfDb + 8) / 20);
+
+  // Collect silence windows
+  const silenceWins = [];
+  for (let i = 0; i + wsz <= data.length; i += wsz) {
+    let sq = 0;
+    for (let j = i; j < i + wsz; j++) sq += data[j] * data[j];
+    if (Math.sqrt(sq / wsz) < silThresh) silenceWins.push(i);
+    if (silenceWins.length >= 4) break;
+  }
+  if (!silenceWins.length) return { detected: false };
+
+  const N = 65536;
+  const binHz = sr / N;
+  const avgMag = new Float32Array(N / 2 + 1);
+
+  // Correct Cooley-Tukey FFT with bit-reversal permutation
+  function fft(re, im) {
+    const n = re.length;
+    // Bit-reversal permutation
+    let j = 0;
+    for (let i = 1; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) {
+        [re[i], re[j]] = [re[j], re[i]];
+        [im[i], im[j]] = [im[j], im[i]];
+      }
+    }
+    // Butterfly passes
+    for (let len = 2; len <= n; len <<= 1) {
+      const ang = -2 * Math.PI / len;
+      const wRe = Math.cos(ang), wIm = Math.sin(ang);
+      for (let i = 0; i < n; i += len) {
+        let curRe = 1, curIm = 0;
+        for (let k = 0; k < len / 2; k++) {
+          const uRe = re[i+k],       uIm = im[i+k];
+          const vRe = re[i+k+len/2], vIm = im[i+k+len/2];
+          const tRe = curRe*vRe - curIm*vIm;
+          const tIm = curRe*vIm + curIm*vRe;
+          re[i+k]         = uRe + tRe; im[i+k]         = uIm + tIm;
+          re[i+k+len/2]   = uRe - tRe; im[i+k+len/2]   = uIm - tIm;
+          const newRe = curRe*wRe - curIm*wIm;
+          curIm = curRe*wIm + curIm*wRe; curRe = newRe;
+        }
+      }
+    }
+  }
+
+  for (const start of silenceWins) {
+    const re = new Float32Array(N);
+    const im = new Float32Array(N);
+    for (let i = 0; i < N && start + i < data.length; i++) {
+      re[i] = data[start + i] * (0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1))));
+    }
+    fft(re, im);
+    for (let i = 0; i <= N / 2; i++) {
+      avgMag[i] += Math.sqrt(re[i]*re[i] + im[i]*im[i]) / N / silenceWins.length;
+    }
+  }
+
+  function bandDb(loHz, hiHz) {
+    const lo = Math.max(1, Math.round(loHz / binHz));
+    const hi = Math.round(hiHz / binHz);
+    let sum = 0, count = 0;
+    for (let i = lo; i <= hi && i < avgMag.length; i++) { sum += avgMag[i]; count++; }
+    return count > 0 ? 20 * Math.log10(Math.max(sum / count, 1e-12)) : -200;
+  }
+
+  const lowDb  = bandDb(10, 20);
+  const highDb = bandDb(80, 120);
+  const diff   = lowDb - highDb;
+
+  if (diff < -25) return { detected: true, level: 'fail', diff };
+  return { detected: false, diff };
+}
+
 // Detect bleed: correlation of Right during Left speech windows
 function detectBleed(leftData, rightData, sr, nfDb) {
   const winSz  = Math.floor(sr * 0.05); // 50ms windows
@@ -2189,7 +2296,8 @@ async function runSingleArtifactScan(files) {
 
   let humDetected = false, humFreq = null;
   let pops = 0, clicks = 0, impacts = 0;
-  const humClips = [], popClips = [], clickClips = [], impactClips = [];
+  let hpfL = null;
+  const humClips = [], popClips = [], clickClips = [], impactClips = [], hpfLClips = [];
   const getSuffix = f => { const m = f.name.match(/_(\d+)\.wav$/i); return m ? m[1] : f.name; };
   let n = 0;
 
@@ -2203,6 +2311,9 @@ async function runSingleArtifactScan(files) {
 
     const hum = detectHum(data, sr, nfDb);
     if (hum.detected) { humDetected = true; humFreq = hum.freq; humClips.push({ label: clip, file: f.name }); }
+
+    const hpf = detectHPF(data, sr, nfDb);
+    if (hpf.detected) { hpfL = hpf; hpfLClips.push({ label: clip, file: f.name }); }
 
     const p = detectPops(data, sr, nfDb);
     pops += p.events;
@@ -2221,6 +2332,7 @@ async function runSingleArtifactScan(files) {
   return {
     takesAnalyzed: n,
     hum:     { detected: humDetected, freq: humFreq, clips: humClips },
+    hpf:     { left: hpfL, right: null, clipsL: hpfLClips, clipsR: [] },
     pops:    { left: pops, right: 0, clipsL: popClips,    clipsR: [] },
     clicks:  { left: clicks, right: 0, clipsL: clickClips, clipsR: [] },
     impacts: { left: impacts, right: 0, clipsL: impactClips, clipsR: [] },
@@ -2242,11 +2354,12 @@ async function runArtifactScan(leftFiles, rightFiles) {
 
   let bleedSum = 0, humDetected = false, humFreq = null;
   let popsL = 0, popsR = 0, clicksL = 0, clicksR = 0, impactL = 0, impactR = 0;
-  // Per-take clip lists for each artifact
+  let hpfL = null, hpfR = null;
   const bleedClips = [], humClips = [];
   const popClipsL = [], popClipsR = [];
   const clickClipsL = [], clickClipsR = [];
   const impactClipsL = [], impactClipsR = [];
+  const hpfClipsL = [], hpfClipsR = [];
   let n = 0;
 
   for (const pair of scanTakes) {
@@ -2270,6 +2383,12 @@ async function runArtifactScan(leftFiles, rightFiles) {
       humDetected = true; humFreq = hum.freq;
       humClips.push({ label: lClip, file: pair.left.name });
     }
+
+    // HPF — check both tracks independently
+    const hpfLeft  = detectHPF(lData, sr, lNF);
+    const hpfRight = detectHPF(rData, sr, rNF);
+    if (hpfLeft.detected)  { hpfL = hpfLeft;  hpfClipsL.push({ label: lClip, file: pair.left.name }); }
+    if (hpfRight.detected) { hpfR = hpfRight; hpfClipsR.push({ label: rClip, file: pair.right.name }); }
 
     // Pops
     const pL = detectPops(lData, sr, lNF);
@@ -2300,6 +2419,7 @@ async function runArtifactScan(leftFiles, rightFiles) {
     bleedPct:    n > 0 ? bleedSum / n : 0,
     bleedClips,
     hum:         { detected: humDetected, freq: humFreq, clips: humClips },
+    hpf:         { left: hpfL, right: hpfR, clipsL: hpfClipsL, clipsR: hpfClipsR },
     pops:        { left: popsL, right: popsR, clipsL: popClipsL,    clipsR: popClipsR },
     clicks:      { left: clicksL, right: clicksR, clipsL: clickClipsL, clipsR: clickClipsR },
     impacts:     { left: impactL, right: impactR, clipsL: impactClipsL, clipsR: impactClipsR },
@@ -2391,6 +2511,17 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   rows.push(aRow('Hum / Buzz', a.hum.detected ? 'DETECTED' : 'Clean',
     a.hum.detected ? `${a.hum.freq}Hz electrical interference` : 'No 50/60Hz detected', humLevel, a.hum.clips));
 
+  // HPF
+  const hpfLDet = a.hpf && a.hpf.left  && a.hpf.left.detected;
+  const hpfRDet = a.hpf && a.hpf.right && a.hpf.right.detected;
+  if (hpfLDet || hpfRDet) {
+    const who = (hpfLDet && hpfRDet) ? 'Both tracks' : hpfLDet ? 'Left track' : 'Right track';
+    const clips = [...(a.hpf.clipsL||[]), ...(a.hpf.clipsR||[])];
+    rows.push(aRow('HPF', 'DETECTED', `${who} — high-pass filter applied. Re-deliver without HPF.`, 'fail', clips));
+  } else {
+    rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
+  }
+
   // Pops
   const popTotal = a.pops.left + a.pops.right;
   const popLevel = popTotal === 0 ? 'pass' : popTotal <= 3 ? 'warn' : 'fail';
@@ -2440,6 +2571,10 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   if (!isSingleCh && a.bleedPct >= 5) qaRec('warn', 'Bleed', `${a.bleedPct.toFixed(1)}% cross-talk detected. Cover affected regions with room tone clip.`);
   // Hum — equipment issue, may need re-record
   if (a.hum.detected) qaRec('fail', 'Hum / Buzz', `${a.hum.freq}Hz detected. Check power supply, cables and grounding. Re-record if not resolved.`);
+  if (hpfLDet || hpfRDet) {
+    const who = (hpfLDet && hpfRDet) ? 'Both tracks' : hpfLDet ? 'Left track' : 'Right track';
+    qaRec('fail', 'HPF', `${who} — turn off high-pass filter on mic pre-amp. Re-deliver RAW files.`);
+  }
   // Pops — room tone if in silence gap, RX if in speech
   if (popTotal > 0) qaRec(popTotal > 3 ? 'fail' : 'warn', 'Mic Pops', popTotal > 3
     ? `~${popTotal} possible pops — verify by ear. Fix with room tone (silence gaps) or RX (speech). Request re-record if excessive.`
@@ -2590,7 +2725,10 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('rawLCardName').textContent = rawLA._talentCode + ' (' + rawLA._fileCount + ' file' + (rawLA._fileCount>1?'s':'') + ')';
     const rawLSL = getStudioLocation(rawLA._talentCode);
     document.getElementById('rawLCardMeta').textContent = (rawLSL ? 'Studio: ' + rawLSL.studio + ' (' + rawLSL.location + ') · ' : '') + rawLA.sampleRate/1000+' kHz · '+(rawLA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawLA.duration)+' total';
-    document.getElementById('rawLNFBadge').innerHTML    = nfBadgeHTML(rawLA.noiseFloorDb);
+    const hpfLDet = artifactData && artifactData.hpf && artifactData.hpf.left && artifactData.hpf.left.detected;
+    document.getElementById('rawLNFBadge').innerHTML = hpfLDet
+      ? '<span class="nf-chip nf-fail">HPF Detected</span>'
+      : nfBadgeHTML(rawLA.noiseFloorDb);
     document.getElementById('rawLMetrics').innerHTML    = buildMetrics(rawLA, false, true, 'raw');
   }
 
@@ -2610,7 +2748,10 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('rawRCardName').textContent = rawRA._talentCode + ' (' + rawRA._fileCount + ' file' + (rawRA._fileCount>1?'s':'') + ')';
     const rawRSL = getStudioLocation(rawRA._talentCode);
     document.getElementById('rawRCardMeta').textContent = (rawRSL ? 'Studio: ' + rawRSL.studio + ' (' + rawRSL.location + ') · ' : '') + rawRA.sampleRate/1000+' kHz · '+(rawRA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawRA.duration)+' total';
-    document.getElementById('rawRNFBadge').innerHTML    = nfBadgeHTML(rawRA.noiseFloorDb);
+    const hpfRDet = artifactData && artifactData.hpf && artifactData.hpf.right && artifactData.hpf.right.detected;
+    document.getElementById('rawRNFBadge').innerHTML = hpfRDet
+      ? '<span class="nf-chip nf-fail">HPF Detected</span>'
+      : nfBadgeHTML(rawRA.noiseFloorDb);
     document.getElementById('rawRMetrics').innerHTML    = buildMetrics(rawRA, false, true, 'raw');
   }
 
@@ -2704,6 +2845,96 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   } else {
     recsCard.style.display = 'none';
   }
+}
+
+function getReportStyles() {
+  const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+  const styles = Array.from(document.styleSheets).map(ss => {
+    try { return Array.from(ss.cssRules).map(r => r.cssText).join('\n'); } catch(e) { return ''; }
+  }).join('\n');
+  return { theme, styles };
+}
+
+function getSessionInfo() {
+  const date = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+  const rawLName = document.getElementById('rawLCardName')?.textContent || '';
+  const rawRName = document.getElementById('rawRCardName')?.textContent || '';
+  const editName = document.getElementById('editCardName')?.textContent || '';
+  const mixName  = document.getElementById('mixCardName')?.textContent  || '';
+  const rawLMeta = document.getElementById('rawLCardMeta')?.textContent || '';
+  // Extract session name from edit filename or RAW talent code
+  let sessionName = editName.replace(/_edit\.wav$/i,'').replace(/_mixed\.wav$/i,'') || rawLName.split(' (')[0] || 'SOBA Session';
+  return { date, rawLName, rawRName, editName, mixName, rawLMeta, sessionName };
+}
+
+function buildReportShell(title, bodyHTML, sessionInfo, theme, styles) {
+  return `<!DOCTYPE html>
+<html data-theme="${theme}">
+<head>
+<meta charset="utf-8">
+<title>${title} — ${sessionInfo.sessionName}</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+${styles}
+body { padding: 24px 28px; max-width: 1200px; margin: 0 auto; }
+.report-header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border2); }
+.report-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+.report-meta  { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text3); }
+.report-session { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="report-header">
+  <div class="report-title">${title}</div>
+  <div class="report-session">${sessionInfo.sessionName}</div>
+  <div class="report-meta">Generated ${sessionInfo.date} · SoundQC v2.5</div>
+</div>
+${bodyHTML}
+</body>
+</html>`;
+}
+
+function downloadHTML(html, filename) {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportQAReport() {
+  const { theme, styles } = getReportStyles();
+  const info = getSessionInfo();
+
+  // Collect QA cards
+  const ids = ['rawStereoCard','rawLCard','singleQACard','rawRCard','rawPairPanel'];
+  let body = '<div class="cards-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.style.display !== 'none' && !el.hasAttribute('hidden')) body += el.outerHTML;
+  });
+  body += '</div>';
+
+  const filename = `${info.sessionName}_QA_Report_${new Date().toISOString().slice(0,10)}.html`;
+  downloadHTML(buildReportShell('QA Recording Report', body, info, theme, styles), filename);
+}
+
+function exportQCReport() {
+  const { theme, styles } = getReportStyles();
+  const info = getSessionInfo();
+
+  const ids = ['editCard','mixCard','comparePanel','sessionAnalysisCard','recsCard'];
+  let body = '<div class="cards-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.style.display !== 'none' && !el.hasAttribute('hidden')) body += el.outerHTML;
+  });
+  body += '</div>';
+
+  const filename = `${info.sessionName}_QC_Report_${new Date().toISOString().slice(0,10)}.html`;
+  downloadHTML(buildReportShell('QC Edit/Mix Report', body, info, theme, styles), filename);
 }
 </script>
 </body>
