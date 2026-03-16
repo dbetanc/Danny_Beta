@@ -1526,42 +1526,97 @@ function lrBalanceBarHTML(lrDelta, ch0rms, ch1rms) {
   </div>`;
 }
 
+// Non-linear mapping for NF bar: 75% of width = -100 to -50, 25% = -50 to 0
+function nfPct(db) {
+  if (db <= -100) return 0;
+  if (db >= 0)    return 100;
+  if (db <= -50)  return (db - (-100)) / 50 * 75;
+  return 75 + (db - (-50)) / 50 * 25;
+}
+
 function dbBarHTML(db, type) {
-  const MIN = -80, RANGE = 80;
-  const pct = v => Math.max(0, Math.min(100, (v - MIN) / RANGE * 100));
-  const fillPct = pct(db);
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
   const lblCol = isDark ? 'var(--text2)' : 'var(--text3)';
 
-  let fillCol, markers = '';
-
   if (type === 'nf') {
-    fillCol = db > -50 ? 'var(--red)'
-            : db > -57 ? (isDark ? '#ff7800' : '#cc5500')
-            : db >= -68 ? 'var(--green)'
-            : db > -80  ? 'var(--amber)'
-            : '#a050ff';
-    const z57 = pct(-57), z68 = pct(-68);
-    const mc = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)';
-    markers = `<div style="position:absolute;top:0;bottom:0;left:${z57.toFixed(1)}%;width:1px;background:${mc}"></div>
-               <div style="position:absolute;top:0;bottom:0;left:${z68.toFixed(1)}%;width:1px;background:${mc}"></div>`;
-  } else if (type === 'rms') {
-    fillCol = isDark ? '#00ff88' : '#009944';
-  } else {
-    fillCol = db > -3 ? 'var(--red)' : isDark ? '#ff2040' : '#cc0020';
+    const fillPct = nfPct(db);
+
+    // Gradient stops in bar-space (0–100%), scaled to fill width
+    // Colors: purple(NO RT) → amber(quiet) → green(sweet spot) → orange(noisy) → red(fail)
+    const barStops = [
+      [nfPct(-100), '#a050ff'],
+      [nfPct(-80),  '#a050ff'],
+      [nfPct(-73),  '#c070e0'],  // purple fading to amber
+      [nfPct(-68),  '#ffaa00'],  // amber at quiet warn boundary
+      [nfPct(-63),  '#1dff8a'],  // green entering sweet spot
+      [nfPct(-57),  '#1dff8a'],  // green at noisy warn boundary
+      [nfPct(-53),  '#ff7800'],  // orange above sweet spot
+      [nfPct(-50),  '#ff4060'],  // red at fail boundary
+      [100,         '#ff1030'],
+    ];
+
+    // Scale gradient stops relative to fill width so colors sit at correct dB positions
+    const scaledStops = barStops
+      .filter(([bp]) => bp <= fillPct + 8)
+      .map(([bp, col]) => {
+        const scaled = fillPct > 0 ? Math.min(100, bp / fillPct * 100).toFixed(1) : '0';
+        return `${col} ${scaled}%`;
+      }).join(', ');
+
+    const gradient = fillPct > 0 ? `linear-gradient(to right, ${scaledStops})` : '#a050ff';
+
+    // Sweet spot zone highlight
+    const zL = nfPct(-68).toFixed(1);
+    const zW = (nfPct(-57) - nfPct(-68)).toFixed(1);
+    const zoneBg = isDark ? 'rgba(0,255,136,0.18)' : 'rgba(0,180,80,0.15)';
+
+    // Zone boundary markers
+    const mc = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)';
+    const markers = `
+      <div style="position:absolute;top:0;bottom:0;left:${zL}%;width:${zW}%;background:${zoneBg}"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${nfPct(-57).toFixed(1)}%;width:1px;background:${mc}"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${nfPct(-68).toFixed(1)}%;width:1px;background:${mc}"></div>`;
+
+    const ticks = [-100, -90, -80, -70, -60, -50, -25, 0];
+    const ticksHTML = ticks.map(t => {
+      const left   = nfPct(t).toFixed(1);
+      const anchor = t === -100 ? 'left' : t === 0 ? 'right' : 'center';
+      const tx     = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
+      const isZone = (t === -57 || t === -68);
+      const col    = isZone ? (isDark ? 'rgba(0,255,136,0.85)' : 'rgba(0,140,60,0.85)') : lblCol;
+      const weight = isZone ? 'font-weight:700;' : '';
+      return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${col};${weight}">${t}</span>`;
+    }).join('');
+
+    return `<div style="padding:2px 20px 14px;border-bottom:1px solid var(--border)">
+      <div style="position:relative;height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
+        ${markers}
+        <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${gradient};border-radius:3px"></div>
+      </div>
+      <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
+        ${ticksHTML}
+      </div>
+    </div>`;
   }
+
+  // RMS and Peak — linear -80 to 0
+  const MIN = -80, RANGE = 80;
+  const pct     = v => Math.max(0, Math.min(100, (v - MIN) / RANGE * 100));
+  const fillPct = pct(db);
+  const fillCol = type === 'rms'
+    ? (isDark ? '#00ff88' : '#009944')
+    : (db > -3 ? 'var(--red)' : isDark ? '#ff2040' : '#cc0020');
 
   const ticks = [-80, -60, -40, -20, 0];
   const ticksHTML = ticks.map(t => {
-    const left = pct(t).toFixed(1);
+    const left   = pct(t).toFixed(1);
     const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
-    const tx = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
+    const tx     = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
     return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${lblCol}">${t}</span>`;
   }).join('');
 
   return `<div style="padding:2px 20px 14px;border-bottom:1px solid var(--border)">
     <div style="position:relative;height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
-      ${markers}
       <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${fillCol};border-radius:3px"></div>
     </div>
     <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
@@ -1571,14 +1626,12 @@ function dbBarHTML(db, type) {
 }
 
 function lufsBarHTML(lufs, target) {
-  // target: 'edit' (-21 to -24) or 'mixed' (-18 to -20), default edit
   const MIN = -80, RANGE = 80;
   const pct = v => Math.max(0, Math.min(100, (v - MIN) / RANGE * 100));
   const fillPct = pct(lufs);
   const isDark  = document.documentElement.getAttribute('data-theme') !== 'light';
   const lblCol  = isDark ? 'var(--text2)' : 'var(--text3)';
 
-  // Target zone boundaries
   const isRaw   = target === 'raw';
   const isMixed = target === 'mixed';
   const zoneHigh = isMixed ? -18 : -21;
@@ -1586,18 +1639,38 @@ function lufsBarHTML(lufs, target) {
   const zoneLPct = isRaw ? 0 : pct(zoneLow);
   const zoneRPct = isRaw ? 0 : pct(zoneHigh);
   const zoneW    = isRaw ? 0 : zoneRPct - zoneLPct;
+  const zoneBg   = isDark ? 'rgba(0,255,136,0.25)' : 'rgba(0,140,74,0.18)';
 
-  // Fill color — RAW uses generic coloring, Edit/Mixed use zone-relative coloring
-  const fillCol = isRaw
-    ? (isDark ? '#00ff88' : '#009944')
-    : (lufs > zoneHigh ? 'var(--red)' : lufs < zoneLow ? '#a050ff' : 'var(--green)');
-  const zoneBg  = isDark ? 'rgba(0,255,136,0.30)' : 'rgba(0,140,74,0.22)';
-  const zoneCol = isDark ? 'rgba(0,255,136,0.8)'  : 'rgba(0,140,74,0.9)';
+  // Gradient stops — purple (too quiet) → green (target) → red (too loud)
+  // Transition zone is ~4 LU on each side of the target boundaries
+  let gradient;
+  if (isRaw) {
+    gradient = isDark ? '#00ff88' : '#009944';
+  } else {
+    const stops = [
+      [pct(-80),          '#a050ff'],   // far too quiet
+      [pct(zoneLow - 8),  '#a050ff'],   // purple until approaching low boundary
+      [pct(zoneLow - 2),  '#c070ff'],   // purple → transition
+      [pct(zoneLow),      '#1dff8a'],   // green at low boundary
+      [pct(zoneHigh),     '#1dff8a'],   // green at high boundary
+      [pct(zoneHigh + 2), '#ffaa00'],   // transition → orange
+      [pct(zoneHigh + 5), '#ff7800'],   // orange
+      [pct(zoneHigh + 10), '#ff2040'],  // red
+      [100,               '#ff1030'],   // full red
+    ];
 
-  const ticks = isMixed
-    ? [-80, -60, -40, -20, 0]
-    : [-80, -60, -40, -20, 0];
+    const scaledStops = stops
+      .filter(([sp]) => sp <= fillPct + 10)
+      .map(([sp, col]) => {
+        const scaled = fillPct > 0 ? Math.min(100, sp / fillPct * 100).toFixed(1) : '0';
+        return `${col} ${scaled}%`;
+      }).join(', ');
 
+    gradient = fillPct > 0 ? `linear-gradient(to right, ${scaledStops})` : '#a050ff';
+  }
+
+  // Tick labels — highlight zone boundaries in green
+  const ticks = [-80, -60, -40, -20, 0];
   const ticksHTML = ticks.map(t => {
     const left   = pct(t).toFixed(1);
     const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
@@ -1607,8 +1680,8 @@ function lufsBarHTML(lufs, target) {
 
   return `<div style="padding:2px 20px 14px;border-bottom:1px solid var(--border)">
     <div style="position:relative;height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
-      <div style="position:absolute;top:0;bottom:0;left:${zoneLPct.toFixed(1)}%;width:${zoneW.toFixed(1)}%;background:${zoneBg}"></div>
-      <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${fillCol};border-radius:4px;opacity:0.9"></div>
+      ${isRaw ? '' : `<div style="position:absolute;top:0;bottom:0;left:${zoneLPct.toFixed(1)}%;width:${zoneW.toFixed(1)}%;background:${zoneBg}"></div>`}
+      <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${gradient};border-radius:4px"></div>
     </div>
     <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
       ${ticksHTML}
@@ -1618,15 +1691,16 @@ function lufsBarHTML(lufs, target) {
 
 function snrDrBarHTML(nf, rms, peak) {
   const MIN = -80, RANGE = 80;
-  const pct = v => Math.max(0, Math.min(100, (v - MIN) / RANGE * 100));
+  const linPct = v => Math.max(0, Math.min(100, (v - MIN) / RANGE * 100));
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
   const lblCol = isDark ? 'var(--text2)' : 'var(--text3)';
 
-  const nfPct   = pct(nf);
-  const rmsPct  = pct(rms);
-  const pkPct   = pct(peak);
-  const snr     = (rms - nf).toFixed(1);
-  const dr      = (peak - nf).toFixed(1);
+  // NF uses non-linear scale; RMS and Peak use linear -80 to 0
+  const nfBarPct = nfPct(nf);
+  const rmsPct   = linPct(rms);
+  const pkPct    = linPct(peak);
+  const snr      = (rms - nf).toFixed(1);
+  const dr       = (peak - nf).toFixed(1);
 
   // Colors
   const nfCol  = isDark ? '#a050ff' : '#6600cc';  // purple dot = NF anchor
@@ -1636,7 +1710,7 @@ function snrDrBarHTML(nf, rms, peak) {
 
   const ticks = [-80, -60, -40, -20, 0];
   const ticksHTML = ticks.map(t => {
-    const left = pct(t).toFixed(1);
+    const left = linPct(t).toFixed(1);
     const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
     const tx = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
     return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${lblCol}">${t}</span>`;
@@ -1650,11 +1724,11 @@ function snrDrBarHTML(nf, rms, peak) {
     <!-- Dynamic Range bar (behind SNR) -->
     <div style="position:relative;height:10px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:2px">
       <!-- DR span: NF → Peak -->
-      <div style="position:absolute;top:0;bottom:0;left:${nfPct.toFixed(1)}%;width:${(pkPct - nfPct).toFixed(1)}%;background:${drCol}"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${nfBarPct.toFixed(1)}%;width:${(pkPct - nfBarPct).toFixed(1)}%;background:${drCol}"></div>
       <!-- SNR span: NF → RMS -->
-      <div style="position:absolute;top:0;bottom:0;left:${nfPct.toFixed(1)}%;width:${(rmsPct - nfPct).toFixed(1)}%;background:${snrCol};opacity:0.85;border-radius:0 3px 3px 0"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${nfBarPct.toFixed(1)}%;width:${(rmsPct - nfBarPct).toFixed(1)}%;background:${snrCol};opacity:0.85;border-radius:0 3px 3px 0"></div>
       <!-- NF anchor dot -->
-      <div style="position:absolute;top:1px;bottom:1px;left:${nfPct.toFixed(1)}%;width:3px;background:${nfCol};border-radius:2px"></div>
+      <div style="position:absolute;top:1px;bottom:1px;left:${nfBarPct.toFixed(1)}%;width:3px;background:${nfCol};border-radius:2px"></div>
       <!-- Peak dot -->
       <div style="position:absolute;top:1px;bottom:1px;left:${(pkPct - 0.3).toFixed(1)}%;width:3px;background:${pkCol};border-radius:2px"></div>
       <!-- RMS dot -->
@@ -1895,7 +1969,9 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
   if (eA && rawArr.length) {
     const rawNF = rawArr.reduce((s, a) => s + a.noiseFloorDb, 0) / rawArr.length;
     const drop  = eA.noiseFloorDb - rawNF;
-    if (drop < -6)
+    // Only flag if RAW NF is in a valid range — if RAW already has NO RT,
+    // the comparison is meaningless and should not trigger
+    if (rawNF > -80 && drop < -6)
       rec('fail', 'Edit — Unauthorized Processing',
         'NF dropped ' + Math.abs(drop).toFixed(1) + ' dB vs RAW. Re-deliver without noise reduction.');
   }
