@@ -475,7 +475,7 @@ h1 span { color: var(--green); }
 .divider-l    { width: 1px; height: 18px; background: var(--border2); margin: 0 6px; }
 .legend-nf    { display: flex; flex-direction: column; gap: 6px; }
 .legend-nf-item { display: flex; align-items: center; gap: 7px; font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); }
-.nf-chip      { font-family: 'Share Tech Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: .6px; padding: 2px 7px; border-radius: 3px; }
+.nf-chip      { font-family: 'Share Tech Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: .6px; padding: 3px 9px; border-radius: 3px; }
 
 /* ── KEYFRAMES ─────────────────────────────────────── */
 @keyframes fadeUp   { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
@@ -609,13 +609,23 @@ h1 span { color: var(--green); }
       <div class="result-card" id="rawLCard" style="display:none">
         <div class="card-header card-header-qa">
           <div style="min-width:0;flex:1">
-            <div class="card-type"><span class="card-type-qa">QA</span> — RAW Left</div>
+            <div class="card-type" id="rawLCardType"><span class="card-type-qa">QA</span> — RAW Left</div>
             <div class="card-filename" id="rawLCardName"></div>
             <div class="card-meta"    id="rawLCardMeta"></div>
           </div>
           <div id="rawLNFBadge"></div>
         </div>
         <div class="card-body" id="rawLMetrics"></div>
+      </div>
+
+      <!-- Single character QA card — occupies RAW Right slot when no Right track -->
+      <div class="result-card" id="singleQACard" style="display:none">
+        <div class="card-header card-header-qa">
+          <div style="min-width:0;flex:1">
+            <div class="card-type"><span class="card-type-qa">QA</span> — Recording Quality</div>
+          </div>
+        </div>
+        <div class="card-body" id="singleQABody" style="padding:0"></div>
       </div>
 
       <div class="result-card" id="rawRCard" style="display:none">
@@ -823,6 +833,26 @@ function classifyFiles(files) {
   const wavs = files.filter(f => f.name.toLowerCase().endsWith('.wav'));
   const rawAll = [], edits = [], mixes = [];
 
+  // ── Valid talent RAW file filter ─────────────────────────
+  // Accept only files that:
+  // 1. Contain 'dualcharacter' or 'singlecharacter' (case insensitive)
+  // 2. Start with talent code pattern [a-z]{8,12}_ OR Left_Talent/Right_Talent prefix
+  // 3. Do NOT contain room tone markers
+  // Stereo files are rejected at decode time (mono-only for RAW)
+  function isValidTalentFile(f) {
+    const name = f.name.toLowerCase();
+    // Must be dualcharacter or singlecharacter session
+    if (!/dualcharacter|singlecharacter/i.test(name)) return false;
+    // Must NOT be a room tone file
+    if (/roomtone|room.?tone|\brt_/i.test(name)) return false;
+    // Must NOT be an edit or mix bounce
+    if (/_edit\b|_edit\.wav|_mix\b|_mixed\b/i.test(name)) return false;
+    // Must start with talent code pattern or explicit Left/Right prefix
+    const talentCode = /^[a-z]{8,12}_/.test(name);
+    const explicitPrefix = /^(left_talent|right_talent)/i.test(name);
+    return talentCode || explicitPrefix;
+  }
+
   // Detect _RAW stereo file (single stereo WAV with _RAW suffix — dual-character stereo QA)
   rawStereoFile = null;
   const rawStereo = wavs.filter(f => /_raw\b/i.test(f.name));
@@ -838,7 +868,9 @@ function classifyFiles(files) {
     const folder = (f._folder || '').toLowerCase();
     const name   = f.name.toLowerCase();
     if (/audio.?file/i.test(folder)) {
-      rawAll.push(f); return;
+      // Apply strict talent file filter for Audio Files folder
+      if (isValidTalentFile(f)) rawAll.push(f);
+      return;
     }
     if (/bounced/i.test(folder) || /_edit\b/.test(name) || name.includes('_edit.wav')) {
       if (/_edit\b/.test(name) || name.includes('_edit.wav')) edits.push(f);
@@ -848,7 +880,8 @@ function classifyFiles(files) {
     }
     if (/_mix/.test(name)) { mixes.push(f); return; }
     if (/_edit\b/.test(name) || name.includes('_edit.wav')) { edits.push(f); return; }
-    rawAll.push(f);
+    // For files not in a known folder, still apply talent filter before adding to rawAll
+    if (isValidTalentFile(f)) rawAll.push(f);
   });
 
   // Group RAW by talent code alphabetically
@@ -1123,10 +1156,13 @@ async function analyzeGroup(files) {
   const results = [];
   for (const f of files) {
     const buf = await decodeFile(f);
+    // Skip interleaved stereo files — talent RAW tracks are always mono
+    if (buf.numberOfChannels > 1) continue;
     const a = analyzeBuffer(buf);
     a.lufs = computeIntegratedLUFS(buf);
     results.push(a);
   }
+  if (!results.length) return null;
   const n = results.length;
   const avg = k => results.reduce((s,r) => s+r[k], 0) / n;
   const lufsArr = results.filter(r => r.lufs != null);
@@ -1287,11 +1323,14 @@ async function runAnalysis() {
     if (rawLeftFiles.length)  { setProgress('Analyzing RAW Left…',  25); rawLA = await analyzeGroup(rawLeftFiles); }
     if (rawRightFiles.length) { setProgress('Analyzing RAW Right…', 40); rawRA = await analyzeGroup(rawRightFiles); }
 
-    // Artifact scan — only when both RAW tracks present
+    // Artifact scan — dual character needs both tracks, single character just needs one
     let artifactData = null;
     if (rawLeftFiles.length && rawRightFiles.length) {
       setProgress('Scanning for artifacts…', 50);
       artifactData = await runArtifactScan(rawLeftFiles, rawRightFiles);
+    } else if (rawLeftFiles.length && !rawRightFiles.length) {
+      setProgress('Scanning for artifacts…', 50);
+      artifactData = await runSingleArtifactScan(rawLeftFiles);
     }
     if (eFile) {
       setProgress('Decoding Edit WAV…',  60);
@@ -2144,6 +2183,52 @@ function detectTransients(data, sr, nfDb, opts = {}) {
   return { events, pct: windows > 0 ? events / windows * 100 : 0 };
 }
 
+async function runSingleArtifactScan(files) {
+  const TAKES = 5, SECS = 10;
+  const scanFiles = files.slice(0, TAKES);
+
+  let humDetected = false, humFreq = null;
+  let pops = 0, clicks = 0, impacts = 0;
+  const humClips = [], popClips = [], clickClips = [], impactClips = [];
+  const getSuffix = f => { const m = f.name.match(/_(\d+)\.wav$/i); return m ? m[1] : f.name; };
+  let n = 0;
+
+  for (const f of scanFiles) {
+    const buf = await decodeFile(f);
+    if (buf.numberOfChannels > 1) continue;
+    const data = sliceSamples(buf, 0, SECS);
+    const sr   = buf.sampleRate;
+    const nfDb = analyzeChannel(data, sr).noiseFloorDb;
+    const clip  = 'Clip-' + getSuffix(f);
+
+    const hum = detectHum(data, sr, nfDb);
+    if (hum.detected) { humDetected = true; humFreq = hum.freq; humClips.push({ label: clip, file: f.name }); }
+
+    const p = detectPops(data, sr, nfDb);
+    pops += p.events;
+    if (p.events > 0) popClips.push({ label: clip, file: f.name, count: p.events });
+
+    const c = detectTransients(data, sr, nfDb, { minHz:2000, minDurMs:5, maxDurMs:30, threshMult:40, silenceOnly:true });
+    clicks += c.events;
+    if (c.events > 0) clickClips.push({ label: clip, file: f.name, count: c.events });
+
+    const i = detectTransients(data, sr, nfDb, { maxHz:80, minDurMs:50, maxDurMs:200, threshMult:50, silenceOnly:true });
+    impacts += i.events;
+    if (i.events > 0) impactClips.push({ label: clip, file: f.name, count: i.events });
+    n++;
+  }
+
+  return {
+    takesAnalyzed: n,
+    hum:     { detected: humDetected, freq: humFreq, clips: humClips },
+    pops:    { left: pops, right: 0, clipsL: popClips,    clipsR: [] },
+    clicks:  { left: clicks, right: 0, clipsL: clickClips, clipsR: [] },
+    impacts: { left: impacts, right: 0, clipsL: impactClips, clipsR: [] },
+    bleedPct: 0, bleedClips: [],
+    singleChannel: true,
+  };
+}
+
 async function runArtifactScan(leftFiles, rightFiles) {
   const TAKES = 5, SECS = 10;
   const pairs = pairRawFiles(leftFiles, rightFiles);
@@ -2224,7 +2309,7 @@ async function runArtifactScan(leftFiles, rightFiles) {
 function renderQualityCard(rawLA, rawRA, artifactData) {
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 
-  // ── Acoustic Delta row ─────────────────────────────────
+  // ── Acoustic Delta row — dual character only ──────────────
   const delta   = rawLA && rawRA ? Math.abs(rawLA.rmsDb - rawRA.rmsDb) : null;
   const dr      = deltaRating(delta);
   const louder  = rawLA && rawRA && rawLA.rmsDb > rawRA.rmsDb ? 'Left' : 'Right';
@@ -2269,17 +2354,16 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
 
   // ── Artifact row helper ────────────────────────────────
   function aRow(label, status, detail, level, clips) {
-    const col = level === 'fail' ? 'var(--red)' : level === 'warn' ? 'var(--amber)' : 'var(--green)';
     const chip = level === 'fail'
-      ? `<span class="nf-chip nf-fail" style="font-size:9px;padding:1px 6px">${status}</span>`
+      ? `<span class="nf-chip nf-fail">${status}</span>`
       : level === 'warn'
-      ? `<span class="nf-chip nf-warn" style="font-size:9px;padding:1px 6px">${status}</span>`
-      : `<span class="nf-chip nf-pass" style="font-size:9px;padding:1px 6px">${status}</span>`;
+      ? `<span class="nf-chip nf-warn">${status}</span>`
+      : `<span class="nf-chip nf-pass">${status}</span>`;
     const clipsHTML = clips && clips.length ? clipListHTML(clips) : '';
-    return `<div style="display:grid;grid-template-columns:130px 90px 1fr;align-items:start;gap:10px;padding:8px 20px;border-bottom:1px solid var(--border)">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);padding-top:2px">${label}</div>
-      <div style="padding-top:2px">${chip}</div>
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${detail}${clipsHTML}</div>
+    return `<div style="display:grid;grid-template-columns:150px 120px 1fr;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2)">${label}</div>
+      <div>${chip}</div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text)">${detail}${clipsHTML}</div>
     </div>`;
   }
 
@@ -2292,12 +2376,15 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const deltaDetail = delta !== null
     ? `${dr.label} &nbsp;·&nbsp; ${louder} louder &nbsp;·&nbsp; ${balanceHTML}`
     : 'Single track only';
-  rows.push(aRow('Acoustic Δ', deltaVal, deltaDetail, deltaLevel));
+  const isSingleCh = !rawRA || a.singleChannel;
 
-  // Bleed
-  const bleedPct = a.bleedPct.toFixed(1);
-  const bleedLevel = a.bleedPct < 5 ? 'pass' : a.bleedPct < 15 ? 'warn' : 'fail';
-  rows.push(aRow('Bleed', bleedPct + '%', a.bleedPct < 5 ? 'No significant bleed detected' : 'Cross-talk detected between mics', bleedLevel, a.bleedClips));
+  // Only show Acoustic Δ and Bleed for dual character
+  if (!isSingleCh) {
+    rows.push(aRow('Acoustic Δ', deltaVal, deltaDetail, deltaLevel));
+    const bleedPct = a.bleedPct.toFixed(1);
+    const bleedLevel = a.bleedPct < 5 ? 'pass' : a.bleedPct < 15 ? 'warn' : 'fail';
+    rows.push(aRow('Bleed', bleedPct + '%', a.bleedPct < 5 ? 'No significant bleed detected' : 'Cross-talk detected between mics', bleedLevel, a.bleedClips));
+  }
 
   // Hum
   const humLevel = a.hum.detected ? 'fail' : 'pass';
@@ -2350,8 +2437,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     const quieter = louder === 'Left' ? 'Right' : 'Left';
     qaRec('warn', 'Acoustic Δ', `${louder} is ${delta.toFixed(1)} dB louder. Engineer: reduce ${louder} gain by ${delta.toFixed(1)} dB (or raise ${quieter} by ${delta.toFixed(1)} dB).`);
   }
-  // Bleed — engineer covers with room tone clip
-  if (a.bleedPct >= 5) qaRec('warn', 'Bleed', `${a.bleedPct.toFixed(1)}% cross-talk detected. Cover affected regions with room tone clip.`);
+  if (!isSingleCh && a.bleedPct >= 5) qaRec('warn', 'Bleed', `${a.bleedPct.toFixed(1)}% cross-talk detected. Cover affected regions with room tone clip.`);
   // Hum — equipment issue, may need re-record
   if (a.hum.detected) qaRec('fail', 'Hum / Buzz', `${a.hum.freq}Hz detected. Check power supply, cables and grounding. Re-record if not resolved.`);
   // Pops — room tone if in silence gap, RX if in speech
@@ -2498,11 +2584,24 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   // RAW Left card
   document.getElementById('rawLCard').style.display = hasRawL ? '' : 'none';
   if (hasRawL) {
+    // Label: "RAW Left" for dual character, "RAW" for single character
+    const isSingle = hasRawL && !hasRawR;
+    document.getElementById('rawLCardType').innerHTML = '<span class="card-type-qa">QA</span> — RAW' + (isSingle ? '' : ' Left');
     document.getElementById('rawLCardName').textContent = rawLA._talentCode + ' (' + rawLA._fileCount + ' file' + (rawLA._fileCount>1?'s':'') + ')';
     const rawLSL = getStudioLocation(rawLA._talentCode);
     document.getElementById('rawLCardMeta').textContent = (rawLSL ? 'Studio: ' + rawLSL.studio + ' (' + rawLSL.location + ') · ' : '') + rawLA.sampleRate/1000+' kHz · '+(rawLA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawLA.duration)+' total';
     document.getElementById('rawLNFBadge').innerHTML    = nfBadgeHTML(rawLA.noiseFloorDb);
     document.getElementById('rawLMetrics').innerHTML    = buildMetrics(rawLA, false, true, 'raw');
+  }
+
+  // Single character QA card — shows in RAW Right slot when no Right track
+  const singleQACard = document.getElementById('singleQACard');
+  if (hasRawL && !hasRawR && artifactData) {
+    singleQACard.style.display = '';
+    document.getElementById('singleQABody').innerHTML =
+      renderQualityCard(rawLA, null, artifactData);
+  } else {
+    singleQACard.style.display = 'none';
   }
 
   // RAW Right card
