@@ -512,19 +512,20 @@ h1 span { color: var(--green); }
   <header>
     <div class="logo-row">
       <div class="logo-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round">
-          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="2 12 5 12"/><polyline points="19 12 22 12"/>
+          <polyline points="5 12 7 6 9 18 11 8 13 16 15 12 17 12"/>
         </svg>
       </div>
       <div>
-        <h1>Sound<span>QC</span></h1>
+        <h1>SOBA <span style="color:var(--text3);font-weight:400">—</span> <span>Audio QA & QC</span></h1>
         <div class="header-sub">Waveform Quality Control Analyzer</div>
       </div>
     </div>
     <div class="header-right">
       <button id="exportQABtn" onclick="exportQAReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QA Report</button>
       <button id="exportQCBtn" onclick="exportQCReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QC Report</button>
-      <div class="version-badge">v2.5</div>
+      <div class="version-badge">v2.6</div>
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">DARK</span>
@@ -967,7 +968,7 @@ function processFiles(files, autoRun) {
   }
 
   refreshSlots();
-  if (autoRun && (eFile || rawLeftFiles.length || rawStereoFile)) runAnalysis();
+  if (autoRun && (eFile || mFile || rawLeftFiles.length || rawStereoFile)) runAnalysis();
 }
 
 function fmtSize(b) { return b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(1)+' MB'; }
@@ -2977,8 +2978,8 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   const hasQC   = hasEdit  || hasMix;
   const hasStereoRaw = !!rawStereoA;
 
-  // How many visible cards determines grid layout
-  const visibleCount = [hasStereoRaw,hasRawL,hasRawR,hasEdit,hasMix].filter(Boolean).length;
+  // Always 2-column grid when more than one card type present
+  const visibleCount = [hasStereoRaw, hasRawL, hasRawR, hasEdit, hasMix].filter(Boolean).length;
   const grid = document.getElementById('cardsGrid');
   grid.style.gridTemplateColumns = visibleCount === 1 ? '1fr' : '1fr 1fr';
 
@@ -3060,9 +3061,8 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
 
   // Edit card — hide when only stereo RAW QA file present
   const editCardEl = document.getElementById('editCard');
-  editCardEl.style.display = (hasEdit && !hasStereoRaw) ? '' : 'none';
-  // If any RAW cards are present, force Edit to start on column 1 (new row)
-  editCardEl.style.gridColumn = hasRaw ? '1' : '';
+  editCardEl.style.display = hasEdit ? '' : 'none';
+  editCardEl.style.gridColumn = (hasRaw || hasStereoRaw) ? '1' : '';
   if (hasEdit) {
     document.getElementById('editCardType').innerHTML = '<span class="card-type-qc">QC</span> — Edit WAV';
     document.getElementById('editCardName').textContent = eFile.name;
@@ -3071,8 +3071,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('editMetrics').innerHTML    = buildMetrics(eA, false, false, 'edit');
   }
 
-  // Mix card
-  document.getElementById('mixCard').style.display = (hasMix && !hasStereoRaw) ? '' : 'none';
+  document.getElementById('mixCard').style.display = hasMix ? '' : 'none';
   if (hasMix) {
     document.getElementById('mixCardName').textContent = mFile.name;
     document.getElementById('mixCardMeta').textContent = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration);
