@@ -1,7 +1,7 @@
-<!doctype html>
+<!DOCTYPE html>
 <!--
   ============================================
-  SOBA Session Checker v2.0.1
+  SOBA - Session Pre-checker v2.1
   Created by: Danny Beta
   Date: March 2026
   
@@ -9,1146 +9,888 @@
   for SOBA audio production workflows
   ============================================
 -->
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <meta name="author" content="Danny Beta"/>
-  <title>SOBA Session Checker v2.0.1</title>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <style>
-    :root {
-      --success:#16a34a;
-      --danger:#d32f2f;
-      --border:rgba(0,0,0,0.08);
-      --text:#1d1d1f;
-      --muted:#86868b;
-      --good-bg:rgba(220,252,231,0.6);
-      --bad-bg:rgba(254,226,226,0.6);
-      --good-border:rgba(134,239,172,0.6);
-      --bad-border:rgba(252,165,165,0.6);
-      --good-text:#166534;
-      --bad-text:#991b1b;
-      --glass-bg:rgba(255,255,255,0.65);
-      --glass-border:rgba(255,255,255,0.5);
-      --glass-shadow:0 4px 24px rgba(0,0,0,0.06);
-      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue",system-ui,sans-serif;
-    }
-
-    /* Dark/Light Mode Toggle */
-    .mode-toggle {
-      position:fixed;
-      top:20px;
-      right:20px;
-      display:flex;
-      align-items:center;
-      gap:8px;
-      background:var(--glass-bg);
-      padding:8px 14px;
-      border-radius:20px;
-      cursor:pointer;
-      z-index:1000;
-      border:1px solid var(--glass-border);
-      font-size:13px;
-      font-weight:600;
-      color:#3a3a3c;
-      transition:all 0.3s ease;
-      backdrop-filter:blur(20px);
-      -webkit-backdrop-filter:blur(20px);
-      box-shadow:0 2px 12px rgba(0,0,0,0.06);
-    }
-
-    .mode-toggle:hover {
-      background:rgba(255,255,255,0.85);
-      box-shadow:0 4px 16px rgba(0,0,0,0.08);
-    }
-
-    .mode-toggle .icon {
-      font-size:16px;
-    }
-
-    body.dark-mode .mode-toggle {
-      background:#334155;
-      border-color:#475569;
-      color:#e2e8f0;
-    }
-
-    body.dark-mode .mode-toggle:hover {
-      background:#475569;
-    }
-
-    body {
-      background:linear-gradient(135deg, #f5f7fa 0%, #e4e8ee 40%, #dfe6ed 60%, #f0f2f5 100%);
-      background-attachment:fixed;
-      color:var(--text);
-      margin:0;
-      padding:40px;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      position:relative;
-      min-height:100vh;
-    }
-
-    h1 {
-      margin:0 0 12px;
-      font-size:34px !important;
-      font-weight:800;
-      letter-spacing:-0.5px;
-      color:#1d1d1f;
-      text-align:center;
-      line-height:1.2;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-
-    h1 span {
-      font-size:34px !important;
-      font-weight:800;
-    }
-
-    h1 .version {
-      font-size:14px !important;
-      font-weight:600;
-      color:#86868b;
-      background:rgba(0,0,0,0.04);
-      padding:4px 10px;
-      border-radius:20px;
-      letter-spacing:0;
-      backdrop-filter:blur(8px);
-      -webkit-backdrop-filter:blur(8px);
-    }
-
-    p {
-      margin:0 0 18px;
-      font-size:14px;
-      color:#86868b;
-      text-align:center;
-      max-width:600px;
-    }
-
-    /* REQUIREMENTS WRAPPER */
-    .requirements-wrapper {
-      display:flex;
-      justify-content:center;
-      width:100%;
-      margin:12px 0 16px;
-    }
-
-    .requirements-accordion {
-      width:100%;
-      max-width:600px;
-    }
-
-    .requirements-header {
-      background:rgba(254,252,232,0.6);
-      border:1px solid rgba(253,224,71,0.4);
-      border-radius:14px;
-      padding:8px 12px;
-      cursor:pointer;
-      user-select:none;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap:6px;
-      transition:all 0.3s ease;
-      font-size:13px;
-      font-weight:600;
-      color:#854d0e;
-      white-space:nowrap;
-      backdrop-filter:blur(20px);
-      -webkit-backdrop-filter:blur(20px);
-      box-shadow:0 2px 12px rgba(0,0,0,0.04);
-    }
-
-    .requirements-header:hover {
-      background:rgba(254,249,195,0.7);
-      border-color:rgba(250,204,21,0.5);
-    }
-
-    .requirements-header.active {
-      border-bottom-left-radius:0;
-      border-bottom-right-radius:0;
-      border-bottom-color:transparent;
-    }
-
-    .requirements-header .icon {
-      font-size:15px;
-    }
-
-    .requirements-chevron {
-      font-size:12px;
-      color:#a16207;
-      transition:transform 0.2s ease;
-      margin-left:4px;
-    }
-
-    .requirements-chevron.open {
-      transform:rotate(180deg);
-    }
-
-    .requirements-content {
-      max-height:0;
-      overflow:hidden;
-      transition:max-height 0.3s ease, border-width 0.1s ease;
-      background:rgba(254,252,232,0.5);
-      border:0px solid rgba(253,224,71,0.4);
-      border-top:none;
-      border-bottom-left-radius:14px;
-      border-bottom-right-radius:14px;
-      backdrop-filter:blur(20px);
-      -webkit-backdrop-filter:blur(20px);
-    }
-
-    .requirements-content.open {
-      max-height:500px;
-      border-width:1px;
-    }
-
-    .requirements-inner {
-      padding:14px 18px 16px;
-    }
-
-    .requirements-inner ul {
-      margin:0 0 12px;
-      padding-left:18px;
-      list-style:none;
-    }
-
-    .requirements-inner li {
-      margin-bottom:5px;
-      font-size:12px;
-      color:#713f12;
-      line-height:1.4;
-    }
-
-    .requirements-inner li::before {
-      content:"✓";
-      color:#16a34a;
-      font-weight:900;
-      margin-right:6px;
-    }
-
-    .requirements-inner .disclaimer {
-      background:#fef2f2;
-      border:1px solid #fca5a5;
-      border-radius:8px;
-      padding:8px 10px;
-      font-size:11px;
-      font-weight:600;
-      color:#991b1b;
-      line-height:1.3;
-    }
-
-    .requirements-inner .disclaimer::before {
-      content:"⚠️ ";
-      margin-right:4px;
-    }
-
-    .drop {
-      width:100%;
-      max-width:600px;
-      height:100px;
-      border:2px dashed rgba(59,130,246,0.4);
-      border-radius:20px;
-      padding:16px;
-      text-align:center;
-      font-weight:700;
-      font-size:18px;
-      cursor:pointer;
-      transition:all .3s ease;
-      background:rgba(96,165,250,0.15);
-      backdrop-filter:blur(20px);
-      -webkit-backdrop-filter:blur(20px);
-      user-select:none;
-      -webkit-user-select:none;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      flex-direction:column;
-      gap:6px;
-      color:#2563eb;
-      box-shadow:0 4px 24px rgba(59,130,246,0.08);
-    }
-/* UNIFIED BLUE DROP ZONE (LIGHT + DARK MODE MATCH) */
-.drop,
-.drop.dragover {
-  background: #dbeafe !important;
-  border-color: #93c5fd !important;
-  color: #1e40af !important;
-  box-shadow: 0 4px 24px rgba(59,130,246,0.1) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="author" content="Danny Beta"/>
+<title>SOBA - Session Pre-checker v2.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+/* ── DARK THEME (default) ─────────────────────────── */
+[data-theme="dark"] {
+  --bg:        #090c10;
+  --bg2:       #0f1318;
+  --bg3:       #171e28;
+  --border:    rgba(255,255,255,0.08);
+  --border2:   rgba(255,255,255,0.18);
+  --text:      #f4f8ff;
+  --text2:     #b8c4d8;
+  --text3:     #7a8fa8;
+  --shadow:    0 2px 24px rgba(0,0,0,0.55);
+  --grid-line: rgba(255,255,255,0.024);
+  --card-hover:rgba(255,255,255,0.028);
+  --green:     #1dff8a;
+  --green-dim: rgba(29,255,138,0.11);
+  --amber:     #f5a623;
+  --amber-dim: rgba(245,166,35,0.13);
+  --red:       #ff3d57;
+  --red-dim:   rgba(255,61,87,0.12);
+  --blue:      #4da6ff;
+  --blue-dim:  rgba(77,166,255,0.12);
 }
 
-    .drop.dragover {
-      background:#bfdbfe !important;
-      border-color:#60a5fa !important;
-    }
-
-    .drop small {
-      font-weight:500 !important;
-      font-size:14px !important;
-      color:#6b7280 !important;
-    }
-
-    .session-name {
-      margin:16px auto 6px;
-      font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
-      font-size:16px !important;
-      font-weight:700 !important;
-      padding:14px 20px;
-      border-radius:16px;
-      border:1px solid rgba(14,165,233,0.3);
-      width:fit-content;
-      max-width:90vw;
-      white-space:nowrap;
-      text-align:center;
-      box-shadow:var(--glass-shadow);
-      animation:fadeInUp .25s ease-out;
-      box-sizing:border-box;
-      backdrop-filter:blur(20px);
-      -webkit-backdrop-filter:blur(20px);
-      background:var(--glass-bg);
-    }
-
-    .session-name.good {
-      background:rgba(220,252,231,0.5);
-      border-color:rgba(134,239,172,0.5);
-      color:var(--good-text);
-    }
-
-    .session-name.bad {
-      background:rgba(254,226,226,0.5);
-      border-color:rgba(252,165,165,0.5);
-      color:var(--bad-text);
-    }
-
-    .illegal {
-      color:#FFD700 !important;
-      font-weight:bold !important;
-      background:#991b1b !important;
-      border-radius:2px !important;
-    }
-
-    .error-box {
-      margin-top:8px;
-      padding:10px 14px;
-      background:var(--glass-bg);
-      border:1px solid var(--glass-border);
-      border-radius:12px;
-      font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
-      font-size:13px;
-      color:#3a3a3c;
-      text-align:center;
-      max-width:600px;
-      backdrop-filter:blur(20px);
-      -webkit-backdrop-filter:blur(20px);
-    }
-
-    .section {
-      border:1px solid rgba(0,0,0,0.06);
-      border-radius:16px;
-      padding:12px 16px;
-      margin-top:10px;
-      width:100%;
-      max-width:600px;
-      background:var(--glass-bg);
-      backdrop-filter:blur(20px);
-      -webkit-backdrop-filter:blur(20px);
-      box-shadow:var(--glass-shadow);
-      animation:fadeInUp .25s ease-out;
-    }
-
-    .section h2 {
-      font-size:14px;
-      font-weight:700;
-      margin:0 0 8px;
-      border-bottom:1px solid rgba(0,0,0,0.06);
-      padding-bottom:4px;
-      color:#1d1d1f;
-      letter-spacing:-0.2px;
-    }
-
-    .note {
-      font-size:13px;
-      color:#777;
-      font-style:italic;
-      margin:-6px 0 10px;
-    }
-
-    .badge {
-      display:inline-flex;
-      align-items:center;
-      gap:10px;
-      padding:8px 14px;
-      border-radius:12px;
-      font-weight:600;
-      margin-top:8px;
-      font-size:13px;
-    }
-
-    .badge.ok::before {
-      content:"✔";
-      font-size:13px;
-    }
-
-    .badge.fail::before {
-      content:"✖";
-      font-size:13px;
-    }
-
-    .ok {
-      color:var(--success);
-      background:rgba(220,252,231,0.5);
-      border:1px solid rgba(167,243,208,0.5);
-      backdrop-filter:blur(8px);
-      -webkit-backdrop-filter:blur(8px);
-    }
-
-    .expand-arrow {
-      font-size:10px;
-      transition:transform 0.2s ease;
-      margin-left:4px;
-    }
-
-    .badge.ok:hover .expand-arrow {
-      color:var(--success);
-    }
-
-    .passed-details {
-      margin-top:10px;
-      padding:10px;
-      background:rgba(240,253,244,0.5);
-      border:1px solid rgba(167,243,208,0.4);
-      border-radius:12px;
-      transition:all 0.2s ease;
-      backdrop-filter:blur(8px);
-      -webkit-backdrop-filter:blur(8px);
-    }
-
-    .passed-details.hidden {
-      display:none;
-    }
-
-    .passed-details .track-box {
-      background:rgba(255,255,255,0.6);
-      border:1px solid rgba(167,243,208,0.4);
-      color:#166534;
-      white-space:nowrap;
-      overflow-x:auto;
-      font-size:13px;
-    }
-
-    .fail {
-      color:var(--danger);
-      background:rgba(254,226,226,0.5);
-      border:1px solid rgba(255,205,210,0.5);
-      backdrop-filter:blur(8px);
-      -webkit-backdrop-filter:blur(8px);
-    }
-
-    .error-list {
-      margin-top:14px;
-      text-align:left;
-    }
-
-    .error-item {
-      background:rgba(255,245,245,0.6);
-      border-left:3px solid var(--danger);
-      padding:10px 14px;
-      margin-bottom:8px;
-      border-radius:8px;
-      font-size:13px;
-      backdrop-filter:blur(8px);
-      -webkit-backdrop-filter:blur(8px);
-    }
-
-    .tracks-list {
-      margin-top:8px;
-    }
-
-    .track-box {
-      border-radius:10px;
-      padding:8px 12px;
-      margin-bottom:6px;
-      font-weight:600;
-      display:flex;
-      align-items:center;
-      gap:10px;
-      border:1px solid rgba(134,239,172,0.4);
-      background:rgba(220,252,231,0.4);
-      color:var(--good-text);
-      font-size:13px;
-      word-break:break-all;
-    }
-
-    .tracks-list {
-      display:flex;
-      flex-direction:column;
-      align-items:stretch;
-      width:100%;
-    }
-
-    .track-box.bad {
-      border-color:rgba(252,165,165,0.4);
-      background:rgba(254,226,226,0.4);
-      color:var(--bad-text);
-    }
-
-    .track-num {
-      background:var(--success);
-      color:white;
-      font-weight:700;
-      padding:2px 8px;
-      border-radius:6px;
-      font-size:12px;
-      flex-shrink:0;
-    }
-
-    .track-box.bad .track-num {
-      background:#d32f2f;
-    }
-
-    .should-be {
-      margin-left:0;
-      margin-top:6px;
-      margin-bottom:4px;
-      font-size:13px;
-      color:var(--bad-text);
-      font-style:normal;
-      font-weight:600;
-      text-align:center;
-    }
-
-    .should-be-wrapper {
-      width:100%;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      margin-bottom:8px;
-    }
-
-    .should-be-container {
-      display:flex;
-      align-items:center;
-      gap:10px;
-      margin:4px auto;
-      width:fit-content;
-      max-width:100%;
-    }
-
-    .should-be-box {
-      background:rgba(248,250,252,0.6);
-      padding:10px 14px;
-      border-radius:10px;
-      border:1px solid rgba(226,232,240,0.5);
-      display:flex;
-      align-items:center;
-      backdrop-filter:blur(8px);
-      -webkit-backdrop-filter:blur(8px);
-    }
-
-    .should-be code {
-      font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
-      font-size:12px;
-      background:transparent;
-      padding:0;
-      color:#0ea5e9;
-      font-weight:600;
-      white-space:nowrap;
-    }
-
-    .copy-btn {
-      background:transparent;
-      color:#0ea5e9;
-      border:none;
-      padding:6px;
-      border-radius:4px;
-      cursor:pointer;
-      transition:all 0.2s ease;
-      flex-shrink:0;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      width:28px;
-      height:28px;
-      font-family:'Material Icons';
-      font-size:18px;
-    }
-
-    .copy-btn::before {
-      content:"content_copy";
-    }
-
-    .copy-btn:hover {
-      background:#e0f2fe;
-      color:#0284c7;
-    }
-
-    .copy-btn:active {
-      transform:scale(0.9);
-    }
-
-    .copy-btn.copied {
-      color:#16a34a;
-    }
-
-    .copy-btn.copied::before {
-      content:"check";
-    }
-
-    .copy-btn.copied-check {
-      font-size:18px;
-    }
-
-    /* PARTY MODE — ON TOP */
-    #party {
-      margin:20px 0 10px;
-      text-align:center;
-      animation:fadeIn 1s ease-in;
-      width:100%;
-    }
-
-    #party .congrats {
-      font-size:52px;
-      font-weight:900;
-      color:#16a34a;
-      margin:0 0 8px;
-      animation:bounce 1.2s infinite, rainbow 2s linear infinite;
-      letter-spacing:1px;
-      background:linear-gradient(90deg, #ff0000, #ff8000, #ffff00, #00ff00, #00ffff, #0080ff, #8000ff, #ff0080, #ff0000);
-      background-size:200% auto;
-      -webkit-background-clip:text;
-      -webkit-text-fill-color:transparent;
-      background-clip:text;
-    }
-
-    @keyframes rainbow {
-      0% { background-position:0% center; }
-      100% { background-position:200% center; }
-    }
-
-    #party .perfect {
-      font-size:30px;
-      color:#2563eb;
-      font-weight:700;
-      margin-bottom:0;
-    }
-
-    #party .sparkle {
-      font-size:34px;
-      display:inline-block;
-      animation:spin 2s linear infinite;
-    }
-
-    @keyframes fadeIn {
-      from { opacity:0; }
-      to { opacity:1; }
-    }
-
-    @keyframes fadeOut {
-      from { opacity:1; }
-      to { opacity:0; }
-    }
-
-    #party.fade-out {
-      animation:fadeOut 1s ease-out forwards;
-    }
-
-    @keyframes fadeInUp {
-      from {
-        opacity:0;
-        transform:translateY(8px);
-      }
-      to {
-        opacity:1;
-        transform:translateY(0);
-      }
-    }
-
-    @keyframes bounce {
-      0%,100% { transform:translateY(0); }
-      50% { transform:translateY(-18px); }
-    }
-
-    @keyframes spin {
-      from { transform:rotate(0deg); }
-      to { transform:rotate(360deg); }
-    }
-
-    canvas {
-      position:fixed;
-      top:0;
-      left:0;
-      pointer-events:none;
-      z-index:9999;
-      display:none;
-    }
-
-    input[type=file] {
-      display:none;
-    }
-
-    /* DARK MODE OVERRIDES */
-    @media (prefers-color-scheme: dark) {
-      body {
-        background:linear-gradient(135deg, #0a0e1a 0%, #111827 40%, #0f172a 60%, #0d1117 100%);
-        color:#e5e7eb;
-      }
-
-      h1 {
-        color:#e5e7eb;
-      }
-
-      h1 .version {
-        background:rgba(255,255,255,0.06);
-        color:#9ca3af;
-        border:1px solid rgba(255,255,255,0.08);
-      }
-
-      p {
-        color:#9ca3af;
-      }
-
-      .requirements-header {
-        background:rgba(66,32,6,0.6);
-        border-color:rgba(113,63,18,0.5);
-        box-shadow:0 4px 16px rgba(0,0,0,0.3);
-        color:#fef08a;
-        backdrop-filter:blur(20px);
-        -webkit-backdrop-filter:blur(20px);
-      }
-
-      .requirements-header:hover {
-        background:rgba(82,41,10,0.7);
-        border-color:rgba(133,77,14,0.5);
-      }
-
-      .requirements-chevron {
-        color:#fde047;
-      }
-
-      .requirements-content {
-        background:rgba(66,32,6,0.5);
-        border-color:rgba(113,63,18,0.5);
-      }
-
-      .requirements-inner li {
-        color:#fef3c7;
-      }
-
-      .requirements-inner li::before {
-        color:#34d399;
-      }
-
-      .requirements-inner .disclaimer {
-        background:rgba(30,27,27,0.6);
-        border-color:rgba(127,29,29,0.5);
-        color:#fca5a5;
-      }
-
-      .drop {
-        background:#dbeafe !important;
-        border-color:#93c5fd !important;
-        color:#1e40af !important;
-        box-shadow:0 4px 24px rgba(59,130,246,0.1) !important;
-        backdrop-filter:blur(20px) !important;
-        -webkit-backdrop-filter:blur(20px) !important;
-      }
-
-      .drop.dragover {
-        background:#bfdbfe !important;
-        border-color:#60a5fa !important;
-      }
-
-      .drop small {
-        color:#6b7280 !important;
-      }
-
-      .session-name {
-        background:rgba(30,41,59,0.6);
-        border-color:rgba(14,165,233,0.3);
-        color:#e5e7eb;
-        box-shadow:0 6px 24px rgba(0,0,0,0.3);
-        backdrop-filter:blur(20px);
-        -webkit-backdrop-filter:blur(20px);
-      }
-
-      .session-name.good {
-        background:rgba(22,163,74,0.1);
-        border-color:rgba(34,197,94,0.3);
-        color:#bbf7d0;
-      }
-
-      .session-name.bad {
-        background:rgba(220,38,38,0.1);
-        border-color:rgba(248,113,113,0.3);
-        color:#fecaca;
-      }
-
-      .error-box {
-        background:rgba(30,41,59,0.6);
-        border-color:rgba(255,255,255,0.06);
-        color:#e5e7eb;
-        backdrop-filter:blur(20px);
-        -webkit-backdrop-filter:blur(20px);
-      }
-
-      .section {
-        background:rgba(30,41,59,0.5);
-        border-color:rgba(255,255,255,0.06);
-        box-shadow:0 8px 32px rgba(0,0,0,0.25);
-        backdrop-filter:blur(20px);
-        -webkit-backdrop-filter:blur(20px);
-      }
-
-      .section h2 {
-        border-bottom-color:rgba(255,255,255,0.06);
-        color:#e5e7eb;
-      }
-
-      .note {
-        color:#9ca3af;
-      }
-
-      .badge.ok {
-        background:rgba(22,163,74,0.15);
-        border-color:rgba(34,197,94,0.3);
-        color:#bbf7d0;
-      }
-
-      .badge.fail {
-        background:rgba(220,38,38,0.15);
-        border-color:rgba(249,115,115,0.3);
-        color:#fecaca;
-      }
-
-      .error-item {
-        background:rgba(127,29,29,0.2);
-        border-left-color:rgba(249,115,115,0.6);
-        color:#fecaca;
-      }
-
-      .track-box {
-        background:rgba(22,163,74,0.12);
-        border-color:rgba(34,197,94,0.25);
-        color:#bbf7d0;
-      }
-
-      .track-box.bad {
-        background:rgba(127,29,29,0.2);
-        border-color:rgba(249,115,115,0.3);
-        color:#fecaca;
-      }
-
-      .track-num {
-        background:#16a34a;
-      }
-
-      .track-box.bad .track-num {
-        background:#dc2626;
-      }
-
-      .should-be {
-        color:#fecaca;
-      }
-
-      .should-be-box {
-        background:rgba(30,41,59,0.6);
-        border-color:rgba(255,255,255,0.08);
-      }
-
-      .should-be code {
-        color:#38bdf8;
-      }
-
-      .copy-btn {
-        color:#38bdf8;
-      }
-
-      .copy-btn:hover {
-        background:rgba(30,58,82,0.5);
-        color:#7dd3fc;
-      }
-
-      .copy-btn.copied {
-        color:#34d399;
-      }
-
-      .passed-details {
-        background:rgba(22,163,74,0.1);
-        border-color:rgba(34,197,94,0.2);
-      }
-
-      .passed-details .track-box {
-        background:rgba(22,163,74,0.15);
-        border-color:rgba(34,197,94,0.2);
-        color:#bbf7d0;
-      }
-
-      .mode-toggle {
-        background:rgba(51,65,85,0.6);
-        border-color:rgba(255,255,255,0.08);
-        color:#e2e8f0;
-        backdrop-filter:blur(20px);
-        -webkit-backdrop-filter:blur(20px);
-      }
-
-      .mode-toggle:hover {
-        background:rgba(71,85,105,0.6);
-      }
-
-      #party .perfect {
-        color:#60a5fa;
-      }
-
-      #party .sparkle {
-        color:#f9a8d4;
-      }
-    }
-
-    /* Manual dark-mode class for toggle */
-    body.dark-mode {
-      background:linear-gradient(135deg, #0a0e1a 0%, #111827 40%, #0f172a 60%, #0d1117 100%);
-      color:#e5e7eb;
-    }
-    body.dark-mode h1 { color:#e5e7eb; }
-    body.dark-mode h1 .version { background:rgba(255,255,255,0.06); color:#9ca3af; border:1px solid rgba(255,255,255,0.08); }
-    body.dark-mode p { color:#9ca3af; }
-    body.dark-mode .mode-toggle { background:rgba(51,65,85,0.6); border-color:rgba(255,255,255,0.08); color:#e2e8f0; }
-    body.dark-mode .mode-toggle:hover { background:rgba(71,85,105,0.6); }
-    body.dark-mode .requirements-header { background:rgba(66,32,6,0.6); border-color:rgba(113,63,18,0.5); color:#fef08a; }
-    body.dark-mode .requirements-header:hover { background:rgba(82,41,10,0.7); border-color:rgba(133,77,14,0.5); }
-    body.dark-mode .requirements-chevron { color:#fde047; }
-    body.dark-mode .requirements-content { background:rgba(66,32,6,0.5); border-color:rgba(113,63,18,0.5); }
-    body.dark-mode .requirements-inner li { color:#fef3c7; }
-    body.dark-mode .requirements-inner li::before { color:#34d399; }
-    body.dark-mode .requirements-inner .disclaimer { background:rgba(30,27,27,0.6); border-color:rgba(127,29,29,0.5); color:#fca5a5; }
-    body.dark-mode .drop { background:#dbeafe !important; border-color:#93c5fd !important; color:#1e40af !important; box-shadow:0 4px 24px rgba(59,130,246,0.1) !important; }
-    body.dark-mode .drop.dragover { background:#bfdbfe !important; border-color:#60a5fa !important; }
-    body.dark-mode .drop small { color:#6b7280 !important; }
-    body.dark-mode .session-name { background:rgba(30,41,59,0.6); border-color:rgba(14,165,233,0.3); color:#e5e7eb; }
-    body.dark-mode .session-name.good { background:rgba(22,163,74,0.1); border-color:rgba(34,197,94,0.3); color:#bbf7d0; }
-    body.dark-mode .session-name.bad { background:rgba(220,38,38,0.1); border-color:rgba(248,113,113,0.3); color:#fecaca; }
-    body.dark-mode .error-box { background:rgba(30,41,59,0.6); border-color:rgba(255,255,255,0.06); color:#e5e7eb; }
-    body.dark-mode .section { background:rgba(30,41,59,0.5); border-color:rgba(255,255,255,0.06); box-shadow:0 8px 32px rgba(0,0,0,0.25); }
-    body.dark-mode .section h2 { border-bottom-color:rgba(255,255,255,0.06); color:#e5e7eb; }
-    body.dark-mode .note { color:#9ca3af; }
-    body.dark-mode .badge.ok { background:rgba(22,163,74,0.15); border-color:rgba(34,197,94,0.3); color:#bbf7d0; }
-    body.dark-mode .badge.fail { background:rgba(220,38,38,0.15); border-color:rgba(249,115,115,0.3); color:#fecaca; }
-    body.dark-mode .error-list { border-left-color:rgba(55,65,81,0.5); }
-    body.dark-mode .error-item { background:rgba(127,29,29,0.2); border-left-color:rgba(249,115,115,0.6); color:#fecaca; }
-    body.dark-mode .track-box { background:rgba(22,163,74,0.12); border-color:rgba(34,197,94,0.25); color:#bbf7d0; }
-    body.dark-mode .track-box.bad { background:rgba(127,29,29,0.2); border-color:rgba(249,115,115,0.3); color:#fecaca; }
-    body.dark-mode .track-num { background:#16a34a; }
-    body.dark-mode .track-box.bad .track-num { background:#dc2626; }
-    body.dark-mode .should-be { color:#fecaca; }
-    body.dark-mode .should-be-box { background:rgba(30,41,59,0.6); border-color:rgba(255,255,255,0.08); }
-    body.dark-mode .should-be code { color:#38bdf8; }
-    body.dark-mode .copy-btn { color:#38bdf8; }
-    body.dark-mode .copy-btn:hover { background:rgba(30,58,82,0.5); color:#7dd3fc; }
-    body.dark-mode .copy-btn.copied { color:#34d399; }
-    body.dark-mode .passed-details { background:rgba(22,163,74,0.1); border-color:rgba(34,197,94,0.2); }
-    body.dark-mode .passed-details .track-box { background:rgba(22,163,74,0.15); border-color:rgba(34,197,94,0.2); color:#bbf7d0; }
-    body.dark-mode #party .perfect { color:#60a5fa; }
-    body.dark-mode #party .sparkle { color:#f9a8d4; }
-
-    /* Light mode override (when system is dark but user picks light) */
-    body.light-mode {
-      background:linear-gradient(135deg, #f5f7fa 0%, #e4e8ee 40%, #dfe6ed 60%, #f0f2f5 100%);
-      color:#1d1d1f;
-    }
-    body.light-mode h1 { color:#1d1d1f; }
-    body.light-mode h1 .version { background:rgba(0,0,0,0.04); color:#86868b; border:none; }
-    body.light-mode p { color:#86868b; }
-    body.light-mode .mode-toggle { background:var(--glass-bg); border-color:var(--glass-border); color:#3a3a3c; }
-    body.light-mode .mode-toggle:hover { background:rgba(255,255,255,0.85); }
-    body.light-mode .requirements-header { background:rgba(254,252,232,0.6); border-color:rgba(253,224,71,0.4); color:#854d0e; }
-    body.light-mode .requirements-header:hover { background:rgba(254,249,195,0.7); border-color:rgba(250,204,21,0.5); }
-    body.light-mode .requirements-chevron { color:#a16207; }
-    body.light-mode .requirements-content { background:rgba(254,252,232,0.5); border-color:rgba(253,224,71,0.4); }
-    body.light-mode .requirements-inner li { color:#713f12; }
-    body.light-mode .requirements-inner li::before { color:#16a34a; }
-    body.light-mode .requirements-inner .disclaimer { background:rgba(254,242,242,0.6); border-color:rgba(252,165,165,0.5); color:#991b1b; }
-    body.light-mode .session-name { background:var(--glass-bg); border-color:rgba(14,165,233,0.3); color:#1d1d1f; }
-    body.light-mode .session-name.good { background:rgba(220,252,231,0.5); border-color:rgba(134,239,172,0.5); color:#166534; }
-    body.light-mode .session-name.bad { background:rgba(254,226,226,0.5); border-color:rgba(252,165,165,0.5); color:#991b1b; }
-    body.light-mode .error-box { background:var(--glass-bg); border-color:rgba(0,0,0,0.06); color:#3a3a3c; }
-    body.light-mode .section { background:var(--glass-bg); border-color:rgba(0,0,0,0.06); }
-    body.light-mode .section h2 { border-bottom-color:rgba(0,0,0,0.06); color:#1d1d1f; }
-    body.light-mode .badge.ok { background:rgba(220,252,231,0.5); color:#16a34a; }
-    body.light-mode .badge.fail { background:rgba(254,226,226,0.5); color:#d32f2f; }
-    body.light-mode .error-list { border-left-color:rgba(252,165,165,0.5); }
-    body.light-mode .error-item { background:rgba(255,245,245,0.6); border-left-color:#f87171; color:#991b1b; }
-    body.light-mode .track-box { background:rgba(220,252,231,0.4); border-color:rgba(134,239,172,0.4); color:#166534; }
-    body.light-mode .track-box.bad { background:rgba(254,226,226,0.4); border-color:rgba(252,165,165,0.4); color:#991b1b; }
-    body.light-mode .track-num { background:#16a34a; color:#fff; }
-    body.light-mode .track-box.bad .track-num { background:#d32f2f; }
-    body.light-mode .should-be { color:#991b1b; }
-    body.light-mode .should-be-box { background:rgba(248,250,252,0.6); border-color:rgba(226,232,240,0.5); }
-    body.light-mode .should-be code { color:#0ea5e9; }
-    body.light-mode .copy-btn { color:#0ea5e9; }
-    body.light-mode .copy-btn:hover { background:rgba(224,242,254,0.5); color:#0284c7; }
-    body.light-mode .copy-btn.copied { color:#16a34a; }
-    body.light-mode #party .perfect { color:#2563eb; }
-
-    /* Footer credit */
-    .footer-credit {
-      margin-top:40px;
-      padding:20px;
-      text-align:center;
-      font-size:12px;
-      color:#86868b;
-      opacity:0.7;
-      transition:opacity 0.3s ease;
-    }
-
-    .footer-credit:hover {
-      opacity:1;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .footer-credit {
-        color:#9ca3af;
-      }
-    }
-
-    body.dark-mode .footer-credit {
-      color:#9ca3af;
-    }
-
-    body.light-mode .footer-credit {
-      color:#86868b;
-    }
-  </style>
+/* ── LIGHT THEME ──────────────────────────────────── */
+[data-theme="light"] {
+  --bg:        #edf0f5;
+  --bg2:       #ffffff;
+  --bg3:       #e2e7ef;
+  --border:    rgba(0,0,0,0.08);
+  --border2:   rgba(0,0,0,0.16);
+  --text:      #080d14;
+  --text2:     #2e3a50;
+  --text3:     #6a7b96;
+  --shadow:    0 2px 16px rgba(0,0,0,0.09);
+  --grid-line: rgba(0,0,0,0.045);
+  --card-hover:rgba(0,0,0,0.018);
+  --green:     #008c4a;
+  --green-dim: rgba(0,140,74,0.1);
+  --amber:     #b86c00;
+  --amber-dim: rgba(184,108,0,0.1);
+  --red:       #c8001f;
+  --red-dim:   rgba(200,0,31,0.09);
+  --blue:      #0e5fd0;
+  --blue-dim:  rgba(14,95,208,0.1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background .28s, color .28s;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed; top: 0; left: 8%; right: 8%; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--green), transparent);
+  opacity: .5; z-index: 1;
+}
+
+.app {
+  position: relative; z-index: 2;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 2rem 1.75rem 5rem;
+}
+
+/* ── HEADER ────────────────────────────────────────── */
+header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 2rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border2);
+  animation: fadeDown .4s ease both;
+}
+
+.logo-row { display: flex; align-items: center; gap: 14px; }
+
+.logo-icon {
+  width: 42px; height: 42px;
+  border: 1.5px solid var(--green);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--green-dim); flex-shrink: 0;
+}
+
+h1 { font-size: 22px; font-weight: 800; letter-spacing: -.5px; color: var(--text); line-height: 1; white-space: nowrap; }
+h1 span { color: var(--green); }
+
+.header-sub {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; color: var(--text2);
+  letter-spacing: .9px; text-transform: uppercase;
+  margin-top: 5px;
+}
+
+.header-right { display: flex; align-items: center; gap: 12px; margin-top: 22px; margin-right: 0; }
+
+.version-badge {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; color: var(--text2);
+  border: 1px solid var(--border2);
+  border-radius: 5px; padding: 5px 10px; letter-spacing: .5px;
+}
+
+/* ── THEME TOGGLE ──────────────────────────────────── */
+.theme-toggle {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--bg3);
+  border: 1.5px solid var(--border2);
+  border-radius: 20px;
+  padding: 5px 12px 5px 8px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; color: var(--text2);
+  letter-spacing: .5px;
+  transition: border-color .2s, background .2s;
+  outline: none;
+}
+.theme-toggle:hover { border-color: var(--green); color: var(--green); }
+
+.toggle-knob {
+  width: 28px; height: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  position: relative;
+  transition: background .25s;
+}
+
+.toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--green);
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+  box-shadow: 0 0 5px var(--green);
+}
+
+[data-theme="light"] .toggle-thumb { transform: translateX(12px); }
+
+/* ── DROP ZONE ─────────────────────────────────────── */
+.drop-section { animation: fadeUp .5s .05s ease both; }
+
+.drop-zone {
+  border: 1.5px dashed var(--green);
+  border-radius: 14px;
+  padding: 1.5rem 2rem;
+  text-align: center; cursor: pointer;
+  background: var(--bg2);
+  transition: border-color .2s, background .2s, transform .15s;
+  position: relative; overflow: hidden;
+}
+
+.drop-zone::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 55% 45% at 50% 0%, var(--green-dim), transparent 70%);
+  pointer-events: none;
+}
+
+[data-theme="dark"] .drop-zone { border-color: rgba(29,255,138,0.38); }
+[data-theme="dark"] .drop-zone:hover, [data-theme="dark"] .drop-zone.over { border-color: var(--green); }
+
+.drop-zone:hover, .drop-zone.over {
+  background: var(--bg3);
+  transform: translateY(-2px);
+}
+.drop-zone.over { background: var(--green-dim); }
+
+.drop-icon {
+  width: 44px; height: 44px;
+  margin: 0 auto 0.6rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--green);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--green-dim);
+  transition: transform .2s;
+}
+.drop-zone:hover .drop-icon, .drop-zone.over .drop-icon { transform: scale(1.1); }
+
+.drop-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+
+.drop-sub {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px; color: var(--text2);
+  letter-spacing: .2px; line-height: 1.85;
+}
+
+.drop-sub code {
+  color: var(--green);
+  background: var(--green-dim);
+  padding: 1px 6px; border-radius: 3px;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+/* ── REQUIREMENTS ACCORDION ───────────────────────── */
+.requirements-section {
+  margin-top: 1rem;
+  animation: fadeUp .5s .1s ease both;
+}
+
+.requirements-header {
+  background: var(--amber-dim);
+  border: 1.5px solid var(--amber);
+  border-radius: 9px;
+  padding: 10px 16px;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--amber);
+  letter-spacing: .8px;
+  text-transform: uppercase;
+}
+
+.requirements-header:hover {
+  background: rgba(245,166,35,0.18);
+}
+
+.requirements-header.active {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: transparent;
+}
+
+.requirements-chevron {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.requirements-chevron.open {
+  transform: rotate(180deg);
+}
+
+.requirements-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  background: var(--bg2);
+  border: 1.5px solid var(--amber);
+  border-top: none;
+  border-bottom-left-radius: 9px;
+  border-bottom-right-radius: 9px;
+}
+
+.requirements-content.open {
+  max-height: 300px;
+}
+
+.requirements-inner {
+  padding: 16px 20px;
+}
+
+.requirements-inner ul {
+  margin: 0 0 14px;
+  padding-left: 0;
+  list-style: none;
+}
+
+.requirements-inner li {
+  margin-bottom: 6px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.requirements-inner li::before {
+  content: "✓";
+  color: var(--green);
+  font-weight: 900;
+  font-size: 11px;
+}
+
+.requirements-inner .disclaimer {
+  background: var(--red-dim);
+  border: 1.5px solid var(--red);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--red);
+  line-height: 1.5;
+}
+
+/* ── SESSION NAME DISPLAY ─────────────────────────── */
+.session-display {
+  margin-top: 1.5rem;
+  animation: fadeUp .4s ease both;
+}
+
+.session-name {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 16px 20px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border2);
+  background: var(--bg2);
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.session-name strong {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text3);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.session-name.good {
+  border-color: var(--green);
+  background: var(--green-dim);
+}
+
+.session-name.good #sessionText {
+  color: var(--green);
+}
+
+.session-name.bad {
+  border-color: var(--red);
+  background: var(--red-dim);
+}
+
+.session-name.bad #sessionText {
+  color: var(--red);
+}
+
+/* ── ERROR BOX ────────────────────────────────────── */
+.error-box {
+  margin-top: 10px;
+  padding: 14px 18px;
+  background: var(--red-dim);
+  border: 1.5px solid var(--red);
+  border-radius: 9px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--red);
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* ── PARTY MODE ───────────────────────────────────── */
+#party {
+  margin: 1rem 0 1rem;
+  padding-top: 1.5rem;
+  text-align: center;
+  animation: fadeIn 1s ease-in;
+  width: 100%;
+  overflow: visible;
+}
+
+#party .congrats {
+  font-size: 36px;
+  font-weight: 900;
+  margin: 0 0 8px;
+  animation: bounce 1.2s infinite, rainbow 2s linear infinite;
+  letter-spacing: 1px;
+  background: linear-gradient(90deg, #ff0000, #ff8000, #ffff00, #00ff00, #00ffff, #0080ff, #8000ff, #ff0080, #ff0000);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes rainbow {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+#party .perfect {
+  font-size: 24px;
+  color: var(--blue);
+  font-weight: 700;
+  margin-bottom: 0;
+}
+
+#party.fade-out {
+  animation: fadeOut 1s ease-out forwards;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* ── RESULT SECTIONS ──────────────────────────────── */
+.results-area {
+  margin-top: 1.5rem;
+}
+
+.section {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  margin-bottom: 12px;
+  animation: fadeUp .4s ease both;
+}
+
+.section h2 {
+  background: var(--bg3);
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border2);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text2);
+  margin: 0;
+}
+
+.section-body {
+  padding: 14px 18px;
+}
+
+/* ── BADGES ───────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: default;
+}
+
+.badge.ok {
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1.5px solid var(--green);
+}
+
+.badge.ok::before {
+  content: "✔";
+  font-size: 11px;
+}
+
+.badge.fail {
+  background: var(--red-dim);
+  color: var(--red);
+  border: 1.5px solid var(--red);
+}
+
+.badge.fail::before {
+  content: "✖";
+  font-size: 11px;
+}
+
+.badge.missing {
+  background: var(--amber-dim);
+  color: var(--amber);
+  border: 1.5px solid var(--amber);
+}
+
+.badge.missing::before {
+  content: "⚠";
+  font-size: 11px;
+}
+
+.expand-arrow {
+  font-size: 9px;
+  transition: transform 0.2s ease;
+  margin-left: 2px;
+}
+
+/* ── PASSED DETAILS ───────────────────────────────── */
+.passed-details {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--green-dim);
+  border: 1px solid rgba(29,255,138,0.25);
+  border-radius: 8px;
+}
+
+.passed-details.hidden {
+  display: none;
+}
+
+/* ── ERROR LIST ───────────────────────────────────── */
+.error-list {
+  margin-top: 12px;
+}
+
+.error-item {
+  background: var(--red-dim);
+  border-left: 3px solid var(--red);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--red);
+  line-height: 1.6;
+}
+
+/* ── TRACK BOX ────────────────────────────────────── */
+.tracks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.track-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--green-dim);
+  border: 1px solid rgba(29,255,138,0.25);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--green);
+  word-break: break-all;
+}
+
+.track-box.bad {
+  background: var(--red-dim);
+  border-color: rgba(255,61,87,0.25);
+  color: var(--red);
+}
+
+.track-num {
+  background: var(--green);
+  color: var(--bg);
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.track-box.bad .track-num {
+  background: var(--red);
+}
+
+/* ── SHOULD BE BOX ────────────────────────────────── */
+.should-be {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  margin-top: 8px;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.should-be-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.should-be-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.should-be-box {
+  background: var(--bg3);
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+}
+
+.should-be code {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--blue);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ── COPY BUTTON ──────────────────────────────────── */
+.copy-btn {
+  background: transparent;
+  color: var(--blue);
+  border: 1px solid var(--blue);
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-family: 'Material Icons';
+  font-size: 16px;
+}
+
+.copy-btn::before {
+  content: "content_copy";
+}
+
+.copy-btn:hover {
+  background: var(--blue-dim);
+}
+
+.copy-btn:active {
+  transform: scale(0.9);
+}
+
+.copy-btn.copied {
+  color: var(--green);
+  border-color: var(--green);
+}
+
+.copy-btn.copied::before {
+  content: "check";
+}
+
+/* ── NOTE ─────────────────────────────────────────── */
+.note {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text3);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+/* ── ILLEGAL TEXT ─────────────────────────────────── */
+.illegal {
+  color: #FFD700 !important;
+  font-weight: bold !important;
+  background: var(--red) !important;
+  border-radius: 2px !important;
+  padding: 0 2px;
+}
+
+/* ── FOOTER ───────────────────────────────────────── */
+.footer-credit {
+  margin-top: 3rem;
+  padding: 20px;
+  text-align: center;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: .5px;
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.footer-credit:hover {
+  opacity: 1;
+}
+
+/* ── CONFETTI CANVAS ──────────────────────────────── */
+canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 9999;
+  display: none;
+}
+
+/* ── KEYFRAMES ────────────────────────────────────── */
+@keyframes fadeUp { 
+  from { opacity: 0; transform: translateY(14px); } 
+  to { opacity: 1; transform: none; } 
+}
+
+@keyframes fadeDown { 
+  from { opacity: 0; transform: translateY(-8px); } 
+  to { opacity: 1; transform: none; } 
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes bounce {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── HIDE FILE INPUT ──────────────────────────────── */
+input[type=file] {
+  display: none;
+}
+</style>
 </head>
 <body>
-  <div class="mode-toggle" id="modeToggle">
-    <span class="icon" id="modeIcon">🌙</span>
-    <span id="modeText">Dark</span>
+<div class="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-row">
+      <div class="logo-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+      </div>
+      <div>
+        <h1>SOBA - Session <span>Pre-checker</span></h1>
+        <div class="header-sub">Pro Tools Session Validator</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="version-badge">v2.1</div>
+      <button class="theme-toggle" id="themeToggle" title="Toggle light / dark mode">
+        <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
+        <span id="themeLabel">DARK</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- DROP ZONE -->
+  <div class="drop-section">
+    <div class="drop-zone" id="droparea">
+      <div class="drop-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 16 12 12 8 16"/>
+          <line x1="12" y1="12" x2="12" y2="21"/>
+          <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+        </svg>
+      </div>
+      <div class="drop-title">Drop Pro Tools Session Export</div>
+      <div class="drop-sub">
+        Accepts <code>.txt</code> Session Info export
+      </div>
+    </div>
+    <input id="fileinput" type="file" accept=".txt,.markers.txt"/>
   </div>
 
-  <h1>
-    SOBA <span>🍺 Home Brewed Session Checker ✅</span> <span class="version">v2.0.1</span>
-  </h1>
-
-  <div class="requirements-wrapper">
-    <div class="requirements-accordion">
-      <div class="requirements-header" id="requirementsToggle">
-        <span class="icon">⚠️</span>
-        <span>Requirements (click to expand)</span>
-        <span class="requirements-chevron" id="requirementsChevron">▼</span>
-      </div>
-      <div class="requirements-content" id="requirementsContent">
-        <div class="requirements-inner">
-          <ul>
-            <li>Export <strong>Session Info as Text</strong> from Pro Tools</li>
-            <li>Include: <strong>File List</strong></li>
-            <li>Include: <strong>Markers Listing</strong></li>
-            <li>Include: <strong>Track EDLs</strong></li>
-          </ul>
-          <div class="disclaimer">
-            This is not the official SOBA Session Checker. You still need to zip your session and upload the Dropbox URL to the SOBA Session Checker.
-          </div>
+  <!-- REQUIREMENTS ACCORDION -->
+  <div class="requirements-section">
+    <div class="requirements-header" id="requirementsToggle">
+      <span>⚠</span> Requirements (click to expand)
+      <span class="requirements-chevron" id="requirementsChevron">▼</span>
+    </div>
+    <div class="requirements-content" id="requirementsContent">
+      <div class="requirements-inner">
+        <ul>
+          <li>Export <strong>Session Info as Text</strong> from Pro Tools</li>
+          <li>Include: <strong>File List</strong></li>
+          <li>Include: <strong>Markers Listing</strong></li>
+          <li>Include: <strong>Track EDLs</strong></li>
+        </ul>
+        <div class="disclaimer">
+          ⚠ This is not the official SOBA Session Checker. You still need to zip your session and upload the Dropbox URL to the SOBA Session Checker.
         </div>
       </div>
     </div>
   </div>
 
-  <div id="droparea" class="drop">
-    Drop .txt file Here
-    <small>or click to choose</small>
-    <input id="fileinput" type="file" accept=".txt,.markers.txt"/>
-  </div>
-
-  <div id="sessionContainer" style="width:100%;display:flex;flex-direction:column;align-items:center;">
-    <div id="sessionDisplay" class="session-name" style="display:none;">
-      <strong>SESSION NAME:</strong><br>
+  <!-- SESSION NAME DISPLAY -->
+  <div id="sessionContainer" class="session-display" style="display:none;">
+    <div id="sessionDisplay" class="session-name">
+      <strong>SESSION NAME:</strong>
       <span id="sessionText"></span>
     </div>
     <div id="sessionError" class="error-box" style="display:none;"></div>
   </div>
 
-  <!-- PARTY GOES HERE — ON TOP -->
+  <!-- PARTY CONTAINER -->
   <div id="partyContainer" style="width:100%;display:flex;flex-direction:column;align-items:center;"></div>
 
-  <div id="output" style="margin-top:20px;width:100%;display:flex;flex-direction:column;align-items:center;"></div>
+  <!-- RESULTS AREA -->
+  <div id="output" class="results-area"></div>
 
+  <!-- FOOTER -->
   <div class="footer-credit">
     Created by Danny Beta
   </div>
 
-  <canvas id="confetti"></canvas>
+</div>
 
-  <script>
-    (function(){
-      const drop = document.getElementById('droparea');
-      const fileinput = document.getElementById('fileinput');
-      const output = document.getElementById('output');
-      const partyContainer = document.getElementById('partyContainer');
-      const sessionDisplay = document.getElementById('sessionDisplay');
-      const sessionText = document.getElementById('sessionText');
-      const sessionError = document.getElementById('sessionError');
-      const confettiCanvas = document.getElementById('confetti');
+<canvas id="confetti"></canvas>
 
-      // Accordion toggle
-      const requirementsToggle = document.getElementById('requirementsToggle');
-      const requirementsContent = document.getElementById('requirementsContent');
-      const requirementsChevron = document.getElementById('requirementsChevron');
+<script>
+(function(){
+  const drop = document.getElementById('droparea');
+  const fileinput = document.getElementById('fileinput');
+  const output = document.getElementById('output');
+  const partyContainer = document.getElementById('partyContainer');
+  const sessionContainer = document.getElementById('sessionContainer');
+  const sessionDisplay = document.getElementById('sessionDisplay');
+  const sessionText = document.getElementById('sessionText');
+  const sessionError = document.getElementById('sessionError');
+  const confettiCanvas = document.getElementById('confetti');
 
-      requirementsToggle.addEventListener('click', () => {
-        const isOpen = requirementsContent.classList.contains('open');
-        
-        if (isOpen) {
-          requirementsContent.classList.remove('open');
-          requirementsChevron.classList.remove('open');
-          requirementsToggle.classList.remove('active');
-        } else {
-          requirementsContent.classList.add('open');
-          requirementsChevron.classList.add('open');
-          requirementsToggle.classList.add('active');
-        }
-      });
+  // Accordion toggle
+  const requirementsToggle = document.getElementById('requirementsToggle');
+  const requirementsContent = document.getElementById('requirementsContent');
+  const requirementsChevron = document.getElementById('requirementsChevron');
 
-      // Dark/Light Mode Toggle
-      const modeToggle = document.getElementById('modeToggle');
-      const modeIcon = document.getElementById('modeIcon');
-      const modeText = document.getElementById('modeText');
-      
-      // Check system preference on load
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      let isDarkMode = prefersDark;
-      
-      function updateModeUI() {
-        if (isDarkMode) {
-          modeIcon.textContent = '☀️';
-          modeText.textContent = 'Light';
-        } else {
-          modeIcon.textContent = '🌙';
-          modeText.textContent = 'Dark';
-        }
-      }
-      
-      updateModeUI();
-      
-      modeToggle.addEventListener('click', () => {
-        isDarkMode = !isDarkMode;
-        
-        if (isDarkMode) {
-          document.body.classList.add('dark-mode');
-          document.body.classList.remove('light-mode');
-        } else {
-          document.body.classList.add('light-mode');
-          document.body.classList.remove('dark-mode');
-        }
-        
-        updateModeUI();
-      });
+  requirementsToggle.addEventListener('click', () => {
+    const isOpen = requirementsContent.classList.contains('open');
+    
+    if (isOpen) {
+      requirementsContent.classList.remove('open');
+      requirementsChevron.classList.remove('open');
+      requirementsToggle.classList.remove('active');
+    } else {
+      requirementsContent.classList.add('open');
+      requirementsChevron.classList.add('open');
+      requirementsToggle.classList.add('active');
+    }
+  });
 
+  // Theme Toggle
+  const themeToggle = document.getElementById('themeToggle');
+  const themeLabel = document.getElementById('themeLabel');
+  
+  function updateThemeUI() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    themeLabel.textContent = isDark ? 'DARK' : 'LIGHT';
+  }
+  
+  themeToggle.addEventListener('click', () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    updateThemeUI();
+  });
+  
+  updateThemeUI();
       // Copy to clipboard function
       window.copyToClipboard = function(textElementId, buttonId) {
         const textElement = document.getElementById(textElementId);
@@ -1631,14 +1373,14 @@
 
       // NEW: Tracks section — clean when all pass, detailed only on fail
       function renderTracksSection(tracks, expectedList, isMissing, trackNamesFromMarkersErrors = []){
-        let html = `<div class="section"><h2>Tracks</h2>`;
+        let html = `<div class="section"><h2>Tracks</h2><div class="section-body">`;
 
         if (isMissing) {
-          html += `<div class="badge fail">MISSING SECTION</div>`;
+          html += `<div class="badge missing">MISSING SECTION</div>`;
           
           // Show track name validation errors from markers if any
           if (trackNamesFromMarkersErrors && trackNamesFromMarkersErrors.length > 0) {
-            html += `<div class="note" style="color:#991b1b;font-weight:600;margin-top:10px;">
+            html += `<div class="note" style="color:var(--red);font-weight:600;margin-top:10px;">
               Track Listing section missing, but track name errors found in Markers:
             </div>`;
             html += `<div class="error-list">`;
@@ -1647,13 +1389,13 @@
             });
             html += `</div>`;
           } else {
-            html += `<div class="note" style="color:#991b1b;font-weight:600;margin-top:10px;">
+            html += `<div class="note" style="color:var(--red);font-weight:600;margin-top:10px;">
               "Track Listing" section not found in text file.<br>
               Re-export from Pro Tools with all required options.
             </div>`;
           }
           
-          html += `</div>`;
+          html += `</div></div>`;
           return html;
         }
 
@@ -1669,7 +1411,7 @@
           tracks.forEach((t, i) => {
             html += `<div class="track-box"><div class="track-num">${i + 1}</div>${esc(t)}</div>`;
           });
-          html += `</div></div>`;
+          html += `</div></div></div>`;
           return html;
         }
 
@@ -1705,7 +1447,7 @@
           }
         });
 
-        html += `</div></div>`;
+        html += `</div></div></div>`;
         return html;
       }
 
@@ -2171,7 +1913,7 @@ if (!['line','lout','scene'].includes(m.token)) {
 
         return {pass:errors.length===0, errors};
       }function renderMarkersReport(errors){
-        let html = `<div class="section"><h2>Markers</h2>`;
+        let html = `<div class="section"><h2>Markers</h2><div class="section-body">`;
         if (!errors.length) {
           html += `<div class="badge ok">PASSED</div>`;
         } else {
@@ -2181,7 +1923,7 @@ if (!['line','lout','scene'].includes(m.token)) {
           });
           html += `</div>`;
         }
-        html += `</div>`;
+        html += `</div></div>`;
         return html;
       }
 
@@ -2283,19 +2025,19 @@ if (!['line','lout','scene'].includes(m.token)) {
       }
 
       function renderAudioFilesSection(online, audioCheck, isMissing){
-        let html = `<div class="section"><h2>Audio Files</h2>`;
+        let html = `<div class="section"><h2>Audio Files</h2><div class="section-body">`;
 
         if (isMissing) {
-          html += `<div class="badge fail">MISSING SECTION</div>`;
-          html += `<div class="note" style="color:#991b1b;font-weight:600;margin-top:10px;">
+          html += `<div class="badge missing">MISSING SECTION</div>`;
+          html += `<div class="note" style="color:var(--red);font-weight:600;margin-top:10px;">
             "Online Files in Session" section not found in text file.<br>
             Re-export from Pro Tools with all required options.
-          </div></div>`;
+          </div></div></div>`;
           return html;
         }
 
         if (online.err) {
-          html += `<div class="badge fail">FAIL — ${esc(online.err)}</div></div>`;
+          html += `<div class="badge fail">FAIL — ${esc(online.err)}</div></div></div>`;
           return html;
         }
 
@@ -2325,12 +2067,12 @@ if (!['line','lout','scene'].includes(m.token)) {
           html += `</div>`;
         }
 
-        html += `</div>`;
+        html += `</div></div>`;
         return html;
       }
 
       function renderFolderNameSection(sessionName, folderCheck){
-        let html = `<div class="section"><h2>Session Folder</h2>`;
+        let html = `<div class="section"><h2>Session Folder</h2><div class="section-body">`;
 
         if (folderCheck.pass) {
           html += `<div class="badge ok">PASSED</div>`;
@@ -2353,15 +2095,15 @@ if (!['line','lout','scene'].includes(m.token)) {
           html += `</div>`;
         }
 
-        html += `</div>`;
+        html += `</div></div>`;
         return html;
       }
 
       function renderBouncedSection(sessionName, online, bounced){
-        let html = `<div class="section"><h2>Bounces</h2>`;
+        let html = `<div class="section"><h2>Bounces</h2><div class="section-body">`;
 
         if (online.err) {
-          html += `<div class="badge fail">FAIL — ${esc(online.err)}</div></div>`;
+          html += `<div class="badge fail">FAIL — ${esc(online.err)}</div></div></div>`;
           return html;
         }
 
@@ -2389,7 +2131,7 @@ if (!['line','lout','scene'].includes(m.token)) {
           html += `</div>`;
         }
 
-        html += `</div>`;
+        html += `</div></div>`;
         return html;
       }
 
@@ -2471,7 +2213,7 @@ if (!['line','lout','scene'].includes(m.token)) {
 
       async function handleFile(file){
         output.innerHTML = '<div>Processing…</div>';
-        sessionDisplay.style.display = 'none';
+        sessionContainer.style.display = 'none';
         sessionError.style.display = 'none';
         confettiCanvas.style.display = 'none';
         partyContainer.innerHTML = '';
@@ -2488,7 +2230,7 @@ if (!['line','lout','scene'].includes(m.token)) {
         const isValid = VALID_SESSION_REGEX.test(sessionName);
         sessionDisplay.className = `session-name ${isValid ? 'good' : 'bad'}`;
         sessionText.innerHTML = highlightSessionName(sessionName);
-        sessionDisplay.style.display = 'block';
+        sessionContainer.style.display = 'block';
 
         if (!isValid) {
           const corrected = suggestCorrectedSessionName(sessionName);
@@ -2826,6 +2568,7 @@ const tracks = parseTracks(lines);
         if (fileinput.files[0]) handleFile(fileinput.files[0]);
       });
     })();
-  </script>
+
+</script>
 </body>
 </html>
