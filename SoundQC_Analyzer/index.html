@@ -607,19 +607,7 @@ h1 span { color: var(--green); }
 
     <div class="cards-grid" id="cardsGrid">
 
-      <!-- Stereo RAW QA card — shown only for _RAW stereo file -->
-      <div class="result-card" id="rawStereoCard" style="display:none">
-        <div class="card-header card-header-qa">
-          <div style="min-width:0;flex:1">
-            <div class="card-type"><span class="card-type-qa">QA</span> — RAW Stereo</div>
-            <div class="card-filename" id="rawStereoCardName"></div>
-            <div class="card-meta"    id="rawStereoCardMeta"></div>
-          </div>
-          <div id="rawStereoNFBadge"></div>
-        </div>
-        <div class="card-body" id="rawStereoMetrics"></div>
-      </div>
-
+      <!-- Row 1: RAW Left + RAW Right -->
       <div class="result-card" id="rawLCard" style="display:none">
         <div class="card-header card-header-qa">
           <div style="min-width:0;flex:1">
@@ -654,8 +642,21 @@ h1 span { color: var(--green); }
         <div class="card-body" id="rawRMetrics"></div>
       </div>
 
-      <!-- QA — Recording Quality card -->
-      <div id="rawPairPanel" style="display:none;grid-column:1/-1;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
+      <!-- Row 2: RAW Bounce (left) + Recording Quality (right) -->
+      <div class="result-card" id="rawStereoCard" style="display:none">
+        <div class="card-header card-header-qa">
+          <div style="min-width:0;flex:1">
+            <div class="card-type"><span class="card-type-qa">QA</span> — RAW Bounce</div>
+            <div class="card-filename" id="rawStereoCardName"></div>
+            <div class="card-meta"    id="rawStereoCardMeta"></div>
+          </div>
+          <div id="rawStereoNFBadge"></div>
+        </div>
+        <div class="card-body" id="rawStereoMetrics"></div>
+      </div>
+
+      <!-- Recording Quality — right of RAW Bounce when stereo present, or full-width for dual char -->
+      <div class="result-card" id="rawQualityCard" style="display:none">
         <div class="card-header card-header-qa">
           <div style="min-width:0;flex:1">
             <div class="card-type"><span class="card-type-qa">QA</span> — Recording Quality</div>
@@ -664,6 +665,17 @@ h1 span { color: var(--green); }
         <div class="card-body" id="rawQualityBody" style="padding:0"></div>
       </div>
 
+      <!-- Recording Quality full-width — dual char without stereo bounce -->
+      <div id="rawPairPanel" style="display:none;grid-column:1/-1;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
+        <div class="card-header card-header-qa">
+          <div style="min-width:0;flex:1">
+            <div class="card-type"><span class="card-type-qa">QA</span> — Recording Quality</div>
+          </div>
+        </div>
+        <div class="card-body" id="rawPairBody" style="padding:0"></div>
+      </div>
+
+      <!-- QC Row: Edit + Mixed -->
       <div class="result-card" id="editCard">
         <div class="card-header card-header-qc">
           <div style="min-width:0;flex:1">
@@ -697,6 +709,17 @@ h1 span { color: var(--green); }
         <div class="compare-title">Δ Edit vs Mixed Comparison</div>
       </div>
       <div class="compare-grid" id="compareGrid"></div>
+    </div>
+
+    <!-- QA Session Analysis card — Speech/Silence + Overlaps from RAW Stereo bounce -->
+    <div class="result-card" id="qaSessionAnalysisCard" style="display:none;margin-bottom:14px">
+      <div class="card-header card-header-qa">
+        <div style="min-width:0;flex:1">
+          <div class="card-type"><span class="card-type-qa">QA</span> — Session Analysis</div>
+          <div class="card-meta" id="qaSessionAnalysisMeta"></div>
+        </div>
+      </div>
+      <div class="card-body" id="qaSessionAnalysisMetrics"></div>
     </div>
 
     <!-- QC Session Analysis card — Speech/Silence, Markers, Overlaps -->
@@ -1163,7 +1186,10 @@ async function analyzeRawStereo(file) {
   const buf = await decodeFile(file);
   const base = analyzeBuffer(buf);
   const stereo = computeStereoRawAnalysis(buf);
-  return { ...base, stereo, _isRawStereo: true };
+  const ss = computeSignalSilence(buf);  // Speech vs Silence on stereo RAW
+  return { ...base, stereo, signalPct: ss.signalPct, silencePct: ss.silencePct,
+           signalDur: ss.signalDur, silenceDur: ss.silenceDur, thresholdDb: ss.thresholdDb,
+           _isRawStereo: true };
 }
 
 async function analyzeGroup(files) {
@@ -1826,6 +1852,63 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget) {
       mRow('L / R Noise', a.ch0.noiseFloorDb.toFixed(1)+' / '+a.ch1.noiseFloorDb.toFixed(1)+' dBFS', '', ''),
     ] : []),
   ].join('');
+}
+
+function buildQASessionAnalysis(a) {
+  if (!a || a.signalPct == null) return '';
+
+  // Speech vs Silence column — per channel from stereo RAW bounce
+  const s = a.stereo;
+  const speechL = s ? s.speechL.toFixed(1) : null;
+  const speechR = s ? s.speechR.toFixed(1) : null;
+
+  const speechCol = `<div style="flex:1;min-width:0;padding-right:14px">
+    <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+      <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.signalDur)}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
+      </div>
+    </div>
+    <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
+      <div style="height:100%;width:${a.signalPct.toFixed(1)}%;background:#00ff88;border-radius:3px"></div>
+    </div>
+    ${speechL !== null ? `<div style="display:flex;gap:10px;margin-top:8px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3)">
+      <span>Left talent: <span style="color:var(--blue)">${speechL}%</span></span>
+      <span>Right talent: <span style="color:var(--purple, #a050ff)">${speechR}%</span></span>
+    </div>` : ''}
+  </div>`;
+
+  // Overlaps column
+  let overlapCol = '';
+  if (s) {
+    const oc = s.overlapPct < 5 ? 'var(--green)' : s.overlapPct < 15 ? 'var(--amber)' : 'var(--red)';
+    const or = s.overlapPct < 5 ? 'Low' : s.overlapPct < 15 ? 'Moderate' : 'High';
+    overlapCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(simultaneous only)</span></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:${oc};line-height:1">${s.overlapPct.toFixed(1)}%</div>
+        <div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(s.overlapDur)}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;color:${oc}">${or}</div>
+        </div>
+      </div>
+      <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
+        <div style="height:100%;width:${Math.min(100,s.overlapPct).toFixed(1)}%;background:${oc};border-radius:3px"></div>
+      </div>
+    </div>`;
+  }
+
+  return `<div style="padding:12px 20px;display:flex;gap:0;align-items:flex-start">
+    ${speechCol}
+    ${overlapCol}
+  </div>`;
 }
 
 function buildSpeechBlock(a) {
@@ -2706,20 +2789,9 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   const grid = document.getElementById('cardsGrid');
   grid.style.gridTemplateColumns = visibleCount === 1 ? '1fr' : '1fr 1fr';
 
-  // Stereo RAW card
-  document.getElementById('rawStereoCard').style.display = hasStereoRaw ? '' : 'none';
-  if (hasStereoRaw) {
-    document.getElementById('rawStereoCardName').textContent = rawStereoFile.name;
-    document.getElementById('rawStereoCardMeta').textContent =
-      fmtSize(rawStereoFile.size) + ' · ' + rawStereoA.sampleRate/1000 + ' kHz · Stereo · ' + fmtDur(rawStereoA.duration);
-    document.getElementById('rawStereoNFBadge').innerHTML = nfBadgeHTML(rawStereoA.noiseFloorDb);
-    document.getElementById('rawStereoMetrics').innerHTML = buildMetrics(rawStereoA, false, true, 'raw') + buildStereoRawSection(rawStereoA);
-  }
-
   // RAW Left card
   document.getElementById('rawLCard').style.display = hasRawL ? '' : 'none';
   if (hasRawL) {
-    // Label: "RAW Left" for dual character, "RAW" for single character
     const isSingle = hasRawL && !hasRawR;
     document.getElementById('rawLCardType').innerHTML = '<span class="card-type-qa">QA</span> — RAW' + (isSingle ? '' : ' Left');
     document.getElementById('rawLCardName').textContent = rawLA._talentCode + ' (' + rawLA._fileCount + ' file' + (rawLA._fileCount>1?'s':'') + ')';
@@ -2729,15 +2801,14 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('rawLNFBadge').innerHTML = hpfLDet
       ? '<span class="nf-chip nf-fail">HPF Detected</span>'
       : nfBadgeHTML(rawLA.noiseFloorDb);
-    document.getElementById('rawLMetrics').innerHTML    = buildMetrics(rawLA, false, true, 'raw');
+    document.getElementById('rawLMetrics').innerHTML = buildMetrics(rawLA, false, true, 'raw');
   }
 
-  // Single character QA card — shows in RAW Right slot when no Right track
+  // Single character QA card — shows in RAW Right slot when no Right track and no stereo bounce
   const singleQACard = document.getElementById('singleQACard');
-  if (hasRawL && !hasRawR && artifactData) {
+  if (hasRawL && !hasRawR && !hasStereoRaw && artifactData) {
     singleQACard.style.display = '';
-    document.getElementById('singleQABody').innerHTML =
-      renderQualityCard(rawLA, null, artifactData);
+    document.getElementById('singleQABody').innerHTML = renderQualityCard(rawLA, null, artifactData);
   } else {
     singleQACard.style.display = 'none';
   }
@@ -2752,17 +2823,46 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('rawRNFBadge').innerHTML = hpfRDet
       ? '<span class="nf-chip nf-fail">HPF Detected</span>'
       : nfBadgeHTML(rawRA.noiseFloorDb);
-    document.getElementById('rawRMetrics').innerHTML    = buildMetrics(rawRA, false, true, 'raw');
+    document.getElementById('rawRMetrics').innerHTML = buildMetrics(rawRA, false, true, 'raw');
   }
 
-  // RAW Pair Acoustic Delta — between Left and Right mono tracks
-  const rawPairPanel = document.getElementById('rawPairPanel');
-  if (hasRawL && hasRawR && artifactData) {
-    rawPairPanel.style.display = '';
-    document.getElementById('rawQualityBody').innerHTML =
-      renderQualityCard(rawLA, rawRA, artifactData);
-  } else {
+  // RAW Bounce card (stereo) — row 2 left
+  document.getElementById('rawStereoCard').style.display = hasStereoRaw ? '' : 'none';
+  if (hasStereoRaw) {
+    document.getElementById('rawStereoCardName').textContent = rawStereoFile.name;
+    document.getElementById('rawStereoCardMeta').textContent =
+      fmtSize(rawStereoFile.size) + ' · ' + rawStereoA.sampleRate/1000 + ' kHz · Stereo · ' + fmtDur(rawStereoA.duration);
+    document.getElementById('rawStereoNFBadge').innerHTML = nfBadgeHTML(rawStereoA.noiseFloorDb);
+    document.getElementById('rawStereoMetrics').innerHTML = buildMetrics(rawStereoA, false, true, 'raw') + buildStereoRawSection(rawStereoA);
+  }
+
+  // Recording Quality card — row 2 right (next to RAW Bounce when stereo present)
+  const rawQualityCard = document.getElementById('rawQualityCard');
+  const rawPairPanel   = document.getElementById('rawPairPanel');
+  if (hasStereoRaw && artifactData) {
+    // Stereo bounce present: quality card in right slot
+    rawQualityCard.style.display = '';
+    document.getElementById('rawQualityBody').innerHTML = renderQualityCard(rawLA, rawRA, artifactData);
     rawPairPanel.style.display = 'none';
+  } else if (hasRawL && hasRawR && artifactData) {
+    // No stereo bounce, dual char: quality card full-width
+    rawQualityCard.style.display = 'none';
+    rawPairPanel.style.display = '';
+    document.getElementById('rawPairBody').innerHTML = renderQualityCard(rawLA, rawRA, artifactData);
+  } else {
+    rawQualityCard.style.display = 'none';
+    rawPairPanel.style.display = 'none';
+  }
+
+  // QA Session Analysis card — Speech/Silence + Overlaps from RAW stereo bounce
+  const qaSessionCard = document.getElementById('qaSessionAnalysisCard');
+  if (hasStereoRaw && rawStereoA.signalPct != null) {
+    qaSessionCard.style.display = '';
+    document.getElementById('qaSessionAnalysisMeta').textContent =
+      'RAW stereo bounce · ' + fmtDur(rawStereoA.duration) + ' · NF+12dB threshold';
+    document.getElementById('qaSessionAnalysisMetrics').innerHTML = buildQASessionAnalysis(rawStereoA);
+  } else {
+    qaSessionCard.style.display = 'none';
   }
 
   // Edit card — hide when only stereo RAW QA file present
@@ -2909,7 +3009,7 @@ function exportQAReport() {
   const info = getSessionInfo();
 
   // Collect QA cards
-  const ids = ['rawStereoCard','rawLCard','singleQACard','rawRCard','rawPairPanel'];
+  const ids = ['rawLCard','singleQACard','rawRCard','rawStereoCard','rawQualityCard','rawPairPanel','qaSessionAnalysisCard'];
   let body = '<div class="cards-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
   ids.forEach(id => {
     const el = document.getElementById(id);
