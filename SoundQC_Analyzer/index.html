@@ -1377,12 +1377,14 @@ async function runAnalysis() {
       const eBuf = await decodeFile(eFile);
       eA = analyzeBuffer(eBuf);
       eA.lufs = computeIntegratedLUFS(eBuf);
-      // Speech vs Silence only on Edit — contains both talents mixed, so silence is meaningful
       const ss = computeSignalSilence(eBuf);
       eA.signalPct  = ss.signalPct;  eA.silencePct  = ss.silencePct;
       eA.signalDur  = ss.signalDur;  eA.silenceDur  = ss.silenceDur;
       eA.thresholdDb = ss.thresholdDb;
       eA.stereo = computeStereoRawAnalysis(eBuf, true);
+      // QC Edit checks — full file scan
+      setProgress('Scanning Edit WAV…', 70);
+      eA.editChecks = await computeEditChecks(eBuf);
     }
     if (mFile) {
       setProgress('Decoding Mixed WAV…', 80);
@@ -1992,7 +1994,8 @@ function buildSpeechBlock(a) {
     </div>
     ${markersCol}
     ${overlapCol}
-  </div>`;
+  </div>
+  ${a.editChecks ? buildEditChecksSection(a.editChecks) : ''}`;
 }
 
 function buildStereoRawSection(a, skipSpeech) {
@@ -2042,6 +2045,75 @@ function buildStereoRawSection(a, skipSpeech) {
       </div>`}
     </div>
   </div>`;
+}
+
+function buildEditChecksSection(c) {
+  if (!c) return '';
+  const mono = `font-family:'Share Tech Mono',monospace`;
+  const rows = [];
+
+  // Bleed — only show when > 0%
+  if (c.bleedPct > 0) {
+  const bleedCol = c.bleedPct < 3 ? 'var(--green)' : c.bleedPct < 10 ? 'var(--amber)' : 'var(--red)';
+  const bleedLabel = c.bleedPct < 3 ? 'None detected' : c.bleedPct < 10 ? 'Moderate' : 'Significant';
+
+  // Format timestamps as M:SS
+  const fmtTS = t => {
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60).toString().padStart(2,'0');
+    return `${m}:${s}`;
+  };
+
+  let bleedCollapsible = '';
+  if (c.bleedTimestamps && c.bleedTimestamps.length > 0) {
+    const id = 'bleedList_' + Date.now();
+    const items = c.bleedTimestamps.map(t => `<span style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2);background:var(--bg3);padding:2px 7px;border-radius:4px">${fmtTS(t)}</span>`).join(' ');
+    bleedCollapsible = `<div style="margin-top:6px">
+      <div onclick="const el=document.getElementById('${id}');const arr=this.querySelector('.arr');el.style.display=el.style.display==='none'?'flex':'none';arr.textContent=el.style.display==='none'?'▶':'▼';"
+        style="cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px;user-select:none">
+        <span class="arr">▶</span> ${c.bleedTimestamps.length} bleed event${c.bleedTimestamps.length>1?'s':''} — expand
+      </div>
+      <div id="${id}" style="display:none;flex-wrap:wrap;gap:5px;margin-top:6px">${items}</div>
+    </div>`;
+  }
+
+  rows.push(`<div style="display:flex;align-items:flex-start;gap:14px;padding:10px 20px;border-top:1px solid var(--border)">
+    <div style="${mono};font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);width:150px;padding-top:2px">Significant Bleed</div>
+    <div style="flex:1">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+        <div style="${mono};font-size:16px;font-weight:700;color:${bleedCol}">${c.bleedPct.toFixed(1)}%</div>
+        <div style="${mono};font-size:11px;color:${bleedCol};font-weight:700">${bleedLabel}</div>
+        <div style="flex:1;height:5px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
+          <div style="height:100%;width:${Math.min(100,c.bleedPct*4).toFixed(1)}%;background:${bleedCol};border-radius:3px"></div>
+        </div>
+        <div style="${mono};font-size:11px;color:var(--text3)">Headphone bleed clearly above room tone</div>
+      </div>
+      ${bleedCollapsible}
+    </div>
+  </div>`);
+  } // end bleed > 0 block
+
+  // Panning error — only when detected
+  if (c.panningError) {
+    rows.push(`<div style="display:flex;align-items:center;gap:14px;padding:10px 20px;border-top:1px solid var(--border);background:var(--red-dim)">
+      <div style="${mono};font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);width:150px">Panning Error</div>
+      <span class="nf-chip nf-fail">DETECTED</span>
+      <div style="${mono};font-size:11px;color:var(--red)">Channels are nearly identical (corr ${(c.avgPanCorr*100).toFixed(0)}%) — talents not alternated L/R. Re-export with correct panning.</div>
+    </div>`);
+  }
+
+  // Digital zero gaps — only when detected
+  if (c.digitalZeroGaps) {
+    const atStart = c.digitalZeroTimestamps && c.digitalZeroTimestamps.length > 0 && c.digitalZeroTimestamps[0].t < 3.0;
+    const startNote = atStart ? ' Detected at beginning of file.' : '';
+    rows.push(`<div style="display:flex;align-items:center;gap:14px;padding:10px 20px;border-top:1px solid var(--border);background:var(--red-dim)">
+      <div style="${mono};font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);width:150px">Digital Zero Gaps</div>
+      <span class="nf-chip nf-fail">DETECTED</span>
+      <div style="${mono};font-size:11px;color:var(--red)">${(c.digitalZeroRatio*100).toFixed(0)}% of silence gaps erased to digital zero.${startNote} Fill with room tone instead.</div>
+    </div>`);
+  }
+
+  return rows.join('');
 }
 
 // ── QA ARTIFACT DETECTION ────────────────────────────────────
@@ -2167,6 +2239,119 @@ function detectHPF(data, sr, nfDb) {
 }
 
 // Detect bleed: correlation of Right during Left speech windows
+// QC Edit WAV checks — full file scan
+// 1. Bleed: cross-channel correlation during speech windows
+// 2. Panning error: both channels contain same signal (not alternated)
+// 3. Digital zero gaps: silence windows erased to digital zero instead of room tone
+async function computeEditChecks(buf) {
+  if (buf.numberOfChannels < 2) return { bleedPct: 0, panningError: false, digitalZeroGaps: false };
+
+  const ch0 = buf.getChannelData(0);
+  const ch1 = buf.getChannelData(1);
+  const sr  = buf.sampleRate;
+  const wsz = Math.floor(sr * 0.05); // 50ms windows
+  const n   = Math.floor(Math.min(ch0.length, ch1.length) / wsz);
+
+  // Noise floor from quietest 8th percentile of 100ms chunks
+  const csz = Math.floor(sr * 0.1);
+  const chunks = [];
+  for (let i = 0; i + csz < ch0.length; i += csz) {
+    let sq = 0;
+    for (let j = i; j < i + csz; j++) sq += ch0[j] * ch0[j] + ch1[j] * ch1[j];
+    const rms = Math.sqrt(sq / (csz * 2));
+    if (rms > 1e-9) chunks.push(rms);
+  }
+  chunks.sort((a, b) => a - b);
+  const nfLin = chunks[Math.floor(chunks.length * 0.08)] || 1e-6;
+  const speechThresh = nfLin * Math.pow(10, 12 / 20); // NF+12dB
+  const digitalZeroThresh = Math.pow(10, -120 / 20);  // −120 dBFS
+
+  let bleedCorrSum = 0, bleedCount = 0;
+  let bleedTimestamps = [];
+  let panCorrSum = 0, panCount = 0;
+  let silenceWindows = 0, digitalZeroWindows = 0;
+  let digitalZeroTimestamps = [];
+
+  for (let i = 0; i < n; i++) {
+    const start = i * wsz;
+    let sq0 = 0, sq1 = 0, cross = 0;
+    for (let j = start; j < start + wsz; j++) {
+      sq0   += ch0[j] * ch0[j];
+      sq1   += ch1[j] * ch1[j];
+      cross += ch0[j] * ch1[j];
+    }
+    const rms0 = Math.sqrt(sq0 / wsz);
+    const rms1 = Math.sqrt(sq1 / wsz);
+    const corr = cross / (Math.sqrt(sq0 * sq1) + 1e-12);
+
+    // Headphone bleed: during CH1 speech, CH0 mic should be near NF
+    // If CH0 is elevated above NF but below speech threshold → bleed from headphones
+    // Same check symmetric: during CH0 speech, CH1 should be near NF
+    const bleedThreshHi = speechThresh;
+    const bleedThreshLo = nfLin * Math.pow(10, 18 / 20); // NF+18dB — clearly above room tone and breathing
+
+    // CH0 bleed during CH1 speech: CH0 elevated AND correlated with CH1
+    if (rms1 > speechThresh && rms0 < bleedThreshHi && rms0 > bleedThreshLo && corr > 0.3) {
+      bleedCorrSum += rms0 / (rms1 + 1e-12);
+      bleedCount++;
+      bleedTimestamps.push(i * wsz / sr);
+    }
+    // CH1 bleed during CH0 speech: CH1 elevated AND correlated with CH0
+    if (rms0 > speechThresh && rms1 < bleedThreshHi && rms1 > bleedThreshLo && corr > 0.3) {
+      bleedCorrSum += rms1 / (rms0 + 1e-12);
+      bleedCount++;
+      bleedTimestamps.push(i * wsz / sr);
+    }
+
+    // Panning: correlation across all speech windows (both speaking or either)
+    if (rms0 > speechThresh || rms1 > speechThresh) {
+      panCorrSum += Math.abs(corr);
+      panCount++;
+    }
+
+    // Digital zero: engineer erased silence in one channel while the other has speech
+    // Correct edit: fill with room tone. Wrong edit: delete to digital zero.
+    // Signature: one channel speaking (> speechThresh), other channel at digital zero (< -120 dBFS)
+    if (rms0 > speechThresh && rms1 < digitalZeroThresh) { silenceWindows++; digitalZeroWindows++; digitalZeroTimestamps.push({ t: i * wsz / sr, ch: 'Right' }); }
+    else if (rms1 > speechThresh && rms0 < digitalZeroThresh) { silenceWindows++; digitalZeroWindows++; digitalZeroTimestamps.push({ t: i * wsz / sr, ch: 'Left' }); }
+    else if (rms0 < speechThresh && rms1 < speechThresh) {
+      silenceWindows++;
+      // Both channels zeroed (pre-roll or inter-speech gap erased entirely)
+      if (rms0 < digitalZeroThresh && rms1 < digitalZeroThresh) {
+        digitalZeroWindows++; digitalZeroTimestamps.push({ t: i * wsz / sr, ch: 'Both' });
+      }
+      // One channel zeroed, other has room tone
+      else if (rms0 < digitalZeroThresh && rms1 >= nfLin * 0.25) { digitalZeroWindows++; digitalZeroTimestamps.push({ t: i * wsz / sr, ch: 'Left' }); }
+      else if (rms1 < digitalZeroThresh && rms0 >= nfLin * 0.25) { digitalZeroWindows++; digitalZeroTimestamps.push({ t: i * wsz / sr, ch: 'Right' }); }
+    }
+  }
+
+  const bleedPct = bleedCount > 0 ? (bleedCorrSum / bleedCount) * 100 : 0;
+
+  // Merge bleed timestamps within 1 second of each other
+  const mergedTimestamps = [];
+  for (const t of bleedTimestamps.sort((a,b) => a-b)) {
+    if (mergedTimestamps.length && t - mergedTimestamps[mergedTimestamps.length-1] < 1) continue;
+    mergedTimestamps.push(t);
+  }
+
+  const avgPanCorr = panCount > 0 ? panCorrSum / panCount : 0;
+  const panningError = avgPanCorr > 0.85; // channels nearly identical
+  const digitalZeroGaps = silenceWindows > 5 && (digitalZeroWindows / silenceWindows) > 0.05;
+
+  // Merge digital zero timestamps into sections - only report start of each contiguous section
+  // Use 3s threshold to bridge brief speech pauses within a zeroed region
+  const mergedDZTimestamps = [];
+  for (const e of digitalZeroTimestamps.sort((a,b) => a.t - b.t)) {
+    const last = mergedDZTimestamps[mergedDZTimestamps.length - 1];
+    if (!last || e.t - last.t > 3.0) {
+      mergedDZTimestamps.push(e);
+    }
+  }
+
+  return { bleedPct, bleedTimestamps: mergedTimestamps, panningError, avgPanCorr, digitalZeroGaps, digitalZeroRatio: silenceWindows > 0 ? digitalZeroWindows / silenceWindows : 0, digitalZeroTimestamps: mergedDZTimestamps };
+}
+
 function detectBleed(leftData, rightData, sr, nfDb) {
   const winSz  = Math.floor(sr * 0.05); // 50ms windows
   const thresh = Math.pow(10, (nfDb + 12) / 20);
@@ -2586,7 +2771,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     rows.push(aRow('Acoustic Δ', deltaVal, deltaDetail, deltaLevel));
     const bleedPct = a.bleedPct.toFixed(1);
     const bleedLevel = a.bleedPct < 5 ? 'pass' : a.bleedPct < 15 ? 'warn' : 'fail';
-    rows.push(aRow('Bleed', bleedPct + '%', a.bleedPct < 5 ? 'No significant bleed detected' : 'Cross-talk detected between mics', bleedLevel, a.bleedClips));
+    rows.push(aRow('Significant Bleed', bleedPct + '%', a.bleedPct < 5 ? 'No significant bleed detected' : 'Headphone bleed clearly above room tone', bleedLevel, a.bleedClips));
   }
 
   // Hum
@@ -2651,7 +2836,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     const quieter = louder === 'Left' ? 'Right' : 'Left';
     qaRec('warn', 'Acoustic Δ', `${louder} is ${delta.toFixed(1)} dB louder. Engineer: reduce ${louder} gain by ${delta.toFixed(1)} dB (or raise ${quieter} by ${delta.toFixed(1)} dB).`);
   }
-  if (!isSingleCh && a.bleedPct >= 5) qaRec('warn', 'Bleed', `${a.bleedPct.toFixed(1)}% cross-talk detected. Cover affected regions with room tone clip.`);
+  if (!isSingleCh && a.bleedPct >= 5) qaRec('warn', 'Significant Bleed', `${a.bleedPct.toFixed(1)}% headphone bleed detected — clearly above room tone level. Lower headphone monitoring levels.`);
   // Hum — equipment issue, may need re-record
   if (a.hum.detected) qaRec('fail', 'Hum / Buzz', `${a.hum.freq}Hz detected. Check power supply, cables and grounding. Re-record if not resolved.`);
   if (hpfLDet || hpfRDet) {
@@ -2772,6 +2957,14 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
     const louder = eA.ch0.rmsDb > eA.ch1.rmsDb ? 'Left' : 'Right';
     rec('warn', 'Edit — Channel Imbalance',
       eA.lrDelta.toFixed(2) + ' dB · ↓ Trim ' + louder + ' by ' + eA.lrDelta.toFixed(1) + ' dB.');
+  }
+
+  // ── Edit checks ──────────────────────────────────────────
+  if (eA && eA.editChecks) {
+    if (eA.editChecks.panningError)
+      rec('fail', 'Panning Error', 'Both channels contain the same signal — talents not panned L/R. Re-export with Talent 1 hard left, Talent 2 hard right.');
+    if (eA.editChecks.digitalZeroGaps)
+      rec('fail', 'Digital Zero Gaps', `${(eA.editChecks.digitalZeroRatio*100).toFixed(0)}% of silence gaps erased to digital zero. Replace with room tone clips.`);
   }
 
   return recs;
