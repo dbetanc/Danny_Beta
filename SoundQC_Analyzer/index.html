@@ -101,7 +101,7 @@ header {
   animation: fadeDown .4s ease both;
 }
 
-.logo-row { display: flex; align-items: center; gap: 14px; }
+.logo-row { display: flex; align-items: flex-start; gap: 14px; width: 100%; }
 
 .logo-icon {
   width: 42px; height: 42px;
@@ -517,19 +517,19 @@ h1 span { color: var(--green); }
           <polyline points="5 12 7 6 9 18 11 8 13 16 15 12 17 12"/>
         </svg>
       </div>
-      <div>
+      <div style="flex:1;min-width:0">
         <h1>SOBA <span style="color:var(--text3);font-weight:400">—</span> <span>Audio QA & QC</span></h1>
-        <div class="header-sub">Waveform Quality Control Analyzer</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
+          <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="version-badge">v2.7</div>
+            <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
+              <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
+              <span id="themeLabel">DARK</span>
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="header-right">
-      <button id="exportQABtn" onclick="exportQAReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QA Report</button>
-      <button id="exportQCBtn" onclick="exportQCReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QC Report</button>
-      <div class="version-badge">v2.6</div>
-      <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
-        <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
-        <span id="themeLabel">DARK</span>
-      </button>
     </div>
   </header>
 
@@ -604,7 +604,14 @@ h1 span { color: var(--green); }
   <!-- RESULTS -->
   <div id="results" hidden style="margin-top:1.75rem">
 
-    <div id="overallBadge" style="display:none"></div>
+  <!-- RESULTS BAR: overall badge + export buttons -->
+  <div id="resultsBar" style="display:none;align-items:center;justify-content:space-between;margin-bottom:18px;padding:10px 16px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px">
+    <div id="overallBadge"></div>
+    <div style="display:flex;gap:8px">
+      <button id="exportQABtn" onclick="exportQAReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QA Report</button>
+      <button id="exportQCBtn" onclick="exportQCReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QC Report</button>
+    </div>
+  </div>
 
     <div class="cards-grid" id="cardsGrid">
 
@@ -765,8 +772,8 @@ h1 span { color: var(--green); }
         <div class="legend-nf">
           <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>&gt; −50 dBFS &nbsp;<span style="color:var(--text3)">too noisy</span></div>
           <div class="legend-nf-item"><span class="nf-chip nf-orange">WARN</span>−50 to −57 dBFS &nbsp;<span style="color:var(--text3)">trending noisy</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-pass">PASS</span>−57 to −68 dBFS &nbsp;<span style="color:var(--text3)">sweet spot</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-warn">WARN</span>−68 to −80 dBFS &nbsp;<span style="color:var(--text3)">trending quiet</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">PASS</span>−57 to −70 dBFS &nbsp;<span style="color:var(--text3)">sweet spot</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-warn">WARN</span>−70 to −80 dBFS &nbsp;<span style="color:var(--text3)">trending quiet</span></div>
           <div class="legend-nf-item"><span class="nf-chip nf-purple">FAIL</span>&lt; −80 dBFS &nbsp;<span style="color:var(--text3)">no room tone</span></div>
         </div>
       </div>
@@ -1429,16 +1436,16 @@ async function runAnalysis() {
 // ── Render ───────────────────────────────────────────────────
 function nfBadgeHTML(db) {
   if (db > -50)              return '<div class="nf-badge nf-fail">FAIL</div>';
-  if (db > -57)              return '<div class="nf-badge nf-orange">WARN</div>';
-  if (db >= -68)             return '<div class="nf-badge nf-pass">PASS</div>';
-  if (db > -80)              return '<div class="nf-badge nf-warn">WARN</div>';
+  if (db >= -57 && db <= -50) return '<div class="nf-badge nf-orange">WARN</div>';
+  if (db > -70 && db < -57)  return '<div class="nf-badge nf-pass">PASS</div>';
+  if (db >= -80 && db <= -70) return '<div class="nf-badge nf-warn">WARN</div>';
   return                            '<div class="nf-badge nf-purple">NO RT</div>';
 }
 function nfColorCls(db) {
-  if (db > -50)  return 'hl-red';
-  if (db > -57)  return 'hl-amber';
-  if (db >= -68) return 'hl-green';
-  if (db > -80)  return 'hl-amber';
+  if (db > -50)                   return 'hl-red';
+  if (db >= -57 && db <= -50)     return 'hl-amber';
+  if (db > -70 && db < -57)       return 'hl-green';
+  if (db >= -80 && db <= -70)     return 'hl-amber';
   return 'hl-red';
 }
 function deltaRating(d) {
@@ -1463,10 +1470,10 @@ function nfBarHTML(nf, rms, peak) {
 
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 
-  const nfCol  = nf > -50  ? (isDark ? '#ff4060' : '#d4001a')
-               : nf > -57  ? (isDark ? '#ff7800' : '#cc5500')
-               : nf >= -68 ? (isDark ? '#00ff88' : '#009944')
-               : nf > -80  ? (isDark ? '#ffaa00' : '#c06000')
+  const nfCol  = nf > -50        ? (isDark ? '#ff4060' : '#d4001a')
+               : nf <= -50 && nf >= -57 ? (isDark ? '#ff7800' : '#cc5500')
+               : nf > -70 && nf < -57  ? (isDark ? '#00ff88' : '#009944')
+               : nf <= -70 && nf >= -80 ? (isDark ? '#ffaa00' : '#c06000')
                             : (isDark ? '#a050ff' : '#6600cc');
   const rmsCol = isDark ? '#00ff88' : '#00aa55';
   const pkCol  = isDark ? '#ff2040' : '#cc0020';
@@ -1477,15 +1484,15 @@ function nfBarHTML(nf, rms, peak) {
   const tickMinor = isDark ? '#5a7090' : '#8090a8';
   const tickMajor = isDark ? '#a8c0e0' : '#3a4a60';
   const labelCol  = isDark ? '#e8f2ff' : '#1a2a40';
-  // Threshold guides: -57 (orange, noisy WARN boundary) and -68 (amber, quiet WARN boundary)
+  // Threshold guides: -57 (orange, noisy WARN boundary) and -70 (amber, quiet WARN boundary)
   const th57Col   = isDark ? '#ff7800' : '#cc5500';
-  const th68Col   = isDark ? '#ffaa00' : '#c06000';
+  const th70Col   = isDark ? '#ffaa00' : '#c06000';
 
   // Use system monospace — Safari doesn't load Google Fonts in SVG attrs
   const FONT = 'Courier New, Courier, monospace';
 
   const nfX  = px(nf),  rmsX = px(rms), pkX = px(peak);
-  const th57 = px(-57), th68 = px(-68);
+  const th57 = px(-57), th70 = px(-70);
   const TY = 44, TH = 13;
 
   // Labels: sparse on left (-70,-60,-50,-40), every 6dB from -36, then -3, 0
@@ -1539,10 +1546,10 @@ function nfBarHTML(nf, rms, peak) {
       <text x="${th57.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
             font-family="${FONT}" font-size="12" font-weight="bold" fill="${th57Col}">-57</text>
 
-      <line x1="${th68.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th68.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
-            stroke="${th68Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
-      <text x="${th68.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
-            font-family="${FONT}" font-size="12" font-weight="bold" fill="${th68Col}">-68</text>
+      <line x1="${th70.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th70.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
+            stroke="${th70Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="${th70.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
+            font-family="${FONT}" font-size="12" font-weight="bold" fill="${th70Col}">-70</text>
 
       <line x1="${pkX.toFixed(1)}" y1="${(TY-4).toFixed(1)}" x2="${pkX.toFixed(1)}" y2="${(TY+TH+4).toFixed(1)}"
             stroke="${pkCol}" stroke-width="7" stroke-linecap="round"/>
@@ -1626,7 +1633,7 @@ function dbBarHTML(db, type) {
       [nfPct(-100), '#a050ff'],
       [nfPct(-80),  '#a050ff'],
       [nfPct(-73),  '#c070e0'],  // purple fading to amber
-      [nfPct(-68),  '#ffaa00'],  // amber at quiet warn boundary
+      [nfPct(-70),  '#ffaa00'],  // amber at quiet warn boundary
       [nfPct(-63),  '#1dff8a'],  // green entering sweet spot
       [nfPct(-57),  '#1dff8a'],  // green at noisy warn boundary
       [nfPct(-53),  '#ff7800'],  // orange above sweet spot
@@ -1645,8 +1652,8 @@ function dbBarHTML(db, type) {
     const gradient = fillPct > 0 ? `linear-gradient(to right, ${scaledStops})` : '#a050ff';
 
     // Sweet spot zone highlight
-    const zL = nfPct(-68).toFixed(1);
-    const zW = (nfPct(-57) - nfPct(-68)).toFixed(1);
+    const zL = nfPct(-70).toFixed(1);
+    const zW = (nfPct(-57) - nfPct(-70)).toFixed(1);
     const zoneBg = isDark ? 'rgba(0,255,136,0.18)' : 'rgba(0,180,80,0.15)';
 
     // Zone boundary markers
@@ -1654,14 +1661,14 @@ function dbBarHTML(db, type) {
     const markers = `
       <div style="position:absolute;top:0;bottom:0;left:${zL}%;width:${zW}%;background:${zoneBg}"></div>
       <div style="position:absolute;top:0;bottom:0;left:${nfPct(-57).toFixed(1)}%;width:1px;background:${mc}"></div>
-      <div style="position:absolute;top:0;bottom:0;left:${nfPct(-68).toFixed(1)}%;width:1px;background:${mc}"></div>`;
+      <div style="position:absolute;top:0;bottom:0;left:${nfPct(-70).toFixed(1)}%;width:1px;background:${mc}"></div>`;
 
     const ticks = [-100, -90, -80, -70, -60, -50, -25, 0];
     const ticksHTML = ticks.map(t => {
       const left   = nfPct(t).toFixed(1);
       const anchor = t === -100 ? 'left' : t === 0 ? 'right' : 'center';
       const tx     = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
-      const isZone = (t === -57 || t === -68);
+      const isZone = (t === -57 || t === -70);
       const col    = isZone ? (isDark ? 'rgba(0,255,136,0.85)' : 'rgba(0,140,60,0.85)') : lblCol;
       const weight = isZone ? 'font-weight:700;' : '';
       return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${col};${weight}">${t}</span>`;
@@ -2354,21 +2361,105 @@ async function computeEditChecks(buf) {
 }
 
 function detectBleed(leftData, rightData, sr, nfDb) {
-  const winSz  = Math.floor(sr * 0.05); // 50ms windows
-  const thresh = Math.pow(10, (nfDb + 12) / 20);
-  let corrSum = 0, count = 0;
+  const winSz = Math.floor(sr * 0.05); // 50ms windows
+  const dt    = 1 / sr;
+
+  // Speech presence guard — top 10% median approach (same as pop/transient detectors)
+  const rmsArr = [];
   for (let i = 0; i + winSz <= leftData.length; i += winSz) {
-    // Check if Left is speaking in this window
-    let lSq = 0;
-    for (let j = i; j < i+winSz; j++) lSq += leftData[j]*leftData[j];
-    if (Math.sqrt(lSq/winSz) < thresh) continue;
-    // Left is speaking — measure correlation with Right
-    const la = leftData.subarray(i, i+winSz);
-    const ra = rightData.subarray(i, i+winSz);
-    corrSum += Math.abs(pearsonCorr(la, ra));
+    let sq = 0;
+    for (let j = i; j < i+winSz; j++) sq += leftData[j]*leftData[j];
+    rmsArr.push(Math.sqrt(sq/winSz));
+  }
+  rmsArr.sort((a,b) => a-b);
+  const top10Start    = Math.floor(rmsArr.length * 0.90);
+  const top10         = rmsArr.slice(top10Start);
+  const speechRms     = top10[Math.floor(top10.length * 0.5)];
+  const bottom10      = rmsArr[Math.floor(rmsArr.length * 0.10)];
+  const dynRange      = 20 * Math.log10((speechRms + 1e-12) / (bottom10 + 1e-12));
+  const minSpeechLin  = Math.pow(10, -45 / 20);
+  if (dynRange < 30 || speechRms < minSpeechLin) return { low: 0, mid: 0, high: 0, count: 0 };
+  const threshL = speechRms * Math.pow(10, -20/20);
+
+  // Compute right channel speech threshold independently
+  const rmsArrR = [];
+  for (let i = 0; i + winSz <= rightData.length; i += winSz) {
+    let sq = 0;
+    for (let j = i; j < i+winSz; j++) sq += rightData[j]*rightData[j];
+    rmsArrR.push(Math.sqrt(sq/winSz));
+  }
+  rmsArrR.sort((a,b) => a-b);
+  const top10R     = rmsArrR.slice(Math.floor(rmsArrR.length * 0.90));
+  const speechRmsR = top10R[Math.floor(top10R.length * 0.5)];
+  const bottom10R  = rmsArrR[Math.floor(rmsArrR.length * 0.10)];
+  const dynRangeR  = 20 * Math.log10((speechRmsR + 1e-12) / (bottom10R + 1e-12));
+  // If right has no speech, skip — no meaningful bleed windows
+  if (dynRangeR < 30 || speechRmsR < minSpeechLin) return { low: 0, mid: 0, high: 0, count: 0 };
+  const threshR = speechRmsR * Math.pow(10, -20/20);
+
+  // Build three band-limited versions of right channel via IIR filters
+  // Low:  <300Hz  — structural/wall bleed
+  // Mid:  300Hz-3kHz — speech fundamentals (headphone bleed marker)
+  // High: >3kHz  — sibilance/presence (severe headphone bleed)
+  function lpFilter(data, fc) {
+    const a = dt / (1/(2*Math.PI*fc) + dt);
+    const out = new Float32Array(data.length);
+    out[0] = data[0];
+    for (let i = 1; i < data.length; i++) out[i] = a*data[i] + (1-a)*out[i-1];
+    return out;
+  }
+
+  const lp300  = lpFilter(rightData, 300);
+  const lp3k   = lpFilter(rightData, 3000);
+  const bandLow  = lp300;                                        // <300Hz
+  const bandMid  = new Float32Array(rightData.length);           // 300Hz-3kHz
+  const bandHigh = new Float32Array(rightData.length);           // >3kHz
+  for (let i = 0; i < rightData.length; i++) {
+    bandMid[i]  = lp3k[i] - lp300[i];
+    bandHigh[i] = rightData[i] - lp3k[i];
+  }
+
+  // Same bands for left channel (source signal to correlate against)
+  const lp300L = lpFilter(leftData, 300);
+  const lp3kL  = lpFilter(leftData, 3000);
+  const leftLow  = lp300L;
+  const leftMid  = new Float32Array(leftData.length);
+  const leftHigh = new Float32Array(leftData.length);
+  for (let i = 0; i < leftData.length; i++) {
+    leftMid[i]  = lp3kL[i] - lp300L[i];
+    leftHigh[i] = leftData[i] - lp3kL[i];
+  }
+
+  let corrLowSum = 0, corrMidSum = 0, corrHighSum = 0, count = 0;
+
+  // Band-limited Pearson correlation between two arrays at window offset
+  function bandCorr(a, b, offset) {
+    let sa=0, sb=0;
+    for (let j=offset; j<offset+winSz; j++) { sa+=a[j]; sb+=b[j]; }
+    const ma=sa/winSz, mb=sb/winSz;
+    let cov=0, va=0, vb=0;
+    for (let j=offset; j<offset+winSz; j++) { cov+=(a[j]-ma)*(b[j]-mb); va+=(a[j]-ma)**2; vb+=(b[j]-mb)**2; }
+    return cov / (Math.sqrt(va*vb) + 1e-12);
+  }
+
+  for (let i = 0; i + winSz <= leftData.length; i += winSz) {
+    let lSq = 0, rSq = 0;
+    for (let j = i; j < i+winSz; j++) { lSq += leftData[j]*leftData[j]; rSq += rightData[j]*rightData[j]; }
+    const rmsL = Math.sqrt(lSq/winSz), rmsR = Math.sqrt(rSq/winSz);
+
+    // Direction: source (leftData) speaking, target (rightData) quiet → check target for bleed
+    const leftSpeaking = rmsL >= threshL && rmsR < threshR;
+    if (!leftSpeaking) continue;
+
+    corrLowSum  += Math.abs(bandCorr(leftLow,  bandLow,  i));
+    corrMidSum  += Math.abs(bandCorr(leftMid,  bandMid,  i));
+    corrHighSum += Math.abs(bandCorr(leftHigh, bandHigh, i));
     count++;
   }
-  return count > 0 ? (corrSum / count * 100) : 0; // % avg correlation
+
+  if (count === 0) return { low: 0, mid: 0, high: 0, count: 0 };
+
+  return { low: corrLowSum/count, mid: corrMidSum/count, high: corrHighSum/count, count };
 }
 
 // FFT — returns magnitude spectrum
@@ -2456,48 +2547,91 @@ function detectHum(data, sr, nfDb) {
 // by a sudden full-band onset jump of ≥10 dB within 15ms
 function detectPops(data, sr, nfDb) {
   const wsz = Math.floor(sr * 0.005); // 5ms windows
-  const speechThresh = Math.pow(10, -45 / 20);
 
-  // Calibrated thresholds: LP/Full > 0.95, abrupt jump >= 12 dB
+  // Compute speech-level-relative threshold from actual data
+  // Top 10% median of window RMS = actual speech peaks (robust to pre-roll silence)
+  // 75th percentile fails when the sample window contains mostly silence/pre-roll
+  const rmsArr = [];
+  const nWin = Math.floor(data.length / wsz);
+  for (let i = 0; i < nWin; i++) {
+    let sq = 0;
+    for (let j = i*wsz; j < (i+1)*wsz; j++) sq += data[j]*data[j];
+    rmsArr.push(Math.sqrt(sq/wsz));
+  }
+  rmsArr.sort((a,b) => a-b);
+  // Median of top 10% = robust speech RMS regardless of NF or pre-roll content
+  const top10Start = Math.floor(rmsArr.length * 0.90);
+  const top10 = rmsArr.slice(top10Start);
+  const speechRms = top10[Math.floor(top10.length * 0.5)];
+  const bottom10  = rmsArr[Math.floor(rmsArr.length * 0.10)];
+  const dynRange  = 20 * Math.log10((speechRms + 1e-12) / (bottom10 + 1e-12));
+  const minSpeechLin = Math.pow(10, -45 / 20); // -45 dBFS minimum for real speech
+  // If dynamic range < 30dB OR top 10% below -45 dBFS → not real speech (breathing, room tone)
+  if (dynRange < 30 || speechRms < minSpeechLin) return { events: 0, pct: 0 };
+  // Speech threshold: 20dB below typical speech peaks — NF-independent
+  const speechThresh = speechRms * Math.pow(10, -20/20);
+
+  // Calibrated thresholds:
+  // LP/Full > 0.95 (low-freq dominant burst)
+  // Jump >= 15 dB  (raised from 12 — excludes borderline P consonants)
+  // Sub-10Hz infrasonic check — real mic pop has air pressure wave below 10Hz
   const LP_THRESH   = 0.95;
-  const JUMP_THRESH = 12;
-  // RC = 1/(2π*80), alpha = dt/(RC+dt) where dt=1/sr
-  const RC = 1 / (2 * Math.PI * 80);
+  const JUMP_THRESH = 15;
+
+  // 80Hz low-pass (existing)
+  const RC80 = 1 / (2 * Math.PI * 80);
   const dt = 1 / sr;
-  const alpha = dt / (RC + dt);
-  const lp = new Float32Array(data.length);
-  lp[0] = data[0];
-  for (let i = 1; i < data.length; i++) lp[i] = alpha * data[i] + (1 - alpha) * lp[i - 1];
+  const alpha80 = dt / (RC80 + dt);
+  const lp80 = new Float32Array(data.length);
+  lp80[0] = data[0];
+  for (let i = 1; i < data.length; i++) lp80[i] = alpha80 * data[i] + (1 - alpha80) * lp80[i - 1];
+
+  // 10Hz low-pass — captures infrasonic air pressure burst of real pop
+  const RC10 = 1 / (2 * Math.PI * 10);
+  const alpha10 = dt / (RC10 + dt);
+  const lp10 = new Float32Array(data.length);
+  lp10[0] = data[0];
+  for (let i = 1; i < data.length; i++) lp10[i] = alpha10 * data[i] + (1 - alpha10) * lp10[i - 1];
 
   // Envelope per 5ms window
   const n = Math.floor(data.length / wsz);
   const lpEnv   = new Float32Array(n);
+  const lp10Env = new Float32Array(n);
   const fullEnv = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    let sq = 0, sqL = 0;
+    let sq = 0, sqL = 0, sqL10 = 0;
     for (let j = i * wsz; j < (i + 1) * wsz; j++) {
-      sq  += data[j] * data[j];
-      sqL += lp[j]   * lp[j];
+      sq    += data[j]  * data[j];
+      sqL   += lp80[j]  * lp80[j];
+      sqL10 += lp10[j]  * lp10[j];
     }
     fullEnv[i] = Math.sqrt(sq / wsz);
     lpEnv[i]   = Math.sqrt(sqL / wsz);
+    lp10Env[i] = Math.sqrt(sqL10 / wsz);
   }
 
   const candidates = [];
-  for (let i = 1; i < n - 3; i++) {
+  for (let i = 3; i < n - 3; i++) {
     const ratio = lpEnv[i] / (fullEnv[i] + 1e-12);
-    if (ratio < LP_THRESH)      continue; // not LP-dominant
+    if (ratio < LP_THRESH)         continue; // not LP-dominant
     if (fullEnv[i] < speechThresh) continue; // below speech level
 
-    // Check for abrupt amplitude jump in next 3 windows (15ms)
-    const burstDb  = 20 * Math.log10(Math.max(fullEnv[i], 1e-9));
+    // Infrasonic check: real mic pop has sub-10Hz air pressure wave
+    // Sub-10Hz must be within 8dB of full signal
+    // P consonants have energy at 80-300Hz, so sub-10Hz is 15+ dB below full
+    const infraDb = 20 * Math.log10(Math.max(lp10Env[i], 1e-12));
+    const fullDb  = 20 * Math.log10(Math.max(fullEnv[i], 1e-12));
+    if (fullDb - infraDb > 8) continue; // not enough infrasonic content — regular plosive
+
+    // Amplitude jump check: >= 15 dB in next 15ms
+    const burstDb  = fullDb;
     const followDb = Math.max(
       20 * Math.log10(Math.max(fullEnv[i + 1], 1e-9)),
       20 * Math.log10(Math.max(fullEnv[i + 2], 1e-9)),
       20 * Math.log10(Math.max(fullEnv[i + 3], 1e-9))
     );
     const jump = followDb - burstDb;
-    if (jump < JUMP_THRESH) continue; // no abrupt onset = regular P consonant
+    if (jump < JUMP_THRESH) continue;
 
     candidates.push({ t: i * 0.005, jump });
   }
@@ -2516,23 +2650,37 @@ function detectPops(data, sr, nfDb) {
 
 function detectTransients(data, sr, nfDb, opts = {}) {
   const { minHz = 0, maxHz = 24000, minDurMs = 5, maxDurMs = 150, silenceOnly = false } = opts;
-  const winSz    = Math.floor(sr * 0.01); // 10ms windows
-  const nfLin    = Math.pow(10, nfDb / 20);
-  const thresh   = nfLin * opts.threshMult || nfLin * 30;
-  const silThresh = Math.pow(10, (nfDb + 10) / 20);
+  const winSz = Math.floor(sr * 0.01); // 10ms windows
+
+  // Top 10% median of window RMS = actual speech peaks, robust to pre-roll silence
+  const rmsArr = [];
+  for (let i = 0; i + winSz <= data.length; i += winSz) {
+    let sq = 0;
+    for (let j = i; j < i+winSz; j++) sq += data[j]*data[j];
+    rmsArr.push(Math.sqrt(sq/winSz));
+  }
+  rmsArr.sort((a,b) => a-b);
+  const top10Start = Math.floor(rmsArr.length * 0.90);
+  const top10 = rmsArr.slice(top10Start);
+  const speechRms = top10[Math.floor(top10.length * 0.5)];
+  const bottom10  = rmsArr[Math.floor(rmsArr.length * 0.10)];
+  const dynRange  = 20 * Math.log10((speechRms + 1e-12) / (bottom10 + 1e-12));
+  const minSpeechLin = Math.pow(10, -45 / 20);
+  if (dynRange < 30 || speechRms < minSpeechLin) return { events: 0, pct: 0 };
+  const thresh = speechRms * (opts.threshMult || 4);
+  const nfLin  = Math.pow(10, nfDb / 20);
+  const silThresh = nfLin * Math.pow(10, 10/20); // silence threshold stays NF-relative (correct use)
+
   let events = 0, windows = 0, inEvent = false, eventLen = 0;
 
-  // Simple bandpass via envelope — for low-freq check subsample, for high-freq check diff
   function bandEnergy(start) {
     let sq = 0;
     for (let j = start; j < start+winSz && j < data.length; j++) {
       let s = data[j];
       if (maxHz < 500) {
-        // Low-freq: use sample directly (low-pass by decimation)
         const decimated = data[Math.min(data.length-1, j + Math.floor(sr/maxHz/2))];
         s = (s + decimated) / 2;
       } else if (minHz > 500) {
-        // High-freq: use first difference (high-pass)
         s = j > 0 ? data[j] - data[j-1] : data[j];
       }
       sq += s*s;
@@ -2560,7 +2708,8 @@ function detectTransients(data, sr, nfDb, opts = {}) {
 }
 
 async function runSingleArtifactScan(files) {
-  const TAKES = 5, SECS = 10;
+  // const TAKES = 5, SECS = 10; // ← restore this line (and remove the next) to revert to 5-take sampling
+  const TAKES = Infinity, SECS = 10;
   const scanFiles = files.slice(0, TAKES);
 
   let humDetected = false, humFreq = null;
@@ -2605,13 +2754,14 @@ async function runSingleArtifactScan(files) {
     pops:    { left: pops, right: 0, clipsL: popClips,    clipsR: [] },
     clicks:  { left: clicks, right: 0, clipsL: clickClips, clipsR: [] },
     impacts: { left: impacts, right: 0, clipsL: impactClips, clipsR: [] },
-    bleedPct: 0, bleedClips: [],
+    bleedScore: 1, bleedClips: [],
     singleChannel: true,
   };
 }
 
 async function runArtifactScan(leftFiles, rightFiles) {
-  const TAKES = 5, SECS = 10;
+  // const TAKES = 5, SECS = 10; // ← restore this line (and remove the next) to revert to 5-take sampling
+  const TAKES = Infinity, SECS = 10;
   const pairs = pairRawFiles(leftFiles, rightFiles);
   const scanTakes = pairs.slice(0, TAKES);
 
@@ -2621,7 +2771,9 @@ async function runArtifactScan(leftFiles, rightFiles) {
     return `Clip ${side}-${m ? m[1] : '?'}`;
   };
 
-  let bleedSum = 0, humDetected = false, humFreq = null;
+  let bleedLowArr = [], bleedMidArr = [], bleedHighArr = [];
+  let bleedN = 0;
+  let humDetected = false, humFreq = null;
   let popsL = 0, popsR = 0, clicksL = 0, clicksR = 0, impactL = 0, impactR = 0;
   let hpfL = null, hpfR = null;
   const bleedClips = [], humClips = [];
@@ -2641,10 +2793,24 @@ async function runArtifactScan(leftFiles, rightFiles) {
     const lClip = clipLabel(pair.left,  'L');
     const rClip = clipLabel(pair.right, 'R');
 
-    // Bleed
-    const bleedPct = detectBleed(lData, rData, sr, lNF);
-    bleedSum += bleedPct;
-    if (bleedPct >= 5) bleedClips.push({ label: rClip, file: pair.right.name });
+    // Bleed — run both directions separately to flag correct clip
+    const bleedLR = detectBleed(lData, rData, sr, lNF); // L speaking → R bleed
+    const bleedRL = detectBleed(rData, lData, sr, rNF); // R speaking → L bleed
+    // Accumulate worst direction per take
+    const bleedTake = {
+      low:   Math.max(bleedLR.low,   bleedRL.low),
+      mid:   Math.max(bleedLR.mid,   bleedRL.mid),
+      high:  Math.max(bleedLR.high,  bleedRL.high),
+      count: bleedLR.count + bleedRL.count
+    };
+    if (bleedTake.count > 0) {
+      bleedLowArr.push(bleedTake.low);
+      bleedMidArr.push(bleedTake.mid);
+      bleedHighArr.push(bleedTake.high);
+      bleedN++;
+    }
+    if (bleedLR.mid >= 0.08 || bleedLR.high >= 0.05) bleedClips.push({ label: rClip, file: pair.right.name });
+    if (bleedRL.mid >= 0.08 || bleedRL.high >= 0.05) bleedClips.push({ label: lClip, file: pair.left.name });
 
     // Hum
     const hum = detectHum(lData, sr, lNF);
@@ -2683,9 +2849,21 @@ async function runArtifactScan(leftFiles, rightFiles) {
     n++;
   }
 
+    // Compute bleed score from session-averaged band correlations
+    // Scoring based purely on correlation strength — occurrence count doesn't inflate score
+    const med = arr => { if (!arr.length) return 0; const s=[...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; };
+    const avgLow  = med(bleedLowArr);
+    const avgMid  = med(bleedMidArr);
+    const avgHigh = med(bleedHighArr);
+    let bleedScore = 1;
+    if      (avgLow > 0.08 && avgMid < 0.15 && avgHigh < 0.06)  bleedScore = 2; // structural only
+    else if (avgLow > 0.08 && avgMid >= 0.15 && avgMid < 0.25)  bleedScore = 3; // mild HP
+    else if (avgMid >= 0.25 && avgHigh < 0.10)                   bleedScore = 4; // moderate HP
+    else if (avgMid >= 0.25 && avgHigh >= 0.10)                  bleedScore = 5; // severe HP
+
   return {
     takesAnalyzed: n,
-    bleedPct:    n > 0 ? bleedSum / n : 0,
+    bleedScore,
     bleedClips,
     hum:         { detected: humDetected, freq: humFreq, clips: humClips },
     hpf:         { left: hpfL, right: hpfR, clipsL: hpfClipsL, clipsR: hpfClipsR },
@@ -2693,6 +2871,33 @@ async function runArtifactScan(leftFiles, rightFiles) {
     clicks:      { left: clicksL, right: clicksR, clipsL: clickClipsL, clipsR: clickClipsR },
     impacts:     { left: impactL, right: impactR, clipsL: impactClipsL, clipsR: impactClipsR },
   };
+}
+
+// 1-5 dot scale display helpers
+const SCORE_COLORS = ['','#00C853','#FFD600','#FF9100','#FF3D00','#D50000'];
+
+function scoreColor(score) {
+  return SCORE_COLORS[Math.max(1, Math.min(5, score))];
+}
+
+function dotsHTML(score, max, level) {
+  const col = scoreColor(score);
+  return Array.from({length: max}, (_,i) =>
+    `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${i<score?col:'var(--bg3)'};margin-right:3px;border:1px solid var(--border2);vertical-align:middle"></span>`
+  ).join('');
+}
+function scoreSpan(score) {
+  // Score 2 is yellow — use darker shade for text contrast
+  const textCol = score === 2 ? '#2C2C2A' : scoreColor(score);
+  return `<span style="font-family:'Share Tech Mono',monospace;font-size:12px;margin-left:4px;vertical-align:middle;color:${textCol};font-weight:700">${score}/5</span>`;
+}
+
+// QA 3-state pill: Clean / Minor / Serious
+function qaChip(score) {
+  const base = `display:inline-block;padding:3px 10px;border-radius:4px;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.4px;border:1px solid`;
+  if (score <= 1) return `<span style="${base} #1A7A4A;background:#D6F0E2;color:#1A7A4A">Clean</span>`;
+  if (score <= 3) return `<span style="${base} #B8970A;background:#FFD600;color:#2C2C2A">Minor</span>`;
+  return `<span style="${base} #C0392B;background:#FAD7D3;color:#C0392B">Serious</span>`;
 }
 
 function renderQualityCard(rawLA, rawRA, artifactData) {
@@ -2733,8 +2938,8 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       </div>`
     ).join('');
     return `<div style="margin-top:4px">
-      <span onclick="const el=document.getElementById('${id}');const open=el.style.display!=='none';el.style.display=open?'none':'block';this.textContent=open?'▶ Problem in:':'▼ Problem in:'"
-        style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);cursor:pointer;user-select:none">▶ Problem in:</span>
+      <span onclick="const el=document.getElementById('${id}');const open=el.style.display!=='none';el.style.display=open?'none':'block';this.textContent=open?'▶ Detected in:':'▼ Detected in:'"
+        style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);cursor:pointer;user-select:none">▶ Detected in:</span>
       <div id="${id}" style="display:none;margin-top:4px;padding:6px 10px;background:var(--bg3);border-radius:5px;border:1px solid var(--border)">
         ${items}
       </div>
@@ -2742,8 +2947,8 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   }
 
   // ── Artifact row helper ────────────────────────────────
-  function aRow(label, status, detail, level, clips) {
-    const chip = level === 'fail'
+  function aRow(label, status, detail, level, clips, rawStatus) {
+    const chip = rawStatus ? status : level === 'fail'
       ? `<span class="nf-chip nf-fail">${status}</span>`
       : level === 'warn'
       ? `<span class="nf-chip nf-warn">${status}</span>`
@@ -2758,10 +2963,12 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
 
   const a = artifactData;
   const rows = [];
+  let bleedScore = 1; // declared here so recommendations block can access it
 
   // Acoustic Δ
-  const deltaVal = delta !== null ? delta.toFixed(2) + ' dB' : 'N/A';
-  const deltaLevel = delta === null ? '' : delta < 1 ? 'pass' : delta < 3 ? 'warn' : 'fail';
+  const deltaScore  = delta === null ? 1 : delta < 1 ? 1 : delta < 3 ? 2 : 4;
+  const deltaVal    = delta !== null ? delta.toFixed(2) + ' dB' : 'N/A';
+  const deltaLevel  = delta === null ? '' : delta < 1 ? 'pass' : delta < 3 ? 'warn' : 'fail';
   const deltaDetail = delta !== null
     ? `${dr.label} &nbsp;·&nbsp; ${louder} louder &nbsp;·&nbsp; ${balanceHTML}`
     : 'Single track only';
@@ -2769,91 +2976,122 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
 
   // Only show Acoustic Δ and Bleed for dual character
   if (!isSingleCh) {
-    rows.push(aRow('Acoustic Δ', deltaVal, deltaDetail, deltaLevel));
-    const bleedPct = a.bleedPct.toFixed(1);
-    const bleedLevel = a.bleedPct < 5 ? 'pass' : a.bleedPct < 15 ? 'warn' : 'fail';
-    rows.push(aRow('Significant Bleed', bleedPct + '%', a.bleedPct < 5 ? 'No significant bleed detected' : 'Headphone bleed clearly above room tone', bleedLevel, a.bleedClips));
-  }
+    rows.push(aRow('Acoustic Δ', qaChip(deltaScore), deltaDetail, deltaLevel, [], true));
 
-  // Hum
-  const humLevel = a.hum.detected ? 'fail' : 'pass';
-  rows.push(aRow('Hum / Buzz', a.hum.detected ? 'DETECTED' : 'Clean',
-    a.hum.detected ? `${a.hum.freq}Hz electrical interference` : 'No 50/60Hz detected', humLevel, a.hum.clips));
+    // ── HPF — moved here, below Acoustic Delta ────────────
+    const hpfLDet = a.hpf && a.hpf.left  && a.hpf.left.detected;
+    const hpfRDet = a.hpf && a.hpf.right && a.hpf.right.detected;
+    if (hpfLDet || hpfRDet) {
+      const who = (hpfLDet && hpfRDet) ? 'Both tracks' : hpfLDet ? 'Left track' : 'Right track';
+      const clips = [...(a.hpf.clipsL||[]), ...(a.hpf.clipsR||[])];
+      rows.push(aRow('HPF', 'DETECTED', `${who} — high-pass filter applied. Re-deliver without HPF.`, 'fail', clips));
+    } else {
+      rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
+    }
 
-  // HPF
-  const hpfLDet = a.hpf && a.hpf.left  && a.hpf.left.detected;
-  const hpfRDet = a.hpf && a.hpf.right && a.hpf.right.detected;
-  if (hpfLDet || hpfRDet) {
-    const who = (hpfLDet && hpfRDet) ? 'Both tracks' : hpfLDet ? 'Left track' : 'Right track';
-    const clips = [...(a.hpf.clipsL||[]), ...(a.hpf.clipsR||[])];
-    rows.push(aRow('HPF', 'DETECTED', `${who} — high-pass filter applied. Re-deliver without HPF.`, 'fail', clips));
+    // ── Headphone Bleed ───────────────────────────────────
+    bleedScore = a.bleedScore || 1;
+    const bleedLabels = ['','No Bleed','Structural','Mild HP','Moderate HP','Severe HP'];
+    const bleedDescs  = ['','No correlation detected','Low-freq only — wall/structural (100–300Hz)','Speech fundamentals in opposite channel','Clear headphone bleed across speech range','Strong full-band bleed — headphones too loud'];
+    const bleedLevel  = bleedScore <= 2 ? 'pass' : bleedScore <= 3 ? 'warn' : 'fail';
+    rows.push(aRow('Headphone Bleed', qaChip(bleedScore), `${bleedLabels[bleedScore]} — ${bleedDescs[bleedScore]}`, bleedLevel, a.bleedClips, true));
   } else {
-    rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
+    // Single character — still show HPF
+    const hpfLDet = a.hpf && a.hpf.left && a.hpf.left.detected;
+    if (hpfLDet) {
+      rows.push(aRow('HPF', 'DETECTED', 'Left track — high-pass filter applied. Re-deliver without HPF.', 'fail', a.hpf.clipsL || []));
+    } else {
+      rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
+    }
   }
 
-  // Pops
+  // ── Hum score 1–5 ─────────────────────────────────────
+  // Strength from detectHum drives the score
+  const humStrength = a.hum.strength || 0;
+  const humScore = !a.hum.detected ? 1 : humStrength < 50 ? 2 : humStrength < 150 ? 3 : humStrength < 300 ? 4 : 5;
+  const humLevel = humScore === 1 ? 'pass' : humScore <= 2 ? 'warn' : 'fail';
+  const humDesc  = humScore === 1 ? 'No 50/60Hz detected' : `${a.hum.freq}Hz electrical interference`;
+  rows.push(aRow('Hum / Buzz', qaChip(humScore), humDesc, humLevel, a.hum.clips, true));
+
+  // ── Mic Pops score 1–5 ────────────────────────────────
+  // Score based on average events per take (not total count)
   const popTotal = a.pops.left + a.pops.right;
-  const popLevel = popTotal === 0 ? 'pass' : popTotal <= 3 ? 'warn' : 'fail';
-  const popDetail = popTotal === 0 ? '0 events' :
+  const popAvg   = a.takesAnalyzed > 0 ? popTotal / a.takesAnalyzed : popTotal;
+  const popScore = popAvg === 0 ? 1 : popAvg < 0.5 ? 2 : popAvg < 1.5 ? 3 : popAvg < 3 ? 4 : 5;
+  const popLevel = popScore === 1 ? 'pass' : popScore <= 3 ? 'warn' : 'fail';
+  const popDesc  = popTotal === 0 ? '0 events' :
     [a.pops.left ? `Left: ${a.pops.left}` : '', a.pops.right ? `Right: ${a.pops.right}` : ''].filter(Boolean).join(' · ') +
     ' <span style="color:var(--text3);font-style:italic">· verify by ear</span>';
-  rows.push(aRow('Mic Pops', popTotal === 0 ? 'Clean' : `~${popTotal} possible`, popDetail, popLevel,
-    [...(a.pops.clipsL||[]), ...(a.pops.clipsR||[])]));
+  rows.push(aRow('Mic Pops', qaChip(popScore), popDesc, popLevel,
+    [...(a.pops.clipsL||[]), ...(a.pops.clipsR||[])], true));
 
-  // Clicks
+  // ── Mouth Clicks score 1–5 ────────────────────────────
   const clickTotal = a.clicks.left + a.clicks.right;
-  const clickLevel = clickTotal === 0 ? 'pass' : clickTotal <= 5 ? 'warn' : 'fail';
-  const clickDetail = clickTotal === 0 ? '0 events' :
+  const clickAvg   = a.takesAnalyzed > 0 ? clickTotal / a.takesAnalyzed : clickTotal;
+  const clickScore = clickAvg === 0 ? 1 : clickAvg < 1 ? 2 : clickAvg < 3 ? 3 : clickAvg < 6 ? 4 : 5;
+  const clickLevel = clickScore === 1 ? 'pass' : clickScore <= 3 ? 'warn' : 'fail';
+  const clickDesc  = clickTotal === 0 ? '0 events' :
     [a.clicks.left ? `Left: ${a.clicks.left}` : '', a.clicks.right ? `Right: ${a.clicks.right}` : ''].filter(Boolean).join(' · ');
-  rows.push(aRow('Mouth Clicks', clickTotal === 0 ? 'Clean' : clickTotal + ' events', clickDetail, clickLevel,
-    [...(a.clicks.clipsL||[]), ...(a.clicks.clipsR||[])]));
+  rows.push(aRow('Mouth Clicks', qaChip(clickScore), clickDesc, clickLevel,
+    [...(a.clicks.clipsL||[]), ...(a.clicks.clipsR||[])], true));
 
-  // Stand impacts
+  // ── Physical Noises score 1–5 (was Stand Impact) ──────
   const impTotal = a.impacts.left + a.impacts.right;
-  const impLevel = impTotal === 0 ? 'pass' : impTotal <= 2 ? 'warn' : 'fail';
-  const impDetail = impTotal === 0 ? '0 events' :
+  const impAvg   = a.takesAnalyzed > 0 ? impTotal / a.takesAnalyzed : impTotal;
+  const impScore = impAvg === 0 ? 1 : impAvg < 0.5 ? 2 : impAvg < 1 ? 3 : impAvg < 2 ? 4 : 5;
+  const impLevel = impScore === 1 ? 'pass' : impScore <= 2 ? 'warn' : 'fail';
+  const impDesc  = impTotal === 0 ? '0 events' :
     [a.impacts.left ? `Left: ${a.impacts.left}` : '', a.impacts.right ? `Right: ${a.impacts.right}` : ''].filter(Boolean).join(' · ');
-  rows.push(aRow('Stand Impact', impTotal === 0 ? 'Clean' : impTotal + ' events', impDetail, impLevel,
-    [...(a.impacts.clipsL||[]), ...(a.impacts.clipsR||[])]));
+  rows.push(aRow('Physical Noises', qaChip(impScore), impDesc, impLevel,
+    [...(a.impacts.clipsL||[]), ...(a.impacts.clipsR||[])], true));
 
   // ── QA Recommendations ────────────────────────────────
   const qaRecs = [];
-  function qaRec(level, title, action) {
-    const col = level === 'fail' ? 'var(--red)' : 'var(--amber)';
-    const bg  = level === 'fail' ? 'var(--red-dim)' : 'var(--amber-dim)';
-    const bdr = level === 'fail' ? 'var(--red)' : 'var(--amber)';
-    const icon = level === 'fail' ? '🔴' : '🟠';
-    qaRecs.push(`<div style="display:flex;align-items:baseline;gap:10px;padding:7px 12px;background:${bg};border:1px solid ${bdr};border-radius:6px;margin-bottom:5px">
-      <span style="font-size:12px;flex-shrink:0">${icon}</span>
+  function qaRec(level, title, action, score) {
+    const isMinor = score && score <= 3 && score >= 2;
+    const col = isMinor ? '#2C2C2A' : score ? scoreColor(score) : (level === 'fail' ? '#D50000' : '#FF9100');
+    const bg  = isMinor ? '#FFFDE0' : level === 'fail' ? 'var(--red-dim)' : 'var(--amber-dim)';
+    const border = isMinor ? '#B8970A' : col;
+    const icon = score ? qaChip(score) : (level === 'fail' ? '🔴' : '🟠');
+    const titleCol = isMinor ? '#2C2C2A' : col;
+    const detailCol = isMinor ? '#4A4038' : 'var(--text2)';
+    qaRecs.push(`<div style="display:flex;align-items:baseline;gap:10px;padding:7px 12px;background:${bg};border:1px solid ${border};border-radius:6px;margin-bottom:5px">
+      <span style="flex-shrink:0;line-height:1">${icon}</span>
       <div style="font-family:'Share Tech Mono',monospace;font-size:11px">
-        <span style="color:${col};font-weight:700;text-transform:uppercase;letter-spacing:.6px">${title}</span>
-        <span style="color:var(--text3);margin:0 6px">·</span>
-        <span style="color:var(--text2)">${action}</span>
+        <span style="color:${titleCol};font-weight:700;text-transform:uppercase;letter-spacing:.6px">${title}</span>
+        <span style="color:${isMinor ? '#5A4F3A' : 'var(--text3)'};margin:0 6px">·</span>
+        <span style="color:${detailCol}">${action}</span>
       </div>
     </div>`);
   }
 
-  if (delta !== null && delta > 3) {
+  if (delta !== null && delta >= 1) {
+    const deltaScore = delta < 3 ? 2 : 4; // Minor 1-3 dB, Serious >3 dB
     const quieter = louder === 'Left' ? 'Right' : 'Left';
-    qaRec('warn', 'Acoustic Δ', `${louder} is ${delta.toFixed(1)} dB louder. Engineer: reduce ${louder} gain by ${delta.toFixed(1)} dB (or raise ${quieter} by ${delta.toFixed(1)} dB).`);
+    const msg = delta < 3
+      ? `${louder} is ${delta.toFixed(1)} dB louder. Monitor — correct if noticeable.`
+      : `${louder} is ${delta.toFixed(1)} dB louder. Engineer: reduce ${louder} gain by ${delta.toFixed(1)} dB (or raise ${quieter} by ${delta.toFixed(1)} dB).`;
+    qaRec(delta < 3 ? 'warn' : 'fail', 'Acoustic Δ', msg, deltaScore);
   }
-  if (!isSingleCh && a.bleedPct >= 5) qaRec('warn', 'Significant Bleed', `${a.bleedPct.toFixed(1)}% headphone bleed detected — clearly above room tone level. Lower headphone monitoring levels.`);
-  // Hum — equipment issue, may need re-record
-  if (a.hum.detected) qaRec('fail', 'Hum / Buzz', `${a.hum.freq}Hz detected. Check power supply, cables and grounding. Re-record if not resolved.`);
-  if (hpfLDet || hpfRDet) {
-    const who = (hpfLDet && hpfRDet) ? 'Both tracks' : hpfLDet ? 'Left track' : 'Right track';
-    qaRec('fail', 'HPF', `${who} — turn off high-pass filter on mic pre-amp. Re-deliver RAW files.`);
+  if (!isSingleCh && bleedScore >= 2) {
+    const msg = bleedScore === 2 ? 'Low-freq structural bleed — wall/room transmission. Verify.' :
+                bleedScore === 3 ? 'Mild headphone bleed — speech fundamentals in opposite channel. Cover with Roomtone.' :
+                bleedScore === 4 ? 'Moderate headphone bleed — clear across speech range. Flag.' :
+                'Severe headphone bleed — strong full-band. Flag.';
+    qaRec(bleedScore >= 4 ? 'fail' : 'warn', 'Headphone Bleed', msg, bleedScore);
   }
-  // Pops — room tone if in silence gap, RX if in speech
-  if (popTotal > 0) qaRec(popTotal > 3 ? 'fail' : 'warn', 'Mic Pops', popTotal > 3
-    ? `~${popTotal} possible pops — verify by ear. Fix with room tone (silence gaps) or RX (speech). Request re-record if excessive.`
-    : `~${popTotal} possible pop${popTotal>1?'s':''} — verify by ear. Fix with room tone (silence gaps) or RX (speech).`);
-  // Clicks — room tone if in silence gap, RX if in speech
-  if (clickTotal > 0) qaRec('warn', 'Mouth Clicks', `${clickTotal} event${clickTotal>1?'s':''} detected. Fix with room tone (silence gaps) or RX (speech). Ask talent to hydrate.`);
-  // Stand impacts — room tone if in silence gap, RX if in speech
-  if (impTotal > 0) qaRec(impTotal > 2 ? 'fail' : 'warn', 'Stand Impact', impTotal > 2
-    ? `${impTotal} impacts detected. Fix with room tone (silence gaps) or RX (speech). Check mic stand isolation.`
-    : `${impTotal} impact${impTotal>1?'s':''} detected. Fix with room tone (silence gaps) or RX (speech).`);
+  if (humScore >= 2) qaRec('fail', 'Hum / Buzz', `${a.hum.freq}Hz detected. Check power supply, cables and grounding. Re-record if not resolved.`, humScore);
+  const hpfLDet2 = a.hpf && a.hpf.left  && a.hpf.left.detected;
+  const hpfRDet2 = a.hpf && a.hpf.right && a.hpf.right.detected;
+  if (hpfLDet2 || hpfRDet2) {
+    const who2 = (hpfLDet2 && hpfRDet2) ? 'Both tracks' : hpfLDet2 ? 'Left track' : 'Right track';
+    qaRec('fail', 'HPF', `${who2} — remove high-pass filter on source signal chain. Flag.`, 5);
+  }
+  if (popScore >= 2) qaRec(popScore >= 4 ? 'fail' : 'warn', 'Mic Pops', popScore >= 4
+    ? `~${popTotal} possible pops — verify by ear. Fix with room tone or RX. Request re-record if excessive.`
+    : `~${popTotal} possible pop${popTotal>1?'s':''} — verify by ear. Fix with room tone or RX.`, popScore);
+  if (clickScore >= 2) qaRec('warn', 'Mouth Clicks', `${clickTotal} event${clickTotal>1?'s':''} detected. Fix with room tone or RX.`, clickScore);
+  if (impScore >= 2) qaRec(impScore >= 4 ? 'fail' : 'warn', 'Physical Noises', `${impTotal} event${impTotal>1?'s':''} detected. Check mic stand isolation. Fix with room tone or RX.`, impScore);
 
   const recsHTML = qaRecs.length
     ? `<div style="padding:10px 20px 12px;border-top:1px solid var(--border2);background:var(--bg3)">
@@ -2862,7 +3100,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       </div>` : '';
 
   const footerNote = `<div style="padding:6px 20px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);border-top:1px solid var(--border)">
-    Artifact scan · first ${a.takesAnalyzed} paired take${a.takesAnalyzed>1?'s':''} · 10s per take
+    Artifact scan · all ${a.takesAnalyzed} take${a.takesAnalyzed>1?'s':''} · 10s per take
   </div>`;
 
   return rows.join('') + recsHTML + footerNote;
@@ -2892,7 +3130,7 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
   const rawNoisy = rawArr.filter(a => a.noiseFloorDb > -50);
   const rawNoRT  = rawArr.filter(a => a.noiseFloorDb <= -80);
   const rawWarnNoisy = rawArr.filter(a => a.noiseFloorDb > -57 && a.noiseFloorDb <= -50);
-  const rawWarnQuiet = rawArr.filter(a => a.noiseFloorDb > -80 && a.noiseFloorDb <= -68);
+  const rawWarnQuiet = rawArr.filter(a => a.noiseFloorDb >= -80 && a.noiseFloorDb <= -70);
 
   // Hard fails — always shown
   if (rawNoRT.length === 2)
@@ -3119,9 +3357,10 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   // Overall badge
   const allA = [rawStereoA, rawLA, rawRA, eA, mA].filter(Boolean);
   const anyFail = allA.some(a => a.noiseFloorDb > -50 || a.noiseFloorDb <= -80);
-  const allPass = allA.every(a => a.noiseFloorDb <= -57 && a.noiseFloorDb >= -68);
+  const allPass = allA.every(a => a.noiseFloorDb < -57 && a.noiseFloorDb > -70);
   const overall = anyFail ? 'FAIL' : allPass ? 'PASS' : 'WARN';
   const cls = overall==='PASS'?'pass':overall==='FAIL'?'fail':'warn';
+  document.getElementById('resultsBar').style.display = 'flex';
   document.getElementById('overallBadge').innerHTML =
     `<div class="overall-badge ${cls}"><div class="badge-dot"></div>${overall}</div>`;
 
@@ -3229,5 +3468,10 @@ function exportQCReport() {
   downloadHTML(buildReportShell('QC Edit/Mix Report', body, info, theme, styles), filename);
 }
 </script>
+
+  <footer style="text-align:center;padding:32px 0 20px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);letter-spacing:.8px;border-top:1px solid var(--border2);margin-top:40px">
+    Created by Danny Beta
+  </footer>
+
 </body>
 </html>
