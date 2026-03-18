@@ -2983,8 +2983,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     const hpfRDet = a.hpf && a.hpf.right && a.hpf.right.detected;
     if (hpfLDet || hpfRDet) {
       const who = (hpfLDet && hpfRDet) ? 'Both tracks' : hpfLDet ? 'Left track' : 'Right track';
-      const clips = [...(a.hpf.clipsL||[]), ...(a.hpf.clipsR||[])];
-      rows.push(aRow('HPF', 'DETECTED', `${who} — high-pass filter applied. Re-deliver without HPF.`, 'fail', clips));
+      rows.push(aRow('HPF', 'DETECTED', `${who} — high-pass filter applied. Affects all clips. Re-deliver without HPF.`, 'fail', []));
     } else {
       rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
     }
@@ -2999,7 +2998,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     // Single character — still show HPF
     const hpfLDet = a.hpf && a.hpf.left && a.hpf.left.detected;
     if (hpfLDet) {
-      rows.push(aRow('HPF', 'DETECTED', 'Left track — high-pass filter applied. Re-deliver without HPF.', 'fail', a.hpf.clipsL || []));
+      rows.push(aRow('HPF', 'DETECTED', 'Left track — high-pass filter applied. Affects all clips. Re-deliver without HPF.', 'fail', []));
     } else {
       rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
     }
