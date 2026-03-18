@@ -1803,7 +1803,7 @@ function snrDrBarHTML(nf, rms, peak) {
   }).join('');
 
   return `<div style="padding:6px 20px 10px;border-bottom:1px solid var(--border)">
-    <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2);margin-bottom:6px">
       <span>SNR <span style="color:${snrCol};font-weight:700">${snr} dB</span></span>
       <span>Dynamic Range <span style="color:${pkCol};font-weight:700">${dr} dB</span></span>
     </div>
@@ -2571,12 +2571,18 @@ function detectPops(data, sr, nfDb) {
   // Speech threshold: 20dB below typical speech peaks — NF-independent
   const speechThresh = speechRms * Math.pow(10, -20/20);
 
-  // Calibrated thresholds:
-  // LP/Full > 0.95 (low-freq dominant burst)
-  // Jump >= 15 dB  (raised from 12 — excludes borderline P consonants)
-  // Sub-10Hz infrasonic check — real mic pop has air pressure wave below 10Hz
-  const LP_THRESH   = 0.95;
-  const JUMP_THRESH = 15;
+  // Plosive bursts sit BELOW speech level — they're momentary air pressure
+  // releases before the vowel onset. Use NF-relative threshold instead.
+  const nfLin = rmsArr[Math.floor(rmsArr.length * 0.08)];
+  const nfThresh = nfLin * Math.pow(10, 15/20); // NF + 15 dB
+
+  // Calibrated thresholds (relaxed to catch plosive bursts):
+  // LP/Full > 0.90  (burst is low-freq dominant)
+  // infra_gap ≤ 15 dB (real pop has sub-10Hz air pressure wave)
+  // Jump ≥ 12 dB  (vowel onset after burst)
+  const LP_THRESH   = 0.90;
+  const JUMP_THRESH = 12;
+  const INFRA_MAX   = 15;
 
   // 80Hz low-pass (existing)
   const RC80 = 1 / (2 * Math.PI * 80);
@@ -2613,15 +2619,13 @@ function detectPops(data, sr, nfDb) {
   const candidates = [];
   for (let i = 3; i < n - 3; i++) {
     const ratio = lpEnv[i] / (fullEnv[i] + 1e-12);
-    if (ratio < LP_THRESH)         continue; // not LP-dominant
-    if (fullEnv[i] < speechThresh) continue; // below speech level
+    if (ratio < LP_THRESH)        continue; // not LP-dominant
+    if (fullEnv[i] < nfThresh)    continue; // below NF+15dB — not a real event
 
     // Infrasonic check: real mic pop has sub-10Hz air pressure wave
-    // Sub-10Hz must be within 8dB of full signal
-    // P consonants have energy at 80-300Hz, so sub-10Hz is 15+ dB below full
     const infraDb = 20 * Math.log10(Math.max(lp10Env[i], 1e-12));
     const fullDb  = 20 * Math.log10(Math.max(fullEnv[i], 1e-12));
-    if (fullDb - infraDb > 8) continue; // not enough infrasonic content — regular plosive
+    if (fullDb - infraDb > INFRA_MAX) continue; // not enough infrasonic content
 
     // Amplitude jump check: >= 15 dB in next 15ms
     const burstDb  = fullDb;
