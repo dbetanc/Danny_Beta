@@ -9,7 +9,7 @@
   for SOBA audio production workflows
   ============================================
 -->
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,16 +21,16 @@
 <style>
 /* ── DARK THEME (default) ─────────────────────────── */
 [data-theme="dark"] {
-  --bg:        #090c10;
-  --bg2:       #0f1318;
-  --bg3:       #171e28;
+  --bg:        #100c08;
+  --bg2:       #181410;
+  --bg3:       #221c14;
   --border:    rgba(255,255,255,0.08);
   --border2:   rgba(255,255,255,0.18);
-  --text:      #f4f8ff;
-  --text2:     #b8c4d8;
-  --text3:     #7a8fa8;
+  --text:      #fff8f4;
+  --text2:     #d8c8b8;
+  --text3:     #a8947a;
   --shadow:    0 2px 24px rgba(0,0,0,0.55);
-  --grid-line: rgba(255,255,255,0.024);
+  --grid-line: rgba(255,200,120,0.024);
   --card-hover:rgba(255,255,255,0.028);
   --green:     #1dff8a;
   --green-dim: rgba(29,255,138,0.11);
@@ -44,16 +44,16 @@
 
 /* ── LIGHT THEME ──────────────────────────────────── */
 [data-theme="light"] {
-  --bg:        #edf0f5;
+  --bg:        #f5f0eb;
   --bg2:       #ffffff;
-  --bg3:       #e2e7ef;
+  --bg3:       #efe7df;
   --border:    rgba(0,0,0,0.08);
   --border2:   rgba(0,0,0,0.16);
-  --text:      #080d14;
-  --text2:     #2e3a50;
-  --text3:     #6a7b96;
+  --text:      #14100d;
+  --text2:     #50402e;
+  --text3:     #96806a;
   --shadow:    0 2px 16px rgba(0,0,0,0.09);
-  --grid-line: rgba(0,0,0,0.045);
+  --grid-line: rgba(120,80,20,0.045);
   --card-hover:rgba(0,0,0,0.018);
   --green:     #008c4a;
   --green-dim: rgba(0,140,74,0.1);
@@ -776,7 +776,7 @@ input[type=file] {
       <div class="version-badge">v2.1</div>
       <button class="theme-toggle" id="themeToggle" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
-        <span id="themeLabel">DARK</span>
+        <span id="themeLabel">LIGHT</span>
       </button>
     </div>
   </header>
@@ -878,6 +878,10 @@ input[type=file] {
   // Theme Toggle
   const themeToggle = document.getElementById('themeToggle');
   const themeLabel = document.getElementById('themeLabel');
+  
+  // Detect system preference on load
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
   
   function updateThemeUI() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -2071,6 +2075,46 @@ if (!['line','lout','scene'].includes(m.token)) {
         return html;
       }
 
+      function highlightFolderDiff(found, expected) {
+        // Find differences between found and expected, highlight them
+        if (found === expected) return esc(found);
+        
+        let result = '';
+        let i = 0;
+        
+        // Find common prefix
+        while (i < found.length && i < expected.length && found[i] === expected[i]) {
+          i++;
+        }
+        const commonPrefixEnd = i;
+        
+        // Find common suffix (from the end)
+        let foundEnd = found.length;
+        let expectedEnd = expected.length;
+        while (foundEnd > commonPrefixEnd && expectedEnd > commonPrefixEnd && 
+               found[foundEnd - 1] === expected[expectedEnd - 1]) {
+          foundEnd--;
+          expectedEnd--;
+        }
+        
+        // Build highlighted string
+        if (commonPrefixEnd > 0) {
+          result += esc(found.substring(0, commonPrefixEnd));
+        }
+        
+        // The different middle part
+        if (foundEnd > commonPrefixEnd) {
+          result += `<span class="illegal">${esc(found.substring(commonPrefixEnd, foundEnd))}</span>`;
+        }
+        
+        // Common suffix
+        if (foundEnd < found.length) {
+          result += esc(found.substring(foundEnd));
+        }
+        
+        return result;
+      }
+
       function renderFolderNameSection(sessionName, folderCheck){
         let html = `<div class="section"><h2>Session Folder</h2><div class="section-body">`;
 
@@ -2081,8 +2125,9 @@ if (!['line','lout','scene'].includes(m.token)) {
           html += `<div class="error-list">`;
           folderCheck.errors.forEach((err, idx) => {
             const copyId = `copy-folder-${idx}`;
+            const highlightedFolder = highlightFolderDiff(err.found, err.expected);
             html += `<div class="error-item">
-              <div><strong>Folder Name:</strong> ${esc(err.found)}</div>
+              <div><strong>Folder Name:</strong> ${highlightedFolder}</div>
               <div class="should-be">Should Be:</div>
               <div class="should-be-container">
                 <div class="should-be-box">
