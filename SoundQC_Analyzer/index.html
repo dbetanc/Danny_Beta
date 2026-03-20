@@ -337,6 +337,16 @@ h1 span { color: var(--green); }
 .card-header-qc { background: var(--bg3); position:relative; }
 .card-header-qc::after { content:''; position:absolute; inset:0; background:rgba(245,166,35,0.08); pointer-events:none; }
 
+.beta-disclaimer {
+  border-radius:6px; padding:7px 12px; max-width:480px; flex-shrink:1;
+  border:1px solid rgba(61,176,255,0.35);
+  background:#ffffff;
+}
+.beta-disclaimer .beta-title { font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;color:#C0392B;display:block;margin-bottom:2px; }
+.beta-disclaimer .beta-body { font-family:'Share Tech Mono',monospace;font-size:10px;line-height:1.6;display:block;color:var(--text); }
+[data-theme="dark"] .beta-disclaimer { background:rgba(255,255,255,0.07); }
+[data-theme="dark"] .beta-disclaimer .beta-body { color:rgba(255,255,255,0.85); }
+
 .card-type {
   font-family: 'Syne', sans-serif;
   font-size: 17px; font-weight: 800;
@@ -634,6 +644,7 @@ h1 span { color: var(--green); }
           <div style="min-width:0;flex:1">
             <div class="card-type"><span class="card-type-qa">QA</span> — Recording Quality</div>
           </div>
+          <div class="beta-disclaimer"><span class="beta-title">⚠ Beta Mode</span><span class="beta-body">Audio artifacts detection is in early calibration mode and may flag false positives that don't require action. Always verify with your ears before flagging. This tool assists your judgment, not replace it.</span></div>
         </div>
         <div class="card-body" id="singleQABody" style="padding:0"></div>
       </div>
@@ -669,6 +680,7 @@ h1 span { color: var(--green); }
           <div style="min-width:0;flex:1">
             <div class="card-type"><span class="card-type-qa">QA</span> — Recording Quality</div>
           </div>
+          <div class="beta-disclaimer"><span class="beta-title">⚠ Beta Mode</span><span class="beta-body">Audio artifacts detection is in early calibration mode and may flag false positives that don't require action. Always verify with your ears before flagging. This tool assists your judgment, not replace it.</span></div>
         </div>
         <div class="card-body" id="rawQualityBody" style="padding:0"></div>
       </div>
@@ -679,6 +691,7 @@ h1 span { color: var(--green); }
           <div style="min-width:0;flex:1">
             <div class="card-type"><span class="card-type-qa">QA</span> — Recording Quality</div>
           </div>
+          <div class="beta-disclaimer"><span class="beta-title">⚠ Beta Mode</span><span class="beta-body">Audio artifacts detection is in early calibration mode and may flag false positives that don't require action. Always verify with your ears before flagging. This tool assists your judgment, not replace it.</span></div>
         </div>
         <div class="card-body" id="rawPairBody" style="padding:0"></div>
       </div>
@@ -2568,18 +2581,16 @@ function detectPops(data, sr, nfDb) {
   const minSpeechLin = Math.pow(10, -45 / 20); // -45 dBFS minimum for real speech
   // If dynamic range < 30dB OR top 10% below -45 dBFS → not real speech (breathing, room tone)
   if (dynRange < 30 || speechRms < minSpeechLin) return { events: 0, pct: 0 };
-  // Speech threshold: 20dB below typical speech peaks — NF-independent
-  const speechThresh = speechRms * Math.pow(10, -20/20);
 
-  // Plosive bursts sit BELOW speech level — they're momentary air pressure
-  // releases before the vowel onset. Use NF-relative threshold instead.
-  const nfLin = rmsArr[Math.floor(rmsArr.length * 0.08)];
-  const nfThresh = nfLin * Math.pow(10, 15/20); // NF + 15 dB
+  // Plosive bursts sit BELOW speech level — momentary air pressure release
+  // before the vowel onset. Use 30dB below speech RMS to catch them while
+  // staying speech-relative (consistent with other detectors, not NF-relative).
+  const popThresh = speechRms * Math.pow(10, -30/20);
 
-  // Calibrated thresholds (relaxed to catch plosive bursts):
-  // LP/Full > 0.90  (burst is low-freq dominant)
-  // infra_gap ≤ 15 dB (real pop has sub-10Hz air pressure wave)
-  // Jump ≥ 12 dB  (vowel onset after burst)
+  // Calibrated thresholds:
+  // LP/Full 0.90–1.00  (ratio >1.0 = IIR artifact, not a real burst)
+  // infra_gap ≤ 15 dB  (real pop has sub-10Hz air pressure wave)
+  // Jump ≥ 12 dB       (vowel onset after burst)
   const LP_THRESH   = 0.90;
   const JUMP_THRESH = 12;
   const INFRA_MAX   = 15;
@@ -2620,7 +2631,13 @@ function detectPops(data, sr, nfDb) {
   for (let i = 3; i < n - 3; i++) {
     const ratio = lpEnv[i] / (fullEnv[i] + 1e-12);
     if (ratio < LP_THRESH)        continue; // not LP-dominant
-    if (fullEnv[i] < nfThresh)    continue; // below NF+15dB — not a real event
+    if (fullEnv[i] < popThresh)   continue; // below speech-relative floor
+
+    // Isolation check: a real pop is a sudden isolated burst — if the previous
+    // window is also LP-dominant (≥0.85) AND above threshold, this is a
+    // sustained consonant onset ramp, not a discrete pop.
+    const prevRatio = lpEnv[i - 1] / (fullEnv[i - 1] + 1e-12);
+    if (fullEnv[i - 1] >= popThresh && prevRatio >= 0.85) continue;
 
     // Infrasonic check: real mic pop has sub-10Hz air pressure wave
     const infraDb = 20 * Math.log10(Math.max(lp10Env[i], 1e-12));
