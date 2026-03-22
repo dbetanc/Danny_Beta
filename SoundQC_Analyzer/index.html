@@ -532,7 +532,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v2.9</div>
+            <div class="version-badge">v3.0.0</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -644,7 +644,7 @@ h1 span { color: var(--green); }
           <div style="min-width:0;flex:1">
             <div class="card-type"><span class="card-type-qa">QA</span> — Recording Quality</div>
           </div>
-          <div class="beta-disclaimer"><span class="beta-title">⚠ Beta Mode</span><span class="beta-body">Audio artifacts detection is in early calibration mode and may flag false positives that don't require action. Always verify with your ears before flagging. This tool assists your judgment, not replace it.</span></div>
+          
         </div>
         <div class="card-body" id="singleQABody" style="padding:0"></div>
       </div>
@@ -2816,6 +2816,30 @@ function detectInterference(data, sr, nfDb) {
 
 // A real pop: low-freq burst (LP/Full ratio > 0.85) immediately followed
 // by a sudden full-band onset jump of ≥10 dB within 15ms
+// Keep only interference spikes whose frequency recurs consistently across multiple takes
+// Prevents random quantization noise (which shifts per-take) from being flagged as interference
+function filterConsistentSpikes(spikesByTake, threshold) {
+  const MERGE_HZ = 500;
+  const buckets = {};
+  for (let t = 0; t < spikesByTake.length; t++) {
+    for (const s of spikesByTake[t]) {
+      const key = Math.round(s.freq / MERGE_HZ) * MERGE_HZ;
+      if (!buckets[key]) buckets[key] = { freqs: [], ratios: [], takes: new Set() };
+      buckets[key].freqs.push(s.freq);
+      buckets[key].ratios.push(s.ratio);
+      buckets[key].takes.add(t);
+    }
+  }
+  return Object.values(buckets)
+    .filter(g => g.takes.size >= threshold)
+    .map(g => ({
+      freq:  Math.round(g.freqs.reduce((a,v) => a+v, 0) / g.freqs.length),
+      ratio: Math.max(...g.ratios)
+    }))
+    .sort((a, b) => b.ratio - a.ratio)
+    .slice(0, 5);
+}
+
 function detectPops(data, sr, nfDb) {
   const wsz = Math.floor(sr * 0.005); // 5ms windows
 
@@ -3084,38 +3108,26 @@ async function runSingleArtifactScan(files) {
         return idx.map(i => scanFiles[i]);
       })();
 
-  let interfHits = 0, interfSpikesAll = [];
+  let interfHits = 0, interfSpikesByTakeSingle = [];
   let humHits = 0, humFreqVotesSingle = [];
   const bufCacheSingle = new Map();
   for (const f of interfSample) {
     const buf = await decodeFile(f);
     if (buf.numberOfChannels > 1) continue;
     bufCacheSingle.set(f.name, buf);
-    const sr      = buf.sampleRate;
+    const sr       = buf.sampleRate;
     const dataFull = buf.getChannelData(0);
     const data10s  = sliceSamples(buf, 0, SECS);
-    const nfDb    = analyzeChannel(data10s, sr).noiseFloorDb;
+    const nfDb     = analyzeChannel(data10s, sr).noiseFloorDb;
     const iv = detectInterference(dataFull, sr, nfDb);
-    if (iv.detected) { interfHits++; interfSpikesAll.push(...iv.spikes); }
+    if (iv.detected) { interfHits++; interfSpikesByTakeSingle.push(iv.spikes); }
     const hv = detectHum(dataFull, sr, nfDb);
     if (hv.detected) { humHits++; humFreqVotesSingle.push(hv.freq); }
   }
   const interfThreshSingle = Math.ceil(interfSample.length / 2);
   if (interfHits >= interfThreshSingle) {
-    interfDetected = true; interfLeft = true;
-    const buckets = {};
-    for (const s of interfSpikesAll) {
-      const key = Math.round(s.freq / 500) * 500;
-      if (!buckets[key]) buckets[key] = [];
-      buckets[key].push(s);
-    }
-    interfSpikes = Object.values(buckets)
-      .map(g => ({
-        freq: Math.round(g.reduce((a,s) => a + s.freq, 0) / g.length),
-        ratio: Math.max(...g.map(s => s.ratio))
-      }))
-      .sort((a, b) => b.ratio - a.ratio)
-      .slice(0, 5);
+    interfSpikes = filterConsistentSpikes(interfSpikesByTakeSingle, interfThreshSingle);
+    if (interfSpikes.length) { interfDetected = true; interfLeft = true; }
   }
   if (humHits >= Math.ceil(interfSample.length / 2)) {
     humDetected = true;
@@ -3204,7 +3216,8 @@ async function runArtifactScan(leftFiles, rightFiles) {
         return idx.map(i => scanTakes[i]);
       })();
 
-  let interfLHits = 0, interfRHits = 0, interfLSpikesAll = [], interfRSpikesAll = [];
+  let interfLHits = 0, interfRHits = 0;
+  let interfLSpikesByTake = [], interfRSpikesByTake = [];
   let humLHits = 0, humRHits = 0, humFreqVotes = [];
   const bufCache = new Map(); // cache decoded buffers keyed by filename
   for (const pair of interfSample) {
@@ -3220,8 +3233,8 @@ async function runArtifactScan(leftFiles, rightFiles) {
     const rNF      = analyzeChannel(rData10s, sr).noiseFloorDb;
     const iL = detectInterference(lFull, sr, lNF);
     const iR = detectInterference(rFull, sr, rNF);
-    if (iL.detected) { interfLHits++; interfLSpikesAll.push(...iL.spikes); }
-    if (iR.detected) { interfRHits++; interfRSpikesAll.push(...iR.spikes); }
+    if (iL.detected) { interfLHits++; interfLSpikesByTake.push(iL.spikes); }
+    if (iR.detected) { interfRHits++; interfRSpikesByTake.push(iR.spikes); }
     const hL = detectHum(lFull, sr, lNF);
     const hR = detectHum(rFull, sr, rNF);
     if (hL.detected) { humLHits++; humFreqVotes.push(hL.freq); }
@@ -3231,23 +3244,12 @@ async function runArtifactScan(leftFiles, rightFiles) {
   const humThreshold    = Math.ceil(interfSample.length / 2);
   interfLeft  = interfLHits >= interfThreshold;
   interfRight = interfRHits >= interfThreshold;
+
   if (interfLeft || interfRight) {
-    interfDetected = true;
-    // Collect all spikes from all sampled takes, merge within 500Hz, keep strongest per cluster
-    const allSpikes = [...interfLSpikesAll, ...interfRSpikesAll];
-    const buckets = {};
-    for (const s of allSpikes) {
-      const key = Math.round(s.freq / 500) * 500;
-      if (!buckets[key]) buckets[key] = [];
-      buckets[key].push(s);
-    }
-    interfSpikes = Object.values(buckets)
-      .map(g => ({
-        freq: Math.round(g.reduce((a,s) => a + s.freq, 0) / g.length),
-        ratio: Math.max(...g.map(s => s.ratio))
-      }))
-      .sort((a, b) => b.ratio - a.ratio)
-      .slice(0, 5);
+    const spikesByTake = interfLeft ? interfLSpikesByTake : interfRSpikesByTake;
+    interfSpikes = filterConsistentSpikes(spikesByTake, interfThreshold);
+    if (interfSpikes.length) interfDetected = true;
+    else { interfLeft = false; interfRight = false; } // random noise — not real interference
   }
   if (humLHits >= humThreshold || humRHits >= humThreshold) {
     humDetected = true;
