@@ -532,7 +532,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v2.7</div>
+            <div class="version-badge">v2.9</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -785,9 +785,9 @@ h1 span { color: var(--green); }
         <div class="legend-nf">
           <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>&gt; −50 dBFS &nbsp;<span style="color:var(--text3)">too noisy</span></div>
           <div class="legend-nf-item"><span class="nf-chip nf-orange">WARN</span>−50 to −57 dBFS &nbsp;<span style="color:var(--text3)">trending noisy</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-pass">PASS</span>−57 to −70 dBFS &nbsp;<span style="color:var(--text3)">sweet spot</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-warn">WARN</span>−70 to −80 dBFS &nbsp;<span style="color:var(--text3)">trending quiet</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-purple">FAIL</span>&lt; −80 dBFS &nbsp;<span style="color:var(--text3)">no room tone</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">PASS</span>&lt; −57 dBFS &nbsp;<span style="color:var(--text3)">acceptable</span></div>
+          <div class="legend-nf-item" style="margin-top:6px"><span class="nf-chip nf-fail">FAIL</span>HPF detected &nbsp;<span style="color:var(--text3)">filter applied</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>Digital Zero RT &nbsp;<span style="color:var(--text3)">room tone removed</span></div>
         </div>
       </div>
 
@@ -1448,18 +1448,16 @@ async function runAnalysis() {
 
 // ── Render ───────────────────────────────────────────────────
 function nfBadgeHTML(db) {
-  if (db > -50)              return '<div class="nf-badge nf-fail">FAIL</div>';
-  if (db >= -57 && db <= -50) return '<div class="nf-badge nf-orange">WARN</div>';
-  if (db > -70 && db < -57)  return '<div class="nf-badge nf-pass">PASS</div>';
-  if (db >= -80 && db <= -70) return '<div class="nf-badge nf-warn">WARN</div>';
-  return                            '<div class="nf-badge nf-purple">NO RT</div>';
+  if (db >= -50)  return '<div class="nf-badge nf-fail">FAIL — NOISY</div>';
+  if (db > -57)   return '<div class="nf-badge nf-orange">WARN</div>';
+  if (db > -90)   return '<div class="nf-badge nf-pass">PASS</div>';
+  return                 '<div class="nf-badge nf-purple">FAIL — NO RT</div>';
 }
 function nfColorCls(db) {
-  if (db > -50)                   return 'hl-red';
-  if (db >= -57 && db <= -50)     return 'hl-amber';
-  if (db > -70 && db < -57)       return 'hl-green';
-  if (db >= -80 && db <= -70)     return 'hl-amber';
-  return 'hl-red';
+  if (db >= -50)  return 'hl-red';
+  if (db > -57)   return 'hl-amber';
+  if (db > -90)   return 'hl-green';
+  return 'hl-purple';
 }
 function deltaRating(d) {
   if (d === null) return { label:'N/A — Mono', cls:'' };
@@ -1483,11 +1481,10 @@ function nfBarHTML(nf, rms, peak) {
 
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 
-  const nfCol  = nf > -50        ? (isDark ? '#ff4060' : '#d4001a')
-               : nf <= -50 && nf >= -57 ? (isDark ? '#ff7800' : '#cc5500')
-               : nf > -70 && nf < -57  ? (isDark ? '#00ff88' : '#009944')
-               : nf <= -70 && nf >= -80 ? (isDark ? '#ffaa00' : '#c06000')
-                            : (isDark ? '#a050ff' : '#6600cc');
+  const nfCol  = nf >= -50  ? (isDark ? '#ff4060' : '#d4001a')
+               : nf > -57  ? (isDark ? '#ff7800' : '#cc5500')
+               : nf > -90  ? (isDark ? '#00ff88' : '#009944')
+               :              (isDark ? '#a050ff' : '#6600cc');
   const rmsCol = isDark ? '#00ff88' : '#00aa55';
   const pkCol  = isDark ? '#ff2040' : '#cc0020';
   const valCol = isDark ? '#ffffff' : '#0f1a2a';
@@ -1497,21 +1494,20 @@ function nfBarHTML(nf, rms, peak) {
   const tickMinor = isDark ? '#5a7090' : '#8090a8';
   const tickMajor = isDark ? '#a8c0e0' : '#3a4a60';
   const labelCol  = isDark ? '#e8f2ff' : '#1a2a40';
-  // Threshold guides: -57 (orange, noisy WARN boundary) and -70 (amber, quiet WARN boundary)
+  const th90Col   = isDark ? '#a050ff' : '#6600cc';
   const th57Col   = isDark ? '#ff7800' : '#cc5500';
-  const th70Col   = isDark ? '#ffaa00' : '#c06000';
+  const th50Col   = isDark ? '#ff4060' : '#d4001a';
 
   // Use system monospace — Safari doesn't load Google Fonts in SVG attrs
   const FONT = 'Courier New, Courier, monospace';
 
   const nfX  = px(nf),  rmsX = px(rms), pkX = px(peak);
-  const th57 = px(-57), th70 = px(-70);
+  const th90 = px(-90), th57 = px(-57), th50 = px(-50);
   const TY = 44, TH = 13;
 
-  // Labels: sparse on left (-70,-60,-50,-40), every 6dB from -36, then -3, 0
   const ticks = [];
   for (let d = -78; d <= 0; d += 3) ticks.push(d);
-  const majorSet = new Set([-70, -60, -50, -40, -36, -30, -24, -18, -12, -6, -3, 0]);
+  const majorSet = new Set([-90, -70, -60, -50, -40, -36, -30, -24, -18, -12, -6, -3, 0]);
 
   const ticksSVG = ticks.map(d => {
     const x   = px(d).toFixed(1);
@@ -1554,15 +1550,20 @@ function nfBarHTML(nf, rms, peak) {
 
       <rect x="0" y="${TY}" width="${nfX.toFixed(1)}" height="${TH}" rx="3" fill="${nfCol}" opacity="0.55"/>
 
+      <line x1="${th90.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th90.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
+            stroke="${th90Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="${th90.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
+            font-family="${FONT}" font-size="12" font-weight="bold" fill="${th90Col}">-90</text>
+
       <line x1="${th57.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th57.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
             stroke="${th57Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
       <text x="${th57.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
             font-family="${FONT}" font-size="12" font-weight="bold" fill="${th57Col}">-57</text>
 
-      <line x1="${th70.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th70.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
-            stroke="${th70Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
-      <text x="${th70.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
-            font-family="${FONT}" font-size="12" font-weight="bold" fill="${th70Col}">-70</text>
+      <line x1="${th50.toFixed(1)}" y1="${(TY-5).toFixed(1)}" x2="${th50.toFixed(1)}" y2="${(TY+TH+5).toFixed(1)}"
+            stroke="${th50Col}" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="${th50.toFixed(1)}" y="${(TY+TH+18).toFixed(1)}" text-anchor="middle"
+            font-family="${FONT}" font-size="12" font-weight="bold" fill="${th50Col}">-50</text>
 
       <line x1="${pkX.toFixed(1)}" y1="${(TY-4).toFixed(1)}" x2="${pkX.toFixed(1)}" y2="${(TY+TH+4).toFixed(1)}"
             stroke="${pkCol}" stroke-width="7" stroke-linecap="round"/>
@@ -1640,52 +1641,60 @@ function dbBarHTML(db, type) {
   if (type === 'nf') {
     const fillPct = nfPct(db);
 
-    // Gradient stops in bar-space (0–100%), scaled to fill width
-    // Colors: purple(NO RT) → amber(quiet) → green(sweet spot) → orange(noisy) → red(fail)
+    // 4-state boundary positions in bar-space (%)
+    // Transitions are wide for smooth visual blending — thresholds unchanged in logic
+    // Boundary -90 (purple→green): blend -102 to -78  (±12 dB, visually wide)
+    // Boundary -57 (green→orange): blend -65 to -49   (±8 dB)
+    // Boundary -50 (orange→red):   blend -56 to -44   (±6 dB)
+    const p92 = nfPct(-102), p88 = nfPct(-78);
+    const p60 = nfPct(-65),  p54 = nfPct(-49);
+    const p52 = nfPct(-56),  p48 = nfPct(-44);
+
+    // Green-only PASS zone highlight (−90 to −57) — no background colour elsewhere
+    const zoneBg = isDark ? 'rgba(0,255,136,0.18)' : 'rgba(0,180,80,0.15)';
+    const mc     = isDark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.18)';
+    const markers = `
+      <div style="position:absolute;top:0;bottom:0;left:${nfPct(-90).toFixed(1)}%;width:${(nfPct(-57)-nfPct(-90)).toFixed(1)}%;background:${zoneBg}"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${nfPct(-90).toFixed(1)}%;width:1px;background:${mc}"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${nfPct(-57).toFixed(1)}%;width:1px;background:${mc}"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${nfPct(-50).toFixed(1)}%;width:1px;background:${mc}"></div>`;
+
+    // Tick labels — boundary values colour-coded to their zone
+    const ticks = [-100, -90, -57, -50, -25, 0];
+    const ticksHTML = ticks.map(t => {
+      const left   = nfPct(t).toFixed(1);
+      const anchor = t === -100 ? 'left' : t === 0 ? 'right' : 'center';
+      const tx     = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
+      const col    = t === -90 ? (isDark ? '#c080ff' : '#7030cc')
+                   : t === -57 ? (isDark ? '#ff9100' : '#cc5500')
+                   : t === -50 ? (isDark ? '#ff4060' : '#d4001a')
+                   : lblCol;
+      const weight = (t === -90 || t === -57 || t === -50) ? 'font-weight:700;' : '';
+      return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${col};${weight}">${t}</span>`;
+    }).join('');
+
+    // Smooth sunset gradient — stops are defined in bar-space then scaled to fillPct
+    // so colours always land at the correct dB position inside the fill div.
+    // Transition zones straddle each boundary for gradual blending.
     const barStops = [
-      [nfPct(-100), '#a050ff'],
-      [nfPct(-80),  '#a050ff'],
-      [nfPct(-73),  '#c070e0'],  // purple fading to amber
-      [nfPct(-70),  '#ffaa00'],  // amber at quiet warn boundary
-      [nfPct(-63),  '#1dff8a'],  // green entering sweet spot
-      [nfPct(-57),  '#1dff8a'],  // green at noisy warn boundary
-      [nfPct(-53),  '#ff7800'],  // orange above sweet spot
-      [nfPct(-50),  '#ff4060'],  // red at fail boundary
-      [100,         '#ff1030'],
+      [0,    '#a050ff'],   // solid purple from left edge
+      [p92,  '#a050ff'],   // purple holds until blend starts
+      [p88,  '#1dff8a'],   // blend complete → full green
+      [p60,  '#1dff8a'],   // green holds until blend starts
+      [p54,  '#ff7800'],   // blend complete → full orange
+      [p52,  '#ff7800'],   // orange holds until blend starts
+      [p48,  '#ff3d57'],   // blend complete → full red
+      [100,  '#ff3d57'],   // red to right edge
     ];
 
-    // Scale gradient stops relative to fill width so colors sit at correct dB positions
     const scaledStops = barStops
-      .filter(([bp]) => bp <= fillPct + 8)
+      .filter(([bp]) => bp <= fillPct + 0.5)
       .map(([bp, col]) => {
         const scaled = fillPct > 0 ? Math.min(100, bp / fillPct * 100).toFixed(1) : '0';
         return `${col} ${scaled}%`;
       }).join(', ');
 
     const gradient = fillPct > 0 ? `linear-gradient(to right, ${scaledStops})` : '#a050ff';
-
-    // Sweet spot zone highlight
-    const zL = nfPct(-70).toFixed(1);
-    const zW = (nfPct(-57) - nfPct(-70)).toFixed(1);
-    const zoneBg = isDark ? 'rgba(0,255,136,0.18)' : 'rgba(0,180,80,0.15)';
-
-    // Zone boundary markers
-    const mc = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)';
-    const markers = `
-      <div style="position:absolute;top:0;bottom:0;left:${zL}%;width:${zW}%;background:${zoneBg}"></div>
-      <div style="position:absolute;top:0;bottom:0;left:${nfPct(-57).toFixed(1)}%;width:1px;background:${mc}"></div>
-      <div style="position:absolute;top:0;bottom:0;left:${nfPct(-70).toFixed(1)}%;width:1px;background:${mc}"></div>`;
-
-    const ticks = [-100, -90, -80, -70, -60, -50, -25, 0];
-    const ticksHTML = ticks.map(t => {
-      const left   = nfPct(t).toFixed(1);
-      const anchor = t === -100 ? 'left' : t === 0 ? 'right' : 'center';
-      const tx     = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
-      const isZone = (t === -57 || t === -70);
-      const col    = isZone ? (isDark ? 'rgba(0,255,136,0.85)' : 'rgba(0,140,60,0.85)') : lblCol;
-      const weight = isZone ? 'font-weight:700;' : '';
-      return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${col};${weight}">${t}</span>`;
-    }).join('');
 
     return `<div style="padding:2px 20px 14px;border-bottom:1px solid var(--border)">
       <div style="position:relative;height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
@@ -1698,16 +1707,97 @@ function dbBarHTML(db, type) {
     </div>`;
   }
 
-  // RMS and Peak — linear -80 to 0
+  // RMS — same sunset gradient as Peak: purple(-80→-70) green(-70→-20) orange(-20→-1) red(0)
   const MIN = -80, RANGE = 80;
   const pct     = v => Math.max(0, Math.min(100, (v - MIN) / RANGE * 100));
   const fillPct = pct(db);
-  const fillCol = type === 'rms'
-    ? (isDark ? '#00ff88' : '#009944')
-    : (db > -3 ? 'var(--red)' : isDark ? '#ff2040' : '#cc0020');
 
-  const ticks = [-80, -60, -40, -20, 0];
-  const ticksHTML = ticks.map(t => {
+  if (type === 'rms') {
+    const rms70 = pct(-70), rms20 = pct(-20), rms1 = pct(-1);
+    const rmsZoneBg = isDark ? 'rgba(0,255,136,0.18)' : 'rgba(0,180,80,0.15)';
+    const rmsMc     = isDark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.18)';
+    const rmsMarkers = `
+      <div style="position:absolute;top:0;bottom:0;left:${rms70.toFixed(1)}%;width:${(rms20-rms70).toFixed(1)}%;background:${rmsZoneBg}"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${rms70.toFixed(1)}%;width:1px;background:${rmsMc}"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${rms20.toFixed(1)}%;width:1px;background:${rmsMc}"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${rms1.toFixed(1)}%;width:1px;background:${rmsMc}"></div>`;
+
+    const rmsBarStops = [
+      [0,         '#a050ff'],
+      [pct(-80),  '#a050ff'],
+      [pct(-60),  '#1dff8a'],
+      [pct(-28),  '#1dff8a'],
+      [pct(-12),  '#ff7800'],
+      [pct(-3),   '#ff7800'],
+      [pct(3),    '#ff3d57'],
+      [100,       '#ff3d57'],
+    ];
+
+    const rmsScaled = rmsBarStops
+      .filter(([bp]) => bp <= fillPct + 0.5)
+      .map(([bp, col]) => {
+        const scaled = fillPct > 0 ? Math.min(100, bp / fillPct * 100).toFixed(1) : '0';
+        return `${col} ${scaled}%`;
+      }).join(', ');
+
+    const rmsGradient = fillPct > 0 ? `linear-gradient(to right, ${rmsScaled})` : '#a050ff';
+
+    const rmsTicks = [-80, -60, -40, -20, 0];
+    const rmsTicksHTML = rmsTicks.map(t => {
+      const left   = pct(t).toFixed(1);
+      const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
+      const tx     = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
+      return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${lblCol}">${t}</span>`;
+    }).join('');
+
+    return `<div style="padding:2px 20px 14px;border-bottom:1px solid var(--border)">
+      <div style="position:relative;height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
+        ${rmsMarkers}
+        <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${rmsGradient};border-radius:3px"></div>
+      </div>
+      <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
+        ${rmsTicksHTML}
+      </div>
+    </div>`;
+  }
+
+  // Peak — sunset gradient: purple(-80→-70) → green(-70→-20) → orange(-20→-1) → red(0)
+  // Boundaries:  -70 (purple/green), -20 (green/orange), -1 (orange/red)
+  // Wide blend windows: ±10 dB at -70, ±8 dB at -20, ±4 dB at -1
+  const pk70 = pct(-70), pk20 = pct(-20), pk1 = pct(-1);
+
+  // Zone highlight: green band -70 to -20
+  const pkZoneBg = isDark ? 'rgba(0,255,136,0.18)' : 'rgba(0,180,80,0.15)';
+  const pkMc     = isDark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.18)';
+  const pkMarkers = `
+    <div style="position:absolute;top:0;bottom:0;left:${pk70.toFixed(1)}%;width:${(pk20-pk70).toFixed(1)}%;background:${pkZoneBg}"></div>
+    <div style="position:absolute;top:0;bottom:0;left:${pk70.toFixed(1)}%;width:1px;background:${pkMc}"></div>
+    <div style="position:absolute;top:0;bottom:0;left:${pk20.toFixed(1)}%;width:1px;background:${pkMc}"></div>
+    <div style="position:absolute;top:0;bottom:0;left:${pk1.toFixed(1)}%;width:1px;background:${pkMc}"></div>`;
+
+  const pkBarStops = [
+    [0,              '#a050ff'],   // solid purple from left edge
+    [pct(-80),       '#a050ff'],   // purple holds
+    [pct(-60),       '#1dff8a'],   // blend complete → full green  (±10 dB around -70)
+    [pct(-28),       '#1dff8a'],   // green holds until blend starts (±8 dB around -20)
+    [pct(-12),       '#ff7800'],   // blend complete → full orange
+    [pct(-3),        '#ff7800'],   // orange holds until blend starts (±4 dB around -1)
+    [pct(3),         '#ff3d57'],   // blend complete → full red (clamped to 100%)
+    [100,            '#ff3d57'],
+  ];
+
+  const pkScaled = pkBarStops
+    .filter(([bp]) => bp <= fillPct + 0.5)
+    .map(([bp, col]) => {
+      const scaled = fillPct > 0 ? Math.min(100, bp / fillPct * 100).toFixed(1) : '0';
+      return `${col} ${scaled}%`;
+    }).join(', ');
+
+  const pkGradient = fillPct > 0 ? `linear-gradient(to right, ${pkScaled})` : '#a050ff';
+
+  // Tick labels — standard spacing, no colour coding
+  const pkTicks = [-80, -60, -40, -20, 0];
+  const pkTicksHTML = pkTicks.map(t => {
     const left   = pct(t).toFixed(1);
     const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
     const tx     = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
@@ -1716,12 +1806,27 @@ function dbBarHTML(db, type) {
 
   return `<div style="padding:2px 20px 14px;border-bottom:1px solid var(--border)">
     <div style="position:relative;height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
-      <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${fillCol};border-radius:3px"></div>
+      ${pkMarkers}
+      <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${pkGradient};border-radius:3px"></div>
     </div>
     <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
-      ${ticksHTML}
+      ${pkTicksHTML}
     </div>
   </div>`;
+}
+
+// Returns the highlight class for the LUFS numeric value — mirrors the bar's zone + blend regions
+function lufsColorCls(lufs, target) {
+  if (target === 'raw') return 'hl-green';
+  const isMixed  = target === 'mixed';
+  const zoneHigh = isMixed ? -18 : -21;
+  const zoneLow  = isMixed ? -20 : -24;
+  // Blend windows match lufsBarHTML: ±12 LU on low boundary, ±8 LU on high boundary
+  if (lufs > zoneHigh + 8)  return 'hl-red';      // clearly too loud
+  if (lufs > zoneHigh)      return 'hl-amber';     // in the upper blend → warn orange
+  if (lufs >= zoneLow)      return 'hl-green';     // inside target zone
+  if (lufs >= zoneLow - 12) return 'hl-blue';      // in the lower blend → soft blue/teal
+  return 'hl-purple';                               // clearly too quiet
 }
 
 function lufsBarHTML(lufs, target) {
@@ -1740,26 +1845,25 @@ function lufsBarHTML(lufs, target) {
   const zoneW    = isRaw ? 0 : zoneRPct - zoneLPct;
   const zoneBg   = isDark ? 'rgba(0,255,136,0.25)' : 'rgba(0,140,74,0.18)';
 
-  // Gradient stops — purple (too quiet) → green (target) → red (too loud)
-  // Transition zone is ~4 LU on each side of the target boundaries
+  // Gradient stops — purple (too quiet) → green (target) → orange/red (too loud)
+  // Wide transition windows for smooth sunset-style blending (logic/thresholds unchanged)
+  // Low boundary blend: zoneLow ±12 LU   High boundary blend: zoneHigh ±8 LU
   let gradient;
   if (isRaw) {
     gradient = isDark ? '#00ff88' : '#009944';
   } else {
     const stops = [
-      [pct(-80),          '#a050ff'],   // far too quiet
-      [pct(zoneLow - 8),  '#a050ff'],   // purple until approaching low boundary
-      [pct(zoneLow - 2),  '#c070ff'],   // purple → transition
-      [pct(zoneLow),      '#1dff8a'],   // green at low boundary
-      [pct(zoneHigh),     '#1dff8a'],   // green at high boundary
-      [pct(zoneHigh + 2), '#ffaa00'],   // transition → orange
-      [pct(zoneHigh + 5), '#ff7800'],   // orange
-      [pct(zoneHigh + 10), '#ff2040'],  // red
-      [100,               '#ff1030'],   // full red
+      [pct(-80),              '#a050ff'],   // solid purple from left edge
+      [pct(zoneLow - 12),     '#a050ff'],   // purple holds until wide blend starts
+      [pct(zoneLow + 12),     '#1dff8a'],   // blend complete → full green
+      [pct(zoneHigh - 8),     '#1dff8a'],   // green holds until blend starts
+      [pct(zoneHigh + 4),     '#ff7800'],   // blend complete → full orange
+      [pct(zoneHigh + 10),    '#ff2040'],   // orange fading to red
+      [100,                   '#ff1030'],   // full red at right edge
     ];
 
     const scaledStops = stops
-      .filter(([sp]) => sp <= fillPct + 10)
+      .filter(([sp]) => sp <= fillPct + 0.5)
       .map(([sp, col]) => {
         const scaled = fillPct > 0 ? Math.min(100, sp / fillPct * 100).toFixed(1) : '0';
         return `${col} ${scaled}%`;
@@ -1855,15 +1959,20 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget) {
     dbBarHTML(a.noiseFloorDb, 'nf'),
     ...(a.lufs != null ? [
       mRow('Integrated LUFS', a.lufs.toFixed(1)+' LUFS', '',
-        lufsTarget === 'raw' ? 'hl-green'
-        : a.lufs > (lufsTarget === 'mixed' ? -18 : -21) ? 'hl-red'
-        : a.lufs < (lufsTarget === 'mixed' ? -20 : -24) ? 'hl-purple'
-        : 'hl-green'),
+        lufsColorCls(a.lufs, lufsTarget)),
       lufsBarHTML(a.lufs, lufsTarget),
     ] : []),
-    mRow('RMS Level',      a.rmsDb.toFixed(1)+' dBFS', '', ''),
+    mRow('RMS Level',      a.rmsDb.toFixed(1)+' dBFS', '',
+      a.rmsDb >= -1  ? 'hl-red'
+      : a.rmsDb > -20 ? 'hl-amber'
+      : a.rmsDb > -70 ? 'hl-green'
+      : 'hl-purple'),
     dbBarHTML(a.rmsDb, 'rms'),
-    mRow('Peak Level',     a.peakDb.toFixed(1)+' dBFS', '', ''),
+    mRow('Peak Level',     a.peakDb.toFixed(1)+' dBFS', '',
+      a.peakDb >= -1  ? 'hl-red'
+      : a.peakDb > -20 ? 'hl-amber'
+      : a.peakDb > -70 ? 'hl-green'
+      : 'hl-purple'),
     dbBarHTML(a.peakDb, 'peak'),
     snrDrBarHTML(a.noiseFloorDb, a.rmsDb, a.peakDb),
     ...(hideDeltas ? [] : [
@@ -2025,7 +2134,7 @@ function buildStereoRawSection(a, skipSpeech) {
   const speechPct = 100 - s.silencePct;
   const oc = s.overlapPct < 5 ? 'var(--green)' : s.overlapPct < 15 ? 'var(--amber)' : 'var(--red)';
   const or = s.overlapPct < 5 ? 'Low' : s.overlapPct < 15 ? 'Moderate' : 'High';
-  const overlapLabel = skipSpeech ? '(simultaneous only)' : '(simultaneous + gap &lt; 425ms)';
+  const overlapLabel = skipSpeech ? '(simultaneous only)' : '(simultaneous + gap < 425ms)';
 
   const speechSection = skipSpeech ? '' : `<div style="flex:1;min-width:0;padding-right:14px">
     <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
@@ -2505,6 +2614,47 @@ function computeFFT(data, sr) {
   return { mag, binHz };
 }
 
+// Detect digital zero room tone in RAW files
+// Checks silence windows between speech — if consistently at or near -90 dBFS,
+// room tone has been removed by a gate, expander, or NR processing on RAW.
+function detectDigitalZero(data, sr) {
+  const winSz = Math.floor(sr * 0.05); // 50ms windows
+  const nWin  = Math.floor(data.length / winSz);
+
+  // Speech presence check
+  const rmsArr = [];
+  for (let i = 0; i < nWin; i++) {
+    let sq = 0;
+    for (let j = i*winSz; j < (i+1)*winSz; j++) sq += data[j]*data[j];
+    rmsArr.push(Math.sqrt(sq/winSz));
+  }
+  rmsArr.sort((a,b) => a-b);
+  const speechRms = rmsArr[Math.floor(nWin*0.90)];
+  const minSpeech = Math.pow(10, -45/20);
+  if (speechRms < minSpeech) return { detected: false };
+
+  const speechThresh  = speechRms * Math.pow(10, -20/20);
+  const digitalZeroDb = -90; // below this = effectively digital zero
+  const digitalZeroLin = Math.pow(10, digitalZeroDb/20);
+
+  let silenceCount = 0, zeroCount = 0;
+  const rmsUnsorted = [];
+  for (let i = 0; i < nWin; i++) {
+    let sq = 0;
+    for (let j = i*winSz; j < (i+1)*winSz; j++) sq += data[j]*data[j];
+    rmsUnsorted.push(Math.sqrt(sq/winSz));
+  }
+  for (let i = 0; i < nWin; i++) {
+    if (rmsUnsorted[i] < speechThresh) {
+      silenceCount++;
+      if (rmsUnsorted[i] < digitalZeroLin) zeroCount++;
+    }
+  }
+  if (silenceCount < 5) return { detected: false };
+  const ratio = zeroCount / silenceCount;
+  return { detected: ratio > 0.60, ratio }; // >60% of silence windows at digital zero
+}
+
 // Detect hum: check energy at 50/60Hz and harmonics in silence windows
 function detectHum(data, sr, nfDb) {
   const winSz  = Math.floor(sr * 0.2); // 200ms silence windows for FFT
@@ -2736,7 +2886,8 @@ async function runSingleArtifactScan(files) {
   let humDetected = false, humFreq = null;
   let pops = 0, clicks = 0, impacts = 0;
   let hpfL = null;
-  const humClips = [], popClips = [], clickClips = [], impactClips = [], hpfLClips = [];
+  let digitalZeroL = false;
+  const humClips = [], popClips = [], clickClips = [], impactClips = [], hpfLClips = [], dzLClips = [];
   const getSuffix = f => { const m = f.name.match(/_(\d+)\.wav$/i); return m ? m[1] : f.name; };
   let n = 0;
 
@@ -2754,6 +2905,9 @@ async function runSingleArtifactScan(files) {
     const hpf = detectHPF(data, sr, nfDb);
     if (hpf.detected) { hpfL = hpf; hpfLClips.push({ label: clip, file: f.name }); }
 
+    const dz = detectDigitalZero(data, sr);
+    if (dz.detected) { digitalZeroL = true; dzLClips.push({ label: clip, file: f.name }); }
+
     const p = detectPops(data, sr, nfDb);
     pops += p.events;
     if (p.events > 0) popClips.push({ label: clip, file: f.name, count: p.events });
@@ -2770,11 +2924,12 @@ async function runSingleArtifactScan(files) {
 
   return {
     takesAnalyzed: n,
-    hum:     { detected: humDetected, freq: humFreq, clips: humClips },
-    hpf:     { left: hpfL, right: null, clipsL: hpfLClips, clipsR: [] },
-    pops:    { left: pops, right: 0, clipsL: popClips,    clipsR: [] },
-    clicks:  { left: clicks, right: 0, clipsL: clickClips, clipsR: [] },
-    impacts: { left: impacts, right: 0, clipsL: impactClips, clipsR: [] },
+    hum:         { detected: humDetected, freq: humFreq, clips: humClips },
+    hpf:         { left: hpfL, right: null, clipsL: hpfLClips, clipsR: [] },
+    digitalZero: { left: digitalZeroL, right: false, clipsL: dzLClips, clipsR: [] },
+    pops:        { left: pops, right: 0, clipsL: popClips,    clipsR: [] },
+    clicks:      { left: clicks, right: 0, clipsL: clickClips, clipsR: [] },
+    impacts:     { left: impacts, right: 0, clipsL: impactClips, clipsR: [] },
     bleedScore: 1, bleedClips: [],
     singleChannel: true,
   };
@@ -2797,11 +2952,13 @@ async function runArtifactScan(leftFiles, rightFiles) {
   let humDetected = false, humFreq = null;
   let popsL = 0, popsR = 0, clicksL = 0, clicksR = 0, impactL = 0, impactR = 0;
   let hpfL = null, hpfR = null;
+  let digitalZeroL = false, digitalZeroR = false;
   const bleedClips = [], humClips = [];
   const popClipsL = [], popClipsR = [];
   const clickClipsL = [], clickClipsR = [];
   const impactClipsL = [], impactClipsR = [];
   const hpfClipsL = [], hpfClipsR = [];
+  const dzClipsL = [], dzClipsR = [];
   let n = 0;
 
   for (const pair of scanTakes) {
@@ -2846,6 +3003,12 @@ async function runArtifactScan(leftFiles, rightFiles) {
     if (hpfLeft.detected)  { hpfL = hpfLeft;  hpfClipsL.push({ label: lClip, file: pair.left.name }); }
     if (hpfRight.detected) { hpfR = hpfRight; hpfClipsR.push({ label: rClip, file: pair.right.name }); }
 
+    // Digital Zero RT — check both tracks
+    const dzLeft  = detectDigitalZero(lData, sr);
+    const dzRight = detectDigitalZero(rData, sr);
+    if (dzLeft.detected)  { digitalZeroL = true; dzClipsL.push({ label: lClip, file: pair.left.name }); }
+    if (dzRight.detected) { digitalZeroR = true; dzClipsR.push({ label: rClip, file: pair.right.name }); }
+
     // Pops
     const pL = detectPops(lData, sr, lNF);
     const pR = detectPops(rData, sr, rNF);
@@ -2888,6 +3051,7 @@ async function runArtifactScan(leftFiles, rightFiles) {
     bleedClips,
     hum:         { detected: humDetected, freq: humFreq, clips: humClips },
     hpf:         { left: hpfL, right: hpfR, clipsL: hpfClipsL, clipsR: hpfClipsR },
+    digitalZero: { left: digitalZeroL, right: digitalZeroR, clipsL: dzClipsL, clipsR: dzClipsR },
     pops:        { left: popsL, right: popsR, clipsL: popClipsL,    clipsR: popClipsR },
     clicks:      { left: clicksL, right: clicksR, clipsL: clickClipsL, clipsR: clickClipsR },
     impacts:     { left: impactL, right: impactR, clipsL: impactClipsL, clipsR: impactClipsR },
@@ -3009,6 +3173,16 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
     }
 
+    // ── Digital Zero RT ───────────────────────────────────
+    const dzLDet = a.digitalZero && a.digitalZero.left;
+    const dzRDet = a.digitalZero && a.digitalZero.right;
+    if (dzLDet || dzRDet) {
+      const who = (dzLDet && dzRDet) ? 'Both tracks' : dzLDet ? 'Left track' : 'Right track';
+      rows.push(aRow('Digital Zero RT', 'DETECTED', `${who} — room tone erased. Gate or NR applied on RAW. Re-deliver unprocessed.`, 'fail', []));
+    } else {
+      rows.push(aRow('Digital Zero RT', 'Clean', 'Room tone present in silence gaps', 'pass', []));
+    }
+
     // ── Headphone Bleed ───────────────────────────────────
     bleedScore = a.bleedScore || 1;
     const bleedLabels = ['','No Bleed','Structural','Mild HP','Moderate HP','Severe HP'];
@@ -3016,12 +3190,18 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     const bleedLevel  = bleedScore <= 2 ? 'pass' : bleedScore <= 3 ? 'warn' : 'fail';
     rows.push(aRow('Headphone Bleed', qaChip(bleedScore), `${bleedLabels[bleedScore]} — ${bleedDescs[bleedScore]}`, bleedLevel, a.bleedClips, true));
   } else {
-    // Single character — still show HPF
+    // Single character — still show HPF and Digital Zero RT
     const hpfLDet = a.hpf && a.hpf.left && a.hpf.left.detected;
     if (hpfLDet) {
       rows.push(aRow('HPF', 'DETECTED', 'Left track — high-pass filter applied. Affects all clips. Re-deliver without HPF.', 'fail', []));
     } else {
       rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
+    }
+    const dzLDet2 = a.digitalZero && a.digitalZero.left;
+    if (dzLDet2) {
+      rows.push(aRow('Digital Zero RT', 'DETECTED', 'Left track — room tone erased. Gate or NR applied on RAW. Re-deliver unprocessed.', 'fail', []));
+    } else {
+      rows.push(aRow('Digital Zero RT', 'Clean', 'Room tone present in silence gaps', 'pass', []));
     }
   }
 
@@ -3107,6 +3287,12 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     const who2 = (hpfLDet2 && hpfRDet2) ? 'Both tracks' : hpfLDet2 ? 'Left track' : 'Right track';
     qaRec('fail', 'HPF', `${who2} — remove high-pass filter on source signal chain. Flag.`, 5);
   }
+  const dzLDet3 = a.digitalZero && a.digitalZero.left;
+  const dzRDet3 = a.digitalZero && a.digitalZero.right;
+  if (dzLDet3 || dzRDet3) {
+    const who3 = (dzLDet3 && dzRDet3) ? 'Both tracks' : dzLDet3 ? 'Left track' : 'Right track';
+    qaRec('fail', 'Digital Zero RT', `${who3} — room tone erased between lines. Unauthorized gate or NR on RAW. Re-deliver unprocessed.`, 5);
+  }
   if (popScore >= 2) qaRec(popScore >= 4 ? 'fail' : 'warn', 'Mic Pops', popScore >= 4
     ? `~${popTotal} possible pops — verify by ear. Fix with room tone or RX. Request re-record if excessive.`
     : `~${popTotal} possible pop${popTotal>1?'s':''} — verify by ear. Fix with room tone or RX.`, popScore);
@@ -3147,46 +3333,30 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
   // ── RAW Noise Floor (Left + Right combined) ───────────────
   const rawArr   = [rawLA, rawRA].filter(Boolean);
   const rawOnly  = rawArr.length > 0 && !eA && !mA;
-  const rawNoisy = rawArr.filter(a => a.noiseFloorDb > -50);
-  const rawNoRT  = rawArr.filter(a => a.noiseFloorDb <= -80);
-  const rawWarnNoisy = rawArr.filter(a => a.noiseFloorDb > -57 && a.noiseFloorDb <= -50);
-  const rawWarnQuiet = rawArr.filter(a => a.noiseFloorDb >= -80 && a.noiseFloorDb <= -70);
+  const rawNoisy     = rawArr.filter(a => a.noiseFloorDb >= -50);
+  const rawWarnNoisy = rawArr.filter(a => a.noiseFloorDb > -57 && a.noiseFloorDb < -50);
 
-  // Hard fails — always shown
-  if (rawNoRT.length === 2)
-    rec('fail', 'RAW — No Room Tone', 'Both tracks below −80 dBFS. Request re-recording.');
-  else if (rawNoRT.length === 1)
-    rec('fail', (rawNoRT[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — No Room Tone',
-      rawNoRT[0].noiseFloorDb.toFixed(1) + ' dBFS. Request re-recording.');
-
+  // Hard fails — too noisy
   if (rawNoisy.length === 2)
     rec('fail', 'RAW — Too Noisy', 'Both tracks exceed −50 dBFS. Request re-recording.');
   else if (rawNoisy.length === 1)
     rec('fail', (rawNoisy[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — Too Noisy',
       rawNoisy[0].noiseFloorDb.toFixed(1) + ' dBFS. Request re-recording.');
 
-  // Warn zones — only shown in RAW-only QA workflow
+  // Warn zones — trending noisy
   if (rawOnly) {
     if (rawWarnNoisy.length === 2)
       rec('warn', 'RAW — Trending Noisy', 'Both tracks in −50 to −57 dBFS range. Monitor before editing.');
     else if (rawWarnNoisy.length === 1)
       rec('warn', (rawWarnNoisy[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — Trending Noisy',
         rawWarnNoisy[0].noiseFloorDb.toFixed(1) + ' dBFS. Monitor before editing.');
-
-    if (rawWarnQuiet.length === 2)
-      rec('warn', 'RAW — Trending Quiet', 'Both tracks in −68 to −80 dBFS range. Verify room tone is present.');
-    else if (rawWarnQuiet.length === 1)
-      rec('warn', (rawWarnQuiet[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — Trending Quiet',
-        rawWarnQuiet[0].noiseFloorDb.toFixed(1) + ' dBFS. Verify room tone is present.');
   }
 
   // ── Edit: unauthorized processing ────────────────────────
   if (eA && rawArr.length) {
     const rawNF = rawArr.reduce((s, a) => s + a.noiseFloorDb, 0) / rawArr.length;
     const drop  = eA.noiseFloorDb - rawNF;
-    // Only flag if RAW NF is in a valid range — if RAW already has NO RT,
-    // the comparison is meaningless and should not trigger
-    if (rawNF > -80 && drop < -6)
+    if (drop < -6)
       rec('fail', 'Edit — Unauthorized Processing',
         'NF dropped ' + Math.abs(drop).toFixed(1) + ' dB vs RAW. Re-deliver without noise reduction.');
   }
@@ -3376,8 +3546,8 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
 
   // Overall badge
   const allA = [rawStereoA, rawLA, rawRA, eA, mA].filter(Boolean);
-  const anyFail = allA.some(a => a.noiseFloorDb > -50 || a.noiseFloorDb <= -80);
-  const allPass = allA.every(a => a.noiseFloorDb < -57 && a.noiseFloorDb > -70);
+  const anyFail = allA.some(a => a.noiseFloorDb >= -50 || a.noiseFloorDb <= -90);
+  const allPass = allA.every(a => a.noiseFloorDb > -90 && a.noiseFloorDb <= -57);
   const overall = anyFail ? 'FAIL' : allPass ? 'PASS' : 'WARN';
   const cls = overall==='PASS'?'pass':overall==='FAIL'?'fail':'warn';
   document.getElementById('resultsBar').style.display = 'flex';
