@@ -1447,17 +1447,18 @@ async function runAnalysis() {
 }
 
 // ── Render ───────────────────────────────────────────────────
-function nfBadgeHTML(db) {
+function nfBadgeHTML(db, hpf) {
   if (db >= -50)  return '<div class="nf-badge nf-fail">FAIL — NOISY</div>';
   if (db > -57)   return '<div class="nf-badge nf-orange">WARN</div>';
   if (db > -90)   return '<div class="nf-badge nf-pass">PASS</div>';
-  return                 '<div class="nf-badge nf-purple">FAIL — NO RT</div>';
+  return hpf ? '<div class="nf-badge nf-fail">FAIL — NO RT</div>'
+             : '<div class="nf-badge nf-blue">VERY QUIET</div>';
 }
-function nfColorCls(db) {
+function nfColorCls(db, hpf) {
   if (db >= -50)  return 'hl-red';
   if (db > -57)   return 'hl-amber';
   if (db > -90)   return 'hl-green';
-  return 'hl-purple';
+  return hpf ? 'hl-red' : 'hl-blue';
 }
 function deltaRating(d) {
   if (d === null) return { label:'N/A — Mono', cls:'' };
@@ -1817,16 +1818,21 @@ function dbBarHTML(db, type) {
 
 // Returns the highlight class for the LUFS numeric value — mirrors the bar's zone + blend regions
 function lufsColorCls(lufs, target) {
-  if (target === 'raw') return 'hl-green';
   const isMixed  = target === 'mixed';
+  if (target === 'raw') {
+    // RAW: no delivery zone, colour by absolute level
+    if (lufs >= -16)  return 'hl-red';
+    if (lufs >= -24)  return 'hl-amber';
+    if (lufs >= -60)  return 'hl-green';
+    return 'hl-purple';
+  }
   const zoneHigh = isMixed ? -18 : -21;
   const zoneLow  = isMixed ? -20 : -24;
-  // Blend windows match lufsBarHTML: ±12 LU on low boundary, ±8 LU on high boundary
-  if (lufs > zoneHigh + 8)  return 'hl-red';      // clearly too loud
-  if (lufs > zoneHigh)      return 'hl-amber';     // in the upper blend → warn orange
-  if (lufs >= zoneLow)      return 'hl-green';     // inside target zone
-  if (lufs >= zoneLow - 12) return 'hl-blue';      // in the lower blend → soft blue/teal
-  return 'hl-purple';                               // clearly too quiet
+  if (lufs > zoneHigh + 8)  return 'hl-red';
+  if (lufs > zoneHigh)      return 'hl-amber';
+  if (lufs >= zoneLow)      return 'hl-green';
+  if (lufs >= zoneLow - 12) return 'hl-blue';
+  return 'hl-purple';
 }
 
 function lufsBarHTML(lufs, target) {
@@ -1848,29 +1854,33 @@ function lufsBarHTML(lufs, target) {
   // Gradient stops — purple (too quiet) → green (target) → orange/red (too loud)
   // Wide transition windows for smooth sunset-style blending (logic/thresholds unchanged)
   // Low boundary blend: zoneLow ±12 LU   High boundary blend: zoneHigh ±8 LU
-  let gradient;
-  if (isRaw) {
-    gradient = isDark ? '#00ff88' : '#009944';
-  } else {
-    const stops = [
-      [pct(-80),              '#a050ff'],   // solid purple from left edge
-      [pct(zoneLow - 12),     '#a050ff'],   // purple holds until wide blend starts
-      [pct(zoneLow + 12),     '#1dff8a'],   // blend complete → full green
-      [pct(zoneHigh - 8),     '#1dff8a'],   // green holds until blend starts
-      [pct(zoneHigh + 4),     '#ff7800'],   // blend complete → full orange
-      [pct(zoneHigh + 10),    '#ff2040'],   // orange fading to red
-      [100,                   '#ff1030'],   // full red at right edge
-    ];
+  // RAW has no delivery target so no zone highlight — gradient still applied for visual reference
+  const stops = isRaw ? [
+    [pct(-80),   '#a050ff'],
+    [pct(-60),   '#a050ff'],
+    [pct(-40),   '#1dff8a'],
+    [pct(-24),   '#1dff8a'],
+    [pct(-16),   '#ff7800'],
+    [pct(-10),   '#ff2040'],
+    [100,        '#ff1030'],
+  ] : [
+    [pct(-80),              '#a050ff'],
+    [pct(zoneLow - 12),     '#a050ff'],
+    [pct(zoneLow + 12),     '#1dff8a'],
+    [pct(zoneHigh - 8),     '#1dff8a'],
+    [pct(zoneHigh + 4),     '#ff7800'],
+    [pct(zoneHigh + 10),    '#ff2040'],
+    [100,                   '#ff1030'],
+  ];
 
-    const scaledStops = stops
-      .filter(([sp]) => sp <= fillPct + 0.5)
-      .map(([sp, col]) => {
-        const scaled = fillPct > 0 ? Math.min(100, sp / fillPct * 100).toFixed(1) : '0';
-        return `${col} ${scaled}%`;
-      }).join(', ');
+  const scaledStops = stops
+    .filter(([sp]) => sp <= fillPct + 0.5)
+    .map(([sp, col]) => {
+      const scaled = fillPct > 0 ? Math.min(100, sp / fillPct * 100).toFixed(1) : '0';
+      return `${col} ${scaled}%`;
+    }).join(', ');
 
-    gradient = fillPct > 0 ? `linear-gradient(to right, ${scaledStops})` : '#a050ff';
-  }
+  const gradient = fillPct > 0 ? `linear-gradient(to right, ${scaledStops})` : '#a050ff';
 
   // Tick labels — highlight zone boundaries in green
   const ticks = [-80, -60, -40, -20, 0];
@@ -1882,9 +1892,12 @@ function lufsBarHTML(lufs, target) {
   }).join('');
 
   return `<div style="padding:2px 20px 14px;border-bottom:1px solid var(--border)">
-    <div style="position:relative;height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
-      ${isRaw ? '' : `<div style="position:absolute;top:0;bottom:0;left:${zoneLPct.toFixed(1)}%;width:${zoneW.toFixed(1)}%;background:${zoneBg}"></div>`}
-      <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${gradient};border-radius:4px"></div>
+    <div style="position:relative;height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
+      ${isRaw ? '' : `
+      <div style="position:absolute;top:0;bottom:0;left:${zoneLPct.toFixed(1)}%;width:${zoneW.toFixed(1)}%;background:${zoneBg}"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${zoneLPct.toFixed(1)}%;width:1px;background:${isDark?'rgba(255,255,255,0.28)':'rgba(0,0,0,0.18)'}"></div>
+      <div style="position:absolute;top:0;bottom:0;left:${zoneRPct.toFixed(1)}%;width:1px;background:${isDark?'rgba(255,255,255,0.28)':'rgba(0,0,0,0.18)'}"></div>`}
+      <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${gradient};border-radius:3px"></div>
     </div>
     <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
       ${ticksHTML}
@@ -1948,14 +1961,14 @@ function snrDrBarHTML(nf, rms, peak) {
   </div>`;
 }
 
-function buildMetrics(a, showSignal, hideDeltas, lufsTarget) {
+function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
   const dr = deltaRating(a.lrDelta);
   const lrVal = a.lrDelta !== null ? a.lrDelta.toFixed(2)+' dB' : 'N/A — Mono';
   const rTag  = dr.cls
     ? `<span class="rating-tag ${dr.cls}">${dr.label}</span>`
     : `<span style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">${dr.label}</span>`;
   return [
-    mRow('Noise Floor',    a.noiseFloorDb.toFixed(1)+' dBFS', nfBadgeHTML(a.noiseFloorDb), nfColorCls(a.noiseFloorDb)),
+    mRow('Noise Floor',    a.noiseFloorDb.toFixed(1)+' dBFS', nfBadgeHTML(a.noiseFloorDb, hpf), nfColorCls(a.noiseFloorDb, hpf)),
     dbBarHTML(a.noiseFloorDb, 'nf'),
     ...(a.lufs != null ? [
       mRow('Integrated LUFS', a.lufs.toFixed(1)+' LUFS', '',
@@ -2043,7 +2056,7 @@ function buildQASessionAnalysis(a) {
   </div>`;
 }
 
-function buildSpeechBlock(a) {
+function buildSpeechBlock(a, editChecks) {
   if (a.signalPct === undefined) return '';
 
   // Markers column (if available)
@@ -2102,6 +2115,41 @@ function buildSpeechBlock(a) {
     </div>`;
   }
 
+  // Bounce Bleed column (if editChecks available)
+  let bleedCol = '';
+  if (editChecks) {
+    const c = editChecks;
+    const bc  = c.bleedPct < 3 ? 'var(--green)' : c.bleedPct < 10 ? 'var(--amber)' : 'var(--red)';
+    const cls = c.bleedPct < 3 ? 'nf-pass'      : c.bleedPct < 10 ? 'nf-warn'      : 'nf-fail';
+    const lbl = c.bleedPct < 3 ? 'Clean'        : c.bleedPct < 10 ? 'Moderate'     : 'Significant';
+    const fmtTS = t => { const m = Math.floor(t/60); const s = Math.floor(t%60).toString().padStart(2,'0'); return `${m}:${s}`; };
+    let timestamps = '';
+    if (c.bleedPct >= 3 && c.bleedTimestamps && c.bleedTimestamps.length > 0) {
+      const id = 'bleedCol_' + Date.now();
+      const items = c.bleedTimestamps.map(t => `<span style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px">${fmtTS(t)}</span>`).join(' ');
+      timestamps = `<div style="margin-top:5px">
+        <div onclick="const el=document.getElementById('${id}');const arr=this.querySelector('.arr');el.style.display=el.style.display==='none'?'flex':'none';arr.textContent=el.style.display==='none'?'▶':'▼';"
+          style="cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px;user-select:none">
+          <span class="arr">▶</span> ${c.bleedTimestamps.length} event${c.bleedTimestamps.length>1?'s':''}
+        </div>
+        <div id="${id}" style="display:none;flex-wrap:wrap;gap:4px;margin-top:5px">${items}</div>
+      </div>`;
+    }
+    bleedCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Bounce Bleed</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:${bc};line-height:1">${c.bleedPct.toFixed(1)}%</div>
+        <div>
+          <span class="nf-badge ${cls}" style="font-size:10px;padding:3px 8px">${lbl}</span>
+        </div>
+      </div>
+      <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
+        <div style="height:100%;width:${Math.min(100,c.bleedPct*4).toFixed(1)}%;background:${bc};border-radius:3px"></div>
+      </div>
+      ${timestamps}
+    </div>`;
+  }
+
   return `<div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:0;align-items:flex-start">
     <!-- Speech vs Silence column -->
     <div style="flex:1;min-width:0;padding-right:14px">
@@ -2124,8 +2172,9 @@ function buildSpeechBlock(a) {
     </div>
     ${markersCol}
     ${overlapCol}
+    ${bleedCol}
   </div>
-  ${a.editChecks ? buildEditChecksSection(a.editChecks) : ''}`;
+  ${editChecks ? buildEditChecksSection(editChecks) : ''}`;
 }
 
 function buildStereoRawSection(a, skipSpeech) {
@@ -2181,47 +2230,6 @@ function buildEditChecksSection(c) {
   if (!c) return '';
   const mono = `font-family:'Share Tech Mono',monospace`;
   const rows = [];
-
-  // Bleed — only show when > 0%
-  if (c.bleedPct > 0) {
-  const bleedCol = c.bleedPct < 3 ? 'var(--green)' : c.bleedPct < 10 ? 'var(--amber)' : 'var(--red)';
-  const bleedLabel = c.bleedPct < 3 ? 'None detected' : c.bleedPct < 10 ? 'Moderate' : 'Significant';
-
-  // Format timestamps as M:SS
-  const fmtTS = t => {
-    const m = Math.floor(t / 60);
-    const s = Math.floor(t % 60).toString().padStart(2,'0');
-    return `${m}:${s}`;
-  };
-
-  let bleedCollapsible = '';
-  if (c.bleedTimestamps && c.bleedTimestamps.length > 0) {
-    const id = 'bleedList_' + Date.now();
-    const items = c.bleedTimestamps.map(t => `<span style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2);background:var(--bg3);padding:2px 7px;border-radius:4px">${fmtTS(t)}</span>`).join(' ');
-    bleedCollapsible = `<div style="margin-top:6px">
-      <div onclick="const el=document.getElementById('${id}');const arr=this.querySelector('.arr');el.style.display=el.style.display==='none'?'flex':'none';arr.textContent=el.style.display==='none'?'▶':'▼';"
-        style="cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px;user-select:none">
-        <span class="arr">▶</span> ${c.bleedTimestamps.length} bleed event${c.bleedTimestamps.length>1?'s':''} — expand
-      </div>
-      <div id="${id}" style="display:none;flex-wrap:wrap;gap:5px;margin-top:6px">${items}</div>
-    </div>`;
-  }
-
-  rows.push(`<div style="display:flex;align-items:flex-start;gap:14px;padding:10px 20px;border-top:1px solid var(--border)">
-    <div style="${mono};font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);width:150px;padding-top:2px">Significant Bleed</div>
-    <div style="flex:1">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
-        <div style="${mono};font-size:16px;font-weight:700;color:${bleedCol}">${c.bleedPct.toFixed(1)}%</div>
-        <div style="${mono};font-size:11px;color:${bleedCol};font-weight:700">${bleedLabel}</div>
-        <div style="flex:1;height:5px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
-          <div style="height:100%;width:${Math.min(100,c.bleedPct*4).toFixed(1)}%;background:${bleedCol};border-radius:3px"></div>
-        </div>
-        <div style="${mono};font-size:11px;color:var(--text3)">Headphone bleed clearly above room tone</div>
-      </div>
-      ${bleedCollapsible}
-    </div>
-  </div>`);
-  } // end bleed > 0 block
 
   // Panning error — only when detected
   if (c.panningError) {
@@ -2819,6 +2827,77 @@ function detectPops(data, sr, nfDb) {
   return { events: merged.length, pct: 0 };
 }
 
+// Detect mouth clicks: short impulsive spikes in silence
+// Uses 2ms windows with crest-factor analysis against 10ms pre-context.
+// Criteria: in silence (NF+10), peak > NF+20, peak/pre_rms > 25x,
+//           peak >= 10dB above 20ms post-context (spike shape, not sustained speech)
+function detectClicks(data, sr, nfDb) {
+  const winSz    = Math.floor(sr * 0.002);  // 2ms window
+  const preSz    = Math.floor(sr * 0.010);  // 10ms pre-context
+  const postSz   = Math.floor(sr * 0.020);  // 20ms post-context
+  const nfLin    = Math.pow(10, nfDb / 20);
+  const silThresh     = nfLin * Math.pow(10, 10 / 20);  // NF+10 — pre-silence gate
+  const postSilThresh = nfLin * Math.pow(10, 14 / 20);  // NF+14 — post-silence gate (filters speech-onset consonants)
+  const pkThresh      = nfLin * Math.pow(10, 20 / 20);  // NF+20 — minimum peak
+  const CREST         = 25;    // peak / pre_rms — inter-window crest (spike vs context)
+  const INTRA_CREST   = 4.0;   // peak / window_rms — energy must be concentrated in a few samples
+  const TOP5_FRAC     = 0.50;  // top-5 samples must hold >50% of window energy (impulse shape)
+  const SPIKE_DB      = 10.0;  // peak must be >= 10dB above post-window
+
+  let events = 0;
+  let lastEventSample = -1;
+  const MERGE_SAMP = Math.floor(sr * 0.020); // merge within 20ms
+
+  for (let i = preSz; i + winSz + postSz <= data.length; i += winSz) {
+    // Pre-context RMS — must be in silence
+    let preSq = 0;
+    for (let j = i - preSz; j < i; j++) preSq += data[j] * data[j];
+    const preRms = Math.sqrt(preSq / preSz);
+    if (preRms >= silThresh) continue;
+
+    // Peak and window RMS
+    let peak = 0, winSq = 0;
+    for (let j = i; j < i + winSz; j++) {
+      const v = Math.abs(data[j]);
+      if (v > peak) peak = v;
+      winSq += data[j] * data[j];
+    }
+    const winRms = Math.sqrt(winSq / winSz);
+
+    if (peak < pkThresh) continue;
+    if (peak / (preRms + 1e-12) < CREST) continue;
+
+    // Intra-window crest: energy must be concentrated in a few samples, not distributed
+    if (peak / (winRms + 1e-12) < INTRA_CREST) continue;
+
+    // Top-5 sample energy fraction: impulse shape check
+    const sqArr = new Float32Array(winSz);
+    for (let j = 0; j < winSz; j++) sqArr[j] = data[i + j] * data[i + j];
+    sqArr.sort();  // ascending
+    let top5 = 0;
+    for (let j = winSz - 1; j >= winSz - 5; j--) top5 += sqArr[j];
+    if (top5 / (winSq + 1e-12) < TOP5_FRAC) continue;
+
+    // Post-context RMS — must return to silence (not a speech onset)
+    let postSq = 0;
+    for (let j = i + winSz; j < i + winSz + postSz; j++) postSq += data[j] * data[j];
+    const postRms = Math.sqrt(postSq / postSz);
+    if (postRms >= postSilThresh) continue;
+
+    // Spike shape: peak must be >= 10dB above post window
+    const spikeDb = 20 * Math.log10((peak + 1e-12) / (postRms + 1e-12));
+    if (spikeDb < SPIKE_DB) continue;
+
+    // Merge with previous event
+    if (lastEventSample >= 0 && i - lastEventSample < MERGE_SAMP) continue;
+
+    events++;
+    lastEventSample = i;
+  }
+  return { events };
+}
+
+
 function detectTransients(data, sr, nfDb, opts = {}) {
   const { minHz = 0, maxHz = 24000, minDurMs = 5, maxDurMs = 150, silenceOnly = false } = opts;
   const winSz = Math.floor(sr * 0.01); // 10ms windows
@@ -2912,7 +2991,7 @@ async function runSingleArtifactScan(files) {
     pops += p.events;
     if (p.events > 0) popClips.push({ label: clip, file: f.name, count: p.events });
 
-    const c = detectTransients(data, sr, nfDb, { minHz:2000, minDurMs:5, maxDurMs:30, threshMult:40, silenceOnly:true });
+    const c = detectClicks(data, sr, nfDb);
     clicks += c.events;
     if (c.events > 0) clickClips.push({ label: clip, file: f.name, count: c.events });
 
@@ -3017,8 +3096,8 @@ async function runArtifactScan(leftFiles, rightFiles) {
     if (pR.events > 0) popClipsR.push({ label: rClip, file: pair.right.name, count: pR.events });
 
     // Clicks
-    const cL = detectTransients(lData, sr, lNF, { minHz:2000, minDurMs:5, maxDurMs:30, threshMult:40, silenceOnly:true });
-    const cR = detectTransients(rData, sr, rNF, { minHz:2000, minDurMs:5, maxDurMs:30, threshMult:40, silenceOnly:true });
+    const cL = detectClicks(lData, sr, lNF);
+    const cR = detectClicks(rData, sr, rNF);
     clicksL += cL.events; clicksR += cR.events;
     if (cL.events > 0) clickClipsL.push({ label: lClip, file: pair.left.name,  count: cL.events });
     if (cR.events > 0) clickClipsR.push({ label: rClip, file: pair.right.name, count: cR.events });
@@ -3161,14 +3240,19 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
 
   // Only show Acoustic Δ and Bleed for dual character
   if (!isSingleCh) {
-    rows.push(aRow('Acoustic Δ', qaChip(deltaScore), deltaDetail, deltaLevel, [], true));
+  const deltaActionDetail = delta === null ? deltaDetail
+    : delta < 1 ? deltaDetail
+    : delta < 3
+      ? `${deltaDetail} · monitor — correct if noticeable`
+      : `${deltaDetail} · reduce ${louder} gain ${delta.toFixed(1)} dB or raise ${louder === 'Left' ? 'Right' : 'Left'}`;
+  rows.push(aRow('Acoustic Δ', qaChip(deltaScore), deltaActionDetail, deltaLevel, [], true));
 
     // ── HPF — moved here, below Acoustic Delta ────────────
     const hpfLDet = a.hpf && a.hpf.left  && a.hpf.left.detected;
     const hpfRDet = a.hpf && a.hpf.right && a.hpf.right.detected;
     if (hpfLDet || hpfRDet) {
       const who = (hpfLDet && hpfRDet) ? 'Both tracks' : hpfLDet ? 'Left track' : 'Right track';
-      rows.push(aRow('HPF', 'DETECTED', `${who} — high-pass filter applied. Affects all clips. Re-deliver without HPF.`, 'fail', []));
+      rows.push(aRow('HPF', 'DETECTED', `${who} — stop and report · flag in Labelbox`, 'fail', []));
     } else {
       rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
     }
@@ -3178,50 +3262,62 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     const dzRDet = a.digitalZero && a.digitalZero.right;
     if (dzLDet || dzRDet) {
       const who = (dzLDet && dzRDet) ? 'Both tracks' : dzLDet ? 'Left track' : 'Right track';
-      rows.push(aRow('Digital Zero RT', 'DETECTED', `${who} — room tone erased. Gate or NR applied on RAW. Re-deliver unprocessed.`, 'fail', []));
+      rows.push(aRow('Digital Zero RT', 'DETECTED', `${who} — room tone erased · stop and report · flag in Labelbox`, 'fail', []));
     } else {
       rows.push(aRow('Digital Zero RT', 'Clean', 'Room tone present in silence gaps', 'pass', []));
     }
 
     // ── Headphone Bleed ───────────────────────────────────
     bleedScore = a.bleedScore || 1;
-    const bleedLabels = ['','No Bleed','Structural','Mild HP','Moderate HP','Severe HP'];
-    const bleedDescs  = ['','No correlation detected','Low-freq only — wall/structural (100–300Hz)','Speech fundamentals in opposite channel','Clear headphone bleed across speech range','Strong full-band bleed — headphones too loud'];
+    const bleedLabels = ['','Clean','Structural','Mild HP','Moderate HP','Severe HP'];
+    const bleedActions = ['',
+      'No correlation detected',
+      'Review and proceed or flag',
+      'Review and proceed or flag',
+      'Stop and report · flag in Labelbox',
+      'Stop and report · flag in Labelbox'];
+    const bleedDescs  = ['','','Low-freq only — wall/structural (100–300Hz)','Speech fundamentals in opposite channel','Clear headphone bleed across speech range','Strong full-band bleed — headphones too loud'];
     const bleedLevel  = bleedScore <= 2 ? 'pass' : bleedScore <= 3 ? 'warn' : 'fail';
-    rows.push(aRow('Headphone Bleed', qaChip(bleedScore), `${bleedLabels[bleedScore]} — ${bleedDescs[bleedScore]}`, bleedLevel, a.bleedClips, true));
+    const bleedDetail = a.singleChannel
+      ? 'N/A — single character session'
+      : bleedScore === 1
+        ? 'No correlation detected'
+        : `${bleedLabels[bleedScore]} — ${bleedDescs[bleedScore]} · ${bleedActions[bleedScore]}`;
+    rows.push(aRow('Headphone Bleed', a.singleChannel ? 'N/A' : qaChip(bleedScore), bleedDetail, a.singleChannel ? '' : bleedLevel, a.bleedClips, true));
   } else {
     // Single character — still show HPF and Digital Zero RT
     const hpfLDet = a.hpf && a.hpf.left && a.hpf.left.detected;
     if (hpfLDet) {
-      rows.push(aRow('HPF', 'DETECTED', 'Left track — high-pass filter applied. Affects all clips. Re-deliver without HPF.', 'fail', []));
+      rows.push(aRow('HPF', 'DETECTED', 'Left track — stop and report · flag in Labelbox', 'fail', []));
     } else {
       rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
     }
     const dzLDet2 = a.digitalZero && a.digitalZero.left;
     if (dzLDet2) {
-      rows.push(aRow('Digital Zero RT', 'DETECTED', 'Left track — room tone erased. Gate or NR applied on RAW. Re-deliver unprocessed.', 'fail', []));
+      rows.push(aRow('Digital Zero RT', 'DETECTED', 'Left track — room tone erased · stop and report · flag in Labelbox', 'fail', []));
     } else {
       rows.push(aRow('Digital Zero RT', 'Clean', 'Room tone present in silence gaps', 'pass', []));
     }
   }
 
   // ── Hum score 1–5 ─────────────────────────────────────
-  // Strength from detectHum drives the score
   const humStrength = a.hum.strength || 0;
   const humScore = !a.hum.detected ? 1 : humStrength < 50 ? 2 : humStrength < 150 ? 3 : humStrength < 300 ? 4 : 5;
   const humLevel = humScore === 1 ? 'pass' : humScore <= 2 ? 'warn' : 'fail';
-  const humDesc  = humScore === 1 ? 'No 50/60Hz detected' : `${a.hum.freq}Hz electrical interference`;
+  const humDesc  = humScore === 1 ? 'No 50/60Hz detected'
+    : `${a.hum.freq}Hz interference · stop and report · flag in Labelbox`;
   rows.push(aRow('Hum / Buzz', qaChip(humScore), humDesc, humLevel, a.hum.clips, true));
 
   // ── Mic Pops score 1–5 ────────────────────────────────
-  // Score based on average events per take (not total count)
   const popTotal = a.pops.left + a.pops.right;
   const popAvg   = a.takesAnalyzed > 0 ? popTotal / a.takesAnalyzed : popTotal;
   const popScore = popAvg === 0 ? 1 : popAvg < 0.5 ? 2 : popAvg < 1.5 ? 3 : popAvg < 3 ? 4 : 5;
   const popLevel = popScore === 1 ? 'pass' : popScore <= 3 ? 'warn' : 'fail';
-  const popDesc  = popTotal === 0 ? '0 events' :
-    [a.pops.left ? `Left: ${a.pops.left}` : '', a.pops.right ? `Right: ${a.pops.right}` : ''].filter(Boolean).join(' · ') +
-    ' <span style="color:var(--text3);font-style:italic">· verify by ear</span>';
+  const popDesc  = popScore === 1 ? 'No candidates detected'
+    : popScore === 2 ? 'Low likelihood — review by ear · fix during edit if confirmed'
+    : popScore === 3 ? 'Moderate likelihood — review by ear · fix during edit or flag if excessive'
+    : popScore === 4 ? 'High likelihood — review by ear required · flag in Labelbox if confirmed'
+    : 'Very high likelihood — stop and report · flag in Labelbox';
   rows.push(aRow('Mic Pops', qaChip(popScore), popDesc, popLevel,
     [...(a.pops.clipsL||[]), ...(a.pops.clipsR||[])], true));
 
@@ -3230,86 +3326,31 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const clickAvg   = a.takesAnalyzed > 0 ? clickTotal / a.takesAnalyzed : clickTotal;
   const clickScore = clickAvg === 0 ? 1 : clickAvg < 1 ? 2 : clickAvg < 3 ? 3 : clickAvg < 6 ? 4 : 5;
   const clickLevel = clickScore === 1 ? 'pass' : clickScore <= 3 ? 'warn' : 'fail';
-  const clickDesc  = clickTotal === 0 ? '0 events' :
-    [a.clicks.left ? `Left: ${a.clicks.left}` : '', a.clicks.right ? `Right: ${a.clicks.right}` : ''].filter(Boolean).join(' · ');
+  const clickDesc  = clickTotal === 0 ? 'No events detected'
+    : clickScore <= 3
+      ? `~${clickTotal} event${clickTotal>1?'s':''} detected · fix during edit with RX`
+      : `~${clickTotal} event${clickTotal>1?'s':''} detected · stop and report if distracting · flag in Labelbox`;
   rows.push(aRow('Mouth Clicks', qaChip(clickScore), clickDesc, clickLevel,
     [...(a.clicks.clipsL||[]), ...(a.clicks.clipsR||[])], true));
 
-  // ── Physical Noises score 1–5 (was Stand Impact) ──────
+  // ── Physical Noises score 1–5 ─────────────────────────
   const impTotal = a.impacts.left + a.impacts.right;
   const impAvg   = a.takesAnalyzed > 0 ? impTotal / a.takesAnalyzed : impTotal;
   const impScore = impAvg === 0 ? 1 : impAvg < 0.5 ? 2 : impAvg < 1 ? 3 : impAvg < 2 ? 4 : 5;
   const impLevel = impScore === 1 ? 'pass' : impScore <= 2 ? 'warn' : 'fail';
-  const impDesc  = impTotal === 0 ? '0 events' :
-    [a.impacts.left ? `Left: ${a.impacts.left}` : '', a.impacts.right ? `Right: ${a.impacts.right}` : ''].filter(Boolean).join(' · ');
+  const impDesc  = impScore === 1 ? 'No candidates detected'
+    : impScore === 2 ? 'Low likelihood — review by ear · fix during edit if confirmed'
+    : impScore === 3 ? 'Moderate likelihood — review by ear · fix during edit or flag if excessive'
+    : impScore === 4 ? 'High likelihood — review by ear required · flag in Labelbox if confirmed'
+    : 'Very high likelihood — stop and report · flag in Labelbox';
   rows.push(aRow('Physical Noises', qaChip(impScore), impDesc, impLevel,
     [...(a.impacts.clipsL||[]), ...(a.impacts.clipsR||[])], true));
 
-  // ── QA Recommendations ────────────────────────────────
-  const qaRecs = [];
-  function qaRec(level, title, action, score) {
-    const isMinor = score && score <= 3 && score >= 2;
-    const col = isMinor ? '#2C2C2A' : score ? scoreColor(score) : (level === 'fail' ? '#D50000' : '#FF9100');
-    const bg  = isMinor ? '#FFFDE0' : level === 'fail' ? 'var(--red-dim)' : 'var(--amber-dim)';
-    const border = isMinor ? '#B8970A' : col;
-    const icon = score ? qaChip(score) : (level === 'fail' ? '🔴' : '🟠');
-    const titleCol = isMinor ? '#2C2C2A' : col;
-    const detailCol = isMinor ? '#4A4038' : 'var(--text2)';
-    qaRecs.push(`<div style="display:flex;align-items:baseline;gap:10px;padding:7px 12px;background:${bg};border:1px solid ${border};border-radius:6px;margin-bottom:5px">
-      <span style="flex-shrink:0;line-height:1">${icon}</span>
-      <div style="font-family:'Share Tech Mono',monospace;font-size:11px">
-        <span style="color:${titleCol};font-weight:700;text-transform:uppercase;letter-spacing:.6px">${title}</span>
-        <span style="color:${isMinor ? '#5A4F3A' : 'var(--text3)'};margin:0 6px">·</span>
-        <span style="color:${detailCol}">${action}</span>
-      </div>
-    </div>`);
-  }
-
-  if (delta !== null && delta >= 1) {
-    const deltaScore = delta < 3 ? 2 : 4; // Minor 1-3 dB, Serious >3 dB
-    const quieter = louder === 'Left' ? 'Right' : 'Left';
-    const msg = delta < 3
-      ? `${louder} is ${delta.toFixed(1)} dB louder. Monitor — correct if noticeable.`
-      : `${louder} is ${delta.toFixed(1)} dB louder. Engineer: reduce ${louder} gain by ${delta.toFixed(1)} dB (or raise ${quieter} by ${delta.toFixed(1)} dB).`;
-    qaRec(delta < 3 ? 'warn' : 'fail', 'Acoustic Δ', msg, deltaScore);
-  }
-  if (!isSingleCh && bleedScore >= 2) {
-    const msg = bleedScore === 2 ? 'Low-freq structural bleed — wall/room transmission. Verify.' :
-                bleedScore === 3 ? 'Mild headphone bleed — speech fundamentals in opposite channel. Cover with Roomtone.' :
-                bleedScore === 4 ? 'Moderate headphone bleed — clear across speech range. Flag.' :
-                'Severe headphone bleed — strong full-band. Flag.';
-    qaRec(bleedScore >= 4 ? 'fail' : 'warn', 'Headphone Bleed', msg, bleedScore);
-  }
-  if (humScore >= 2) qaRec('fail', 'Hum / Buzz', `${a.hum.freq}Hz detected. Check power supply, cables and grounding. Re-record if not resolved.`, humScore);
-  const hpfLDet2 = a.hpf && a.hpf.left  && a.hpf.left.detected;
-  const hpfRDet2 = a.hpf && a.hpf.right && a.hpf.right.detected;
-  if (hpfLDet2 || hpfRDet2) {
-    const who2 = (hpfLDet2 && hpfRDet2) ? 'Both tracks' : hpfLDet2 ? 'Left track' : 'Right track';
-    qaRec('fail', 'HPF', `${who2} — remove high-pass filter on source signal chain. Flag.`, 5);
-  }
-  const dzLDet3 = a.digitalZero && a.digitalZero.left;
-  const dzRDet3 = a.digitalZero && a.digitalZero.right;
-  if (dzLDet3 || dzRDet3) {
-    const who3 = (dzLDet3 && dzRDet3) ? 'Both tracks' : dzLDet3 ? 'Left track' : 'Right track';
-    qaRec('fail', 'Digital Zero RT', `${who3} — room tone erased between lines. Unauthorized gate or NR on RAW. Re-deliver unprocessed.`, 5);
-  }
-  if (popScore >= 2) qaRec(popScore >= 4 ? 'fail' : 'warn', 'Mic Pops', popScore >= 4
-    ? `~${popTotal} possible pops — verify by ear. Fix with room tone or RX. Request re-record if excessive.`
-    : `~${popTotal} possible pop${popTotal>1?'s':''} — verify by ear. Fix with room tone or RX.`, popScore);
-  if (clickScore >= 2) qaRec('warn', 'Mouth Clicks', `${clickTotal} event${clickTotal>1?'s':''} detected. Fix with room tone or RX.`, clickScore);
-  if (impScore >= 2) qaRec(impScore >= 4 ? 'fail' : 'warn', 'Physical Noises', `${impTotal} event${impTotal>1?'s':''} detected. Check mic stand isolation. Fix with room tone or RX.`, impScore);
-
-  const recsHTML = qaRecs.length
-    ? `<div style="padding:10px 20px 12px;border-top:1px solid var(--border2);background:var(--bg3)">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">QA Recommendations</div>
-        ${qaRecs.join('')}
-      </div>` : '';
-
   const footerNote = `<div style="padding:6px 20px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);border-top:1px solid var(--border)">
-    Artifact scan · all ${a.takesAnalyzed} take${a.takesAnalyzed>1?'s':''} · 10s per take
+    Artifact scan · all ${a.takesAnalyzed} take${a.takesAnalyzed>1?'s':''} · 10s per take · Scores are indicators — review by ear before editing
   </div>`;
 
-  return rows.join('') + recsHTML + footerNote;
+  return rows.join('') + footerNote;
 }
 
 function buildRecommendations(rawLA, rawRA, eA, mA) {
@@ -3421,9 +3462,9 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('rawLCardMeta').textContent = (rawLSL ? 'Studio: ' + rawLSL.studio + ' (' + rawLSL.location + ') · ' : '') + rawLA.sampleRate/1000+' kHz · '+(rawLA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawLA.duration)+' total';
     const hpfLDet = artifactData && artifactData.hpf && artifactData.hpf.left && artifactData.hpf.left.detected;
     document.getElementById('rawLNFBadge').innerHTML = hpfLDet
-      ? '<span class="nf-chip nf-fail">HPF Detected</span>'
-      : nfBadgeHTML(rawLA.noiseFloorDb);
-    document.getElementById('rawLMetrics').innerHTML = buildMetrics(rawLA, false, true, 'raw');
+      ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
+      : nfBadgeHTML(rawLA.noiseFloorDb, false);
+    document.getElementById('rawLMetrics').innerHTML = buildMetrics(rawLA, false, true, 'raw', hpfLDet);
   }
 
   // Single character QA card — shows in RAW Right slot when no Right track and no stereo bounce
@@ -3443,9 +3484,9 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('rawRCardMeta').textContent = (rawRSL ? 'Studio: ' + rawRSL.studio + ' (' + rawRSL.location + ') · ' : '') + rawRA.sampleRate/1000+' kHz · '+(rawRA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawRA.duration)+' total';
     const hpfRDet = artifactData && artifactData.hpf && artifactData.hpf.right && artifactData.hpf.right.detected;
     document.getElementById('rawRNFBadge').innerHTML = hpfRDet
-      ? '<span class="nf-chip nf-fail">HPF Detected</span>'
-      : nfBadgeHTML(rawRA.noiseFloorDb);
-    document.getElementById('rawRMetrics').innerHTML = buildMetrics(rawRA, false, true, 'raw');
+      ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
+      : nfBadgeHTML(rawRA.noiseFloorDb, false);
+    document.getElementById('rawRMetrics').innerHTML = buildMetrics(rawRA, false, true, 'raw', hpfRDet);
   }
 
   // RAW Bounce card (stereo) — row 2 left
@@ -3539,14 +3580,19 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('sessionAnalysisMeta').textContent =
       'Based on Edit WAV · ' + fmtDur(eA.duration);
     document.getElementById('sessionAnalysisMetrics').innerHTML =
-      buildSpeechBlock(eA);
+      buildSpeechBlock(eA, eA.editChecks || null);
   } else {
     sac.style.display = 'none';
   }
 
   // Overall badge
   const allA = [rawStereoA, rawLA, rawRA, eA, mA].filter(Boolean);
-  const anyFail = allA.some(a => a.noiseFloorDb >= -50 || a.noiseFloorDb <= -90);
+  const hpfAny = [rawLA, rawRA].filter(Boolean).some((a, i) => {
+    const hpfDet = artifactData && artifactData.hpf;
+    return i === 0 ? (hpfDet && hpfDet.left  && hpfDet.left.detected)
+                   : (hpfDet && hpfDet.right && hpfDet.right.detected);
+  });
+  const anyFail = allA.some(a => a.noiseFloorDb >= -50 || (a.noiseFloorDb <= -90 && hpfAny));
   const allPass = allA.every(a => a.noiseFloorDb > -90 && a.noiseFloorDb <= -57);
   const overall = anyFail ? 'FAIL' : allPass ? 'PASS' : 'WARN';
   const cls = overall==='PASS'?'pass':overall==='FAIL'?'fail':'warn';
