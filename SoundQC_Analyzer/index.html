@@ -2716,8 +2716,104 @@ function detectHum(data, sr, nfDb) {
   return { detected: true, freq, strength };
 }
 
-// Detect transients: short bursts above threshold with optional freq band filter
-// Detect mic pops using LP-dominance + abrupt amplitude jump
+// Detect high-frequency tonal interference (8kHz–23kHz)
+// Uses silence windows + high-res FFT, looks for narrow spikes >8dB above local noise floor
+function detectInterference(data, sr, nfDb) {
+  const winSz   = Math.floor(sr * 2);   // 2s silence windows for frequency resolution
+  const silThresh = Math.pow(10, (nfDb + 8) / 20);
+  const silWins = [];
+  for (let i = 0; i + winSz <= data.length; i += winSz) {
+    let sq = 0;
+    for (let j = i; j < i + winSz; j++) sq += data[j] * data[j];
+    if (Math.sqrt(sq / winSz) < silThresh) silWins.push(i);
+    if (silWins.length >= 4) break;
+  }
+  if (!silWins.length) return { detected: false, freq: null, ratio: 0 };
+
+  // High-res FFT: 16384 points → ~2.93 Hz/bin at 48kHz — sufficient for kHz-range tones
+  const N = 16384;
+  const binHz = sr / N;
+  const avgMag = new Float32Array(N / 2 + 1);
+
+  for (const start of silWins) {
+    const re = new Float32Array(N);
+    const im = new Float32Array(N);
+    const len = Math.min(N, data.length - start);
+    for (let i = 0; i < len; i++) re[i] = data[start + i] * (0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1))));
+    // Cooley-Tukey FFT (reuse same pattern as detectHPF)
+    let j = 0;
+    for (let i = 1; i < N; i++) {
+      let bit = N >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
+    }
+    for (let len2 = 2; len2 <= N; len2 <<= 1) {
+      const ang = -2 * Math.PI / len2;
+      const wRe = Math.cos(ang), wIm = Math.sin(ang);
+      for (let i = 0; i < N; i += len2) {
+        let cRe = 1, cIm = 0;
+        for (let k = 0; k < len2 / 2; k++) {
+          const uRe = re[i+k], uIm = im[i+k], vRe = re[i+k+len2/2], vIm = im[i+k+len2/2];
+          const tRe = cRe*vRe - cIm*vIm, tIm = cRe*vIm + cIm*vRe;
+          re[i+k] = uRe+tRe; im[i+k] = uIm+tIm;
+          re[i+k+len2/2] = uRe-tRe; im[i+k+len2/2] = uIm-tIm;
+          const nr = cRe*wRe - cIm*wIm; cIm = cRe*wIm + cIm*wRe; cRe = nr;
+        }
+      }
+    }
+    for (let i = 0; i <= N / 2; i++) {
+      avgMag[i] += Math.sqrt(re[i]*re[i] + im[i]*im[i]) / N / silWins.length;
+    }
+  }
+
+  // Scan 8kHz–23kHz for tonal spikes
+  const loScan = Math.round(8000  / binHz);
+  const hiScan = Math.round(Math.min(23000, sr / 2 - 100) / binHz);
+  const TONAL_DB   = 8.0;
+  const LOCAL_BINS = Math.round(200 / binHz);
+  const excl       = Math.round(30  / binHz);
+  const maxBin     = N / 2;
+  const MERGE_HZ   = 500; // merge spikes within 500Hz of each other
+
+  const rawSpikes = [];
+
+  for (let b = loScan + LOCAL_BINS; b < hiScan - LOCAL_BINS; b++) {
+    const peak = avgMag[b];
+    const ctx = [];
+    for (let k = b - LOCAL_BINS; k <= b + LOCAL_BINS; k++) {
+      if (Math.abs(k - b) > excl) ctx.push(avgMag[k]);
+    }
+    ctx.sort((a, b) => a - b);
+    const localFloor = ctx[Math.floor(ctx.length / 2)] || 1e-12;
+    const ratioDb = 20 * Math.log10((peak + 1e-12) / (localFloor + 1e-12));
+
+    if (ratioDb > TONAL_DB) {
+      const leftShoulder  = (avgMag[Math.max(0, b-6)] + avgMag[Math.max(0, b-7)] + avgMag[Math.max(0, b-8)]) / 3;
+      const rightShoulder = (avgMag[Math.min(maxBin, b+6)] + avgMag[Math.min(maxBin, b+7)] + avgMag[Math.min(maxBin, b+8)]) / 3;
+      if (peak > leftShoulder * 1.5 && peak > rightShoulder * 1.5) {
+        rawSpikes.push({ freq: b * binHz, ratio: ratioDb });
+      }
+    }
+  }
+
+  if (!rawSpikes.length) return { detected: false, spikes: [] };
+
+  // Merge spikes within 500Hz — keep strongest in each cluster
+  rawSpikes.sort((a, b) => b.ratio - a.ratio);
+  const merged = [];
+  for (const spike of rawSpikes) {
+    if (!merged.some(m => Math.abs(m.freq - spike.freq) < MERGE_HZ)) {
+      merged.push({ freq: Math.round(spike.freq), ratio: spike.ratio });
+    }
+  }
+
+  // Sort by frequency for display, keep up to 5
+  merged.sort((a, b) => a.freq - b.freq);
+  return { detected: true, spikes: merged.slice(0, 5) };
+}
+
+
 // A real pop: low-freq burst (LP/Full ratio > 0.85) immediately followed
 // by a sudden full-band onset jump of ≥10 dB within 15ms
 function detectPops(data, sr, nfDb) {
@@ -2967,6 +3063,7 @@ async function runSingleArtifactScan(files) {
   const scanFiles = files.slice(0, TAKES);
 
   let humDetected = false, humFreq = null;
+  let interfDetected = false, interfSpikes = [], interfLeft = false, interfRight = false;
   let pops = 0, clicks = 0, impacts = 0;
   let hpfL = null;
   let digitalZeroL = false;
@@ -2974,16 +3071,65 @@ async function runSingleArtifactScan(files) {
   const getSuffix = f => { const m = f.name.match(/_(\d+)\.wav$/i); return m ? m[1] : f.name; };
   let n = 0;
 
-  for (const f of scanFiles) {
+  // ── Interference: 5 random takes, majority vote ──
+  const INTERF_TAKES = 5;
+  const interfSample = scanFiles.length <= INTERF_TAKES
+    ? scanFiles
+    : (function() {
+        const idx = [];
+        while (idx.length < INTERF_TAKES) {
+          const r = Math.floor(Math.random() * scanFiles.length);
+          if (!idx.includes(r)) idx.push(r);
+        }
+        return idx.map(i => scanFiles[i]);
+      })();
+
+  let interfHits = 0, interfSpikesAll = [];
+  let humHits = 0, humFreqVotesSingle = [];
+  const bufCacheSingle = new Map();
+  for (const f of interfSample) {
     const buf = await decodeFile(f);
+    if (buf.numberOfChannels > 1) continue;
+    bufCacheSingle.set(f.name, buf);
+    const sr      = buf.sampleRate;
+    const dataFull = buf.getChannelData(0);
+    const data10s  = sliceSamples(buf, 0, SECS);
+    const nfDb    = analyzeChannel(data10s, sr).noiseFloorDb;
+    const iv = detectInterference(dataFull, sr, nfDb);
+    if (iv.detected) { interfHits++; interfSpikesAll.push(...iv.spikes); }
+    const hv = detectHum(dataFull, sr, nfDb);
+    if (hv.detected) { humHits++; humFreqVotesSingle.push(hv.freq); }
+  }
+  const interfThreshSingle = Math.ceil(interfSample.length / 2);
+  if (interfHits >= interfThreshSingle) {
+    interfDetected = true; interfLeft = true;
+    const buckets = {};
+    for (const s of interfSpikesAll) {
+      const key = Math.round(s.freq / 500) * 500;
+      if (!buckets[key]) buckets[key] = [];
+      buckets[key].push(s);
+    }
+    interfSpikes = Object.values(buckets)
+      .map(g => ({
+        freq: Math.round(g.reduce((a,s) => a + s.freq, 0) / g.length),
+        ratio: Math.max(...g.map(s => s.ratio))
+      }))
+      .sort((a, b) => b.ratio - a.ratio)
+      .slice(0, 5);
+  }
+  if (humHits >= Math.ceil(interfSample.length / 2)) {
+    humDetected = true;
+    humFreqVotesSingle.sort((a,b) => a-b);
+    humFreq = humFreqVotesSingle[Math.floor(humFreqVotesSingle.length / 2)];
+  }
+
+  for (const f of scanFiles) {
+    const buf = bufCacheSingle.has(f.name) ? bufCacheSingle.get(f.name) : await decodeFile(f);
     if (buf.numberOfChannels > 1) continue;
     const data = sliceSamples(buf, 0, SECS);
     const sr   = buf.sampleRate;
     const nfDb = analyzeChannel(data, sr).noiseFloorDb;
     const clip  = 'Clip-' + getSuffix(f);
-
-    const hum = detectHum(data, sr, nfDb);
-    if (hum.detected) { humDetected = true; humFreq = hum.freq; humClips.push({ label: clip, file: f.name }); }
 
     const hpf = detectHPF(data, sr, nfDb);
     if (hpf.detected) { hpfL = hpf; hpfLClips.push({ label: clip, file: f.name }); }
@@ -3008,7 +3154,7 @@ async function runSingleArtifactScan(files) {
   return {
     takesAnalyzed: n,
     hum:         { detected: humDetected, freq: humFreq, clips: humClips },
-    hpf:         { left: hpfL, right: null, clipsL: hpfLClips, clipsR: [] },
+    interference: { detected: interfDetected, spikes: interfSpikes, left: interfDetected, right: false },
     digitalZero: { left: digitalZeroL, right: false, clipsL: dzLClips, clipsR: [] },
     pops:        { left: pops, right: 0, clipsL: popClips,    clipsR: [] },
     clicks:      { left: clicks, right: 0, clipsL: clickClips, clipsR: [] },
@@ -3033,6 +3179,7 @@ async function runArtifactScan(leftFiles, rightFiles) {
   let bleedLowArr = [], bleedMidArr = [], bleedHighArr = [];
   let bleedN = 0;
   let humDetected = false, humFreq = null;
+  let interfDetected = false, interfSpikes = [], interfLeft = false, interfRight = false;
   let popsL = 0, popsR = 0, clicksL = 0, clicksR = 0, impactL = 0, impactR = 0;
   let hpfL = null, hpfR = null;
   let digitalZeroL = false, digitalZeroR = false;
@@ -3044,8 +3191,75 @@ async function runArtifactScan(leftFiles, rightFiles) {
   const dzClipsL = [], dzClipsR = [];
   let n = 0;
 
-  for (const pair of scanTakes) {
+  // ── Interference: 5 random takes, both tracks, majority vote ──
+  const INTERF_TAKES = 5;
+  const interfSample = scanTakes.length <= INTERF_TAKES
+    ? scanTakes
+    : (function() {
+        const idx = [];
+        while (idx.length < INTERF_TAKES) {
+          const r = Math.floor(Math.random() * scanTakes.length);
+          if (!idx.includes(r)) idx.push(r);
+        }
+        return idx.map(i => scanTakes[i]);
+      })();
+
+  let interfLHits = 0, interfRHits = 0, interfLSpikesAll = [], interfRSpikesAll = [];
+  let humLHits = 0, humRHits = 0, humFreqVotes = [];
+  const bufCache = new Map(); // cache decoded buffers keyed by filename
+  for (const pair of interfSample) {
     const [lBuf, rBuf] = await Promise.all([decodeFile(pair.left), decodeFile(pair.right)]);
+    bufCache.set(pair.left.name,  lBuf);
+    bufCache.set(pair.right.name, rBuf);
+    const sr       = lBuf.sampleRate;
+    const lFull    = lBuf.getChannelData(0);
+    const rFull    = rBuf.getChannelData(0);
+    const lData10s = sliceSamples(lBuf, 0, SECS);
+    const rData10s = sliceSamples(rBuf, 0, SECS);
+    const lNF      = analyzeChannel(lData10s, sr).noiseFloorDb;
+    const rNF      = analyzeChannel(rData10s, sr).noiseFloorDb;
+    const iL = detectInterference(lFull, sr, lNF);
+    const iR = detectInterference(rFull, sr, rNF);
+    if (iL.detected) { interfLHits++; interfLSpikesAll.push(...iL.spikes); }
+    if (iR.detected) { interfRHits++; interfRSpikesAll.push(...iR.spikes); }
+    const hL = detectHum(lFull, sr, lNF);
+    const hR = detectHum(rFull, sr, rNF);
+    if (hL.detected) { humLHits++; humFreqVotes.push(hL.freq); }
+    if (hR.detected) { humRHits++; if (!humFreqVotes.length) humFreqVotes.push(hR.freq); }
+  }
+  const interfThreshold = Math.ceil(interfSample.length / 2);
+  const humThreshold    = Math.ceil(interfSample.length / 2);
+  interfLeft  = interfLHits >= interfThreshold;
+  interfRight = interfRHits >= interfThreshold;
+  if (interfLeft || interfRight) {
+    interfDetected = true;
+    // Collect all spikes from all sampled takes, merge within 500Hz, keep strongest per cluster
+    const allSpikes = [...interfLSpikesAll, ...interfRSpikesAll];
+    const buckets = {};
+    for (const s of allSpikes) {
+      const key = Math.round(s.freq / 500) * 500;
+      if (!buckets[key]) buckets[key] = [];
+      buckets[key].push(s);
+    }
+    interfSpikes = Object.values(buckets)
+      .map(g => ({
+        freq: Math.round(g.reduce((a,s) => a + s.freq, 0) / g.length),
+        ratio: Math.max(...g.map(s => s.ratio))
+      }))
+      .sort((a, b) => b.ratio - a.ratio)
+      .slice(0, 5);
+  }
+  if (humLHits >= humThreshold || humRHits >= humThreshold) {
+    humDetected = true;
+    humFreqVotes.sort((a,b) => a-b);
+    humFreq = humFreqVotes[Math.floor(humFreqVotes.length / 2)];
+  }
+
+  for (const pair of scanTakes) {
+    const [lBuf, rBuf] = await Promise.all([
+      bufCache.has(pair.left.name)  ? Promise.resolve(bufCache.get(pair.left.name))  : decodeFile(pair.left),
+      bufCache.has(pair.right.name) ? Promise.resolve(bufCache.get(pair.right.name)) : decodeFile(pair.right),
+    ]);
     const lData = sliceSamples(lBuf, 0, SECS);
     const rData = sliceSamples(rBuf, 0, SECS);
     const sr    = lBuf.sampleRate;
@@ -3072,13 +3286,6 @@ async function runArtifactScan(leftFiles, rightFiles) {
     }
     if (bleedLR.mid >= 0.08 || bleedLR.high >= 0.05) bleedClips.push({ label: rClip, file: pair.right.name });
     if (bleedRL.mid >= 0.08 || bleedRL.high >= 0.05) bleedClips.push({ label: lClip, file: pair.left.name });
-
-    // Hum
-    const hum = detectHum(lData, sr, lNF);
-    if (hum.detected) {
-      humDetected = true; humFreq = hum.freq;
-      humClips.push({ label: lClip, file: pair.left.name });
-    }
 
     // HPF — check both tracks independently
     const hpfLeft  = detectHPF(lData, sr, lNF);
@@ -3133,7 +3340,7 @@ async function runArtifactScan(leftFiles, rightFiles) {
     bleedScore,
     bleedClips,
     hum:         { detected: humDetected, freq: humFreq, clips: humClips },
-    hpf:         { left: hpfL, right: hpfR, clipsL: hpfClipsL, clipsR: hpfClipsR },
+    interference: { detected: interfDetected, spikes: interfSpikes, left: interfLeft, right: interfRight },
     digitalZero: { left: digitalZeroL, right: digitalZeroR, clipsL: dzClipsL, clipsR: dzClipsR },
     pops:        { left: popsL, right: popsR, clipsL: popClipsL,    clipsR: popClipsR },
     clicks:      { left: clicksL, right: clicksR, clipsL: clickClipsL, clipsR: clickClipsR },
@@ -3304,13 +3511,39 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     }
   }
 
-  // ── Hum score 1–5 ─────────────────────────────────────
+  // ── Hum / Buzz / Interference score 1–5 ──────────────────
   const humStrength = a.hum.strength || 0;
-  const humScore = !a.hum.detected ? 1 : humStrength < 50 ? 2 : humStrength < 150 ? 3 : humStrength < 300 ? 4 : 5;
-  const humLevel = humScore === 1 ? 'pass' : humScore <= 2 ? 'warn' : 'fail';
-  const humDesc  = humScore === 1 ? 'No 50/60Hz detected'
-    : `${a.hum.freq}Hz interference · stop and report · flag in Labelbox`;
-  rows.push(aRow('Hum / Buzz', qaChip(humScore), humDesc, humLevel, a.hum.clips, true));
+  const humScore  = !a.hum.detected ? 1 : humStrength < 50 ? 2 : humStrength < 150 ? 3 : humStrength < 300 ? 4 : 5;
+  const interfDet    = a.interference && a.interference.detected;
+  const interfSpikes = interfDet ? (a.interference.spikes || []) : [];
+  // Score based on strongest spike ratio — capped at Minor (3) since these are sub-audible in most cases
+  const maxRatio     = interfSpikes.length ? Math.max(...interfSpikes.map(s => s.ratio)) : 0;
+  const interfScore  = !interfDet ? 1 : maxRatio < 12 ? 2 : 3;
+  const combinedScore = Math.max(humScore, interfScore);
+  const humLevel  = combinedScore === 1 ? 'pass' : 'warn'; // interference always Minor at most
+
+  let humDesc = '';
+  if (!a.hum.detected && !interfDet) {
+    humDesc = 'No interference detected';
+  } else {
+    const parts = [];
+    if (a.hum.detected) parts.push(`${a.hum.freq}Hz hum · stop and report · flag in Labelbox`);
+    if (interfDet && interfSpikes.length) {
+      const who = (a.interference.left && a.interference.right) ? 'Both tracks'
+                : a.interference.left  ? 'Left track'
+                : 'Right track';
+      const spikeStr = interfSpikes
+        .map(s => {
+          const khz   = (s.freq / 1000).toFixed(1) + 'kHz';
+          const label = s.ratio >= 14 ? 'strong' : s.ratio >= 10 ? 'moderate' : 'faint';
+          return `${khz} (${label})`;
+        })
+        .join(', ');
+      parts.push(`Tonal interference — ${who}: ${spikeStr}`);
+    }
+    humDesc = parts.join(' · ');
+  }
+  rows.push(aRow('Hum / Buzz / Interference', qaChip(combinedScore), humDesc, humLevel, a.hum.clips, true));
 
   // ── Mic Pops score 1–5 ────────────────────────────────
   const popTotal = a.pops.left + a.pops.right;
