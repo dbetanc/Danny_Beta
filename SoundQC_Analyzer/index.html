@@ -1406,6 +1406,10 @@ async function runAnalysis() {
       // QC Edit checks — full file scan
       setProgress('Scanning Edit WAV…', 70);
       eA.editChecks = await computeEditChecks(eBuf);
+      // HPF detection on Edit bounce — slice to 60s to avoid long filter passes
+      const editSr   = eBuf.sampleRate;
+      const editCh0  = eBuf.getChannelData(0).subarray(0, Math.min(eBuf.getChannelData(0).length, editSr * 60));
+      eA.hpf = detectHPF(editCh0, editSr, eA.noiseFloorDb);
     }
     if (mFile) {
       setProgress('Decoding Mixed WAV…', 80);
@@ -3393,14 +3397,9 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
         rawWarnNoisy[0].noiseFloorDb.toFixed(1) + ' dBFS. Monitor before editing.');
   }
 
-  // ── Edit: unauthorized processing ────────────────────────
-  if (eA && rawArr.length) {
-    const rawNF = rawArr.reduce((s, a) => s + a.noiseFloorDb, 0) / rawArr.length;
-    const drop  = eA.noiseFloorDb - rawNF;
-    if (drop < -6)
-      rec('fail', 'Edit — Unauthorized Processing',
-        'NF dropped ' + Math.abs(drop).toFixed(1) + ' dB vs RAW. Re-deliver without noise reduction.');
-  }
+  // ── Edit: HPF detection ───────────────────────────────────
+  if (eA && eA.hpf && eA.hpf.detected)
+    rec('fail', 'Edit — HPF Detected', 'High-pass filter found on Edit bounce');
 
   // ── Edit LUFS: −21 to −24 ─────────────────────────────────
   if (eA && eA.lufs != null) {
@@ -3536,7 +3535,9 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('editCardType').innerHTML = '<span class="card-type-qc">QC</span> — Edit WAV';
     document.getElementById('editCardName').textContent = eFile.name;
     document.getElementById('editCardMeta').textContent = fmtSize(eFile.size)+' · '+eA.sampleRate/1000+' kHz · '+(eA.channels===1?'Mono':'Stereo')+' · '+fmtDur(eA.duration);
-    document.getElementById('editNFBadge').innerHTML    = nfBadgeHTML(eA.noiseFloorDb);
+    document.getElementById('editNFBadge').innerHTML = (eA.hpf && eA.hpf.detected)
+      ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
+      : nfBadgeHTML(eA.noiseFloorDb);
     document.getElementById('editMetrics').innerHTML    = buildMetrics(eA, false, false, 'edit');
   }
 
