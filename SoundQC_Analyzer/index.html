@@ -532,7 +532,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.0.0</div>
+            <div class="version-badge">v3.0.1</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -1481,7 +1481,7 @@ function mRow(label, val, extra, vcls) {
 }
 function nfBarHTML(nf, rms, peak) {
   // Wider coordinate space (1400 units) gives labels more room — fixes Safari Courier overlap
-  const MIN = -80, RANGE = 80, W = 1400;
+  const MIN = -100, RANGE = 100, W = 1400;
   const px = db => Math.max(0, Math.min(W, (db - MIN) / RANGE * W));
 
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
@@ -1510,9 +1510,9 @@ function nfBarHTML(nf, rms, peak) {
   const th90 = px(-90), th57 = px(-57), th50 = px(-50);
   const TY = 44, TH = 13;
 
-  const ticks = [];
-  for (let d = -78; d <= 0; d += 3) ticks.push(d);
-  const majorSet = new Set([-90, -70, -60, -50, -40, -36, -30, -24, -18, -12, -6, -3, 0]);
+  const ticks = [-100];
+  for (let d = -96; d <= 0; d += 3) ticks.push(d);
+  const majorSet = new Set([-100, -90, -70, -60, -50, -40, -30, -24, -18, -12, -6, -3, 0]);
 
   const ticksSVG = ticks.map(d => {
     const x   = px(d).toFixed(1);
@@ -1665,17 +1665,12 @@ function dbBarHTML(db, type) {
       <div style="position:absolute;top:0;bottom:0;left:${nfPct(-50).toFixed(1)}%;width:1px;background:${mc}"></div>`;
 
     // Tick labels — boundary values colour-coded to their zone
-    const ticks = [-100, -90, -57, -50, -25, 0];
+    const ticks = [-100, -90, -80, -70, -60, -50, -25, 0];
     const ticksHTML = ticks.map(t => {
       const left   = nfPct(t).toFixed(1);
       const anchor = t === -100 ? 'left' : t === 0 ? 'right' : 'center';
       const tx     = anchor === 'center' ? 'translateX(-50%)' : anchor === 'right' ? 'translateX(-100%)' : 'none';
-      const col    = t === -90 ? (isDark ? '#c080ff' : '#7030cc')
-                   : t === -57 ? (isDark ? '#ff9100' : '#cc5500')
-                   : t === -50 ? (isDark ? '#ff4060' : '#d4001a')
-                   : lblCol;
-      const weight = (t === -90 || t === -57 || t === -50) ? 'font-weight:700;' : '';
-      return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${col};${weight}">${t}</span>`;
+      return `<span style="position:absolute;left:${left}%;transform:${tx};white-space:nowrap;color:${lblCol}">${t}</span>`;
     }).join('');
 
     // Smooth sunset gradient — stops are defined in bar-space then scaled to fillPct
@@ -1747,7 +1742,7 @@ function dbBarHTML(db, type) {
 
     const rmsGradient = fillPct > 0 ? `linear-gradient(to right, ${rmsScaled})` : '#a050ff';
 
-    const rmsTicks = [-80, -60, -40, -20, 0];
+    const rmsTicks = [-80, -70, -60, -50, -40, -30, -20, -10, 0];
     const rmsTicksHTML = rmsTicks.map(t => {
       const left   = pct(t).toFixed(1);
       const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
@@ -1801,7 +1796,7 @@ function dbBarHTML(db, type) {
   const pkGradient = fillPct > 0 ? `linear-gradient(to right, ${pkScaled})` : '#a050ff';
 
   // Tick labels — standard spacing, no colour coding
-  const pkTicks = [-80, -60, -40, -20, 0];
+  const pkTicks = [-80, -70, -60, -50, -40, -30, -20, -10, 0];
   const pkTicksHTML = pkTicks.map(t => {
     const left   = pct(t).toFixed(1);
     const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
@@ -1887,7 +1882,7 @@ function lufsBarHTML(lufs, target) {
   const gradient = fillPct > 0 ? `linear-gradient(to right, ${scaledStops})` : '#a050ff';
 
   // Tick labels — highlight zone boundaries in green
-  const ticks = [-80, -60, -40, -20, 0];
+  const ticks = [-80, -70, -60, -50, -40, -30, -20, -10, 0];
   const ticksHTML = ticks.map(t => {
     const left   = pct(t).toFixed(1);
     const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
@@ -1928,7 +1923,7 @@ function snrDrBarHTML(nf, rms, peak) {
   const pkCol  = isDark ? '#ff2040' : '#cc0020';  // red dot = Peak
   const drCol  = isDark ? 'rgba(255,32,64,0.35)' : 'rgba(204,0,32,0.2)'; // red span = DR
 
-  const ticks = [-80, -60, -40, -20, 0];
+  const ticks = [-80, -70, -60, -50, -40, -30, -20, -10, 0];
   const ticksHTML = ticks.map(t => {
     const left = linPct(t).toFixed(1);
     const anchor = t === -80 ? 'left' : t === 0 ? 'right' : 'center';
@@ -2718,8 +2713,8 @@ function detectHum(data, sr, nfDb) {
 
 // Detect high-frequency tonal interference (8kHz–23kHz)
 // Uses silence windows + high-res FFT, looks for narrow spikes >8dB above local noise floor
-function detectInterference(data, sr, nfDb) {
-  const winSz   = Math.floor(sr * 2);   // 2s silence windows for frequency resolution
+function detectInterference(data, sr, nfDb, winSecs = 2) {
+  const winSz   = Math.floor(sr * winSecs);  // silence window size — 2s for dual, 0.5s for single character
   const silThresh = Math.pow(10, (nfDb + 8) / 20);
   const silWins = [];
   for (let i = 0; i + winSz <= data.length; i += winSz) {
@@ -3118,7 +3113,7 @@ async function runSingleArtifactScan(files) {
     const dataFull = buf.getChannelData(0);
     const data10s  = sliceSamples(buf, 0, SECS);
     const nfDb     = analyzeChannel(data10s, sr).noiseFloorDb;
-    const iv = detectInterference(dataFull, sr, nfDb);
+    const iv = detectInterference(dataFull, sr, nfDb, 0.5);
     if (iv.detected) { interfHits++; interfSpikesByTakeSingle.push(iv.spikes); }
     const hv = detectHum(dataFull, sr, nfDb);
     if (hv.detected) { humHits++; humFreqVotesSingle.push(hv.freq); }
