@@ -787,7 +787,7 @@ h1 span { color: var(--green); }
           <div class="legend-nf-item"><span class="nf-chip nf-orange">WARN</span>−50 to −57 dBFS &nbsp;<span style="color:var(--text3)">trending noisy</span></div>
           <div class="legend-nf-item"><span class="nf-chip nf-pass">PASS</span>&lt; −57 dBFS &nbsp;<span style="color:var(--text3)">acceptable</span></div>
           <div class="legend-nf-item" style="margin-top:6px"><span class="nf-chip nf-fail">FAIL</span>HPF detected &nbsp;<span style="color:var(--text3)">filter applied</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>Digital Zero RT &nbsp;<span style="color:var(--text3)">room tone removed</span></div>
+          
         </div>
       </div>
 
@@ -1453,8 +1453,8 @@ async function runAnalysis() {
 // ── Render ───────────────────────────────────────────────────
 function nfBadgeHTML(db, hpf) {
   if (db >= -50)  return '<div class="nf-badge nf-fail">FAIL — NOISY</div>';
-  if (db > -57)   return '<div class="nf-badge nf-orange">WARN</div>';
-  if (db > -90)   return '<div class="nf-badge nf-pass">PASS</div>';
+  if (db > -57)   return hpf ? '<div class="nf-badge nf-fail">FAIL — HPF</div>' : '<div class="nf-badge nf-orange">WARN</div>';
+  if (db > -90)   return hpf ? '<div class="nf-badge nf-fail">FAIL — HPF</div>' : '<div class="nf-badge nf-pass">PASS</div>';
   return hpf ? '<div class="nf-badge nf-fail">FAIL — NO RT</div>'
              : '<div class="nf-badge nf-blue">VERY QUIET</div>';
 }
@@ -3090,8 +3090,7 @@ async function runSingleArtifactScan(files) {
   let interfDetected = false, interfSpikes = [], interfLeft = false, interfRight = false;
   let pops = 0, clicks = 0, impacts = 0;
   let hpfL = null;
-  let digitalZeroL = false;
-  const humClips = [], popClips = [], clickClips = [], impactClips = [], hpfLClips = [], dzLClips = [];
+  const humClips = [], popClips = [], clickClips = [], impactClips = [], hpfLClips = [];
   const getSuffix = f => { const m = f.name.match(/_(\d+)\.wav$/i); return m ? m[1] : f.name; };
   let n = 0;
 
@@ -3146,9 +3145,6 @@ async function runSingleArtifactScan(files) {
     const hpf = detectHPF(data, sr, nfDb);
     if (hpf.detected) { hpfL = hpf; hpfLClips.push({ label: clip, file: f.name }); }
 
-    const dz = detectDigitalZero(data, sr);
-    if (dz.detected) { digitalZeroL = true; dzLClips.push({ label: clip, file: f.name }); }
-
     const p = detectPops(data, sr, nfDb);
     pops += p.events;
     if (p.events > 0) popClips.push({ label: clip, file: f.name, count: p.events });
@@ -3167,7 +3163,7 @@ async function runSingleArtifactScan(files) {
     takesAnalyzed: n,
     hum:         { detected: humDetected, freq: humFreq, clips: humClips },
     interference: { detected: interfDetected, spikes: interfSpikes, left: interfDetected, right: false },
-    digitalZero: { left: digitalZeroL, right: false, clipsL: dzLClips, clipsR: [] },
+    hpf:         { left: hpfL, right: null, clipsL: hpfLClips, clipsR: [] },
     pops:        { left: pops, right: 0, clipsL: popClips,    clipsR: [] },
     clicks:      { left: clicks, right: 0, clipsL: clickClips, clipsR: [] },
     impacts:     { left: impacts, right: 0, clipsL: impactClips, clipsR: [] },
@@ -3194,13 +3190,11 @@ async function runArtifactScan(leftFiles, rightFiles) {
   let interfDetected = false, interfSpikes = [], interfLeft = false, interfRight = false;
   let popsL = 0, popsR = 0, clicksL = 0, clicksR = 0, impactL = 0, impactR = 0;
   let hpfL = null, hpfR = null;
-  let digitalZeroL = false, digitalZeroR = false;
   const bleedClips = [], humClips = [];
   const popClipsL = [], popClipsR = [];
   const clickClipsL = [], clickClipsR = [];
   const impactClipsL = [], impactClipsR = [];
   const hpfClipsL = [], hpfClipsR = [];
-  const dzClipsL = [], dzClipsR = [];
   let n = 0;
 
   // ── Interference: 5 random takes, both tracks, majority vote ──
@@ -3295,12 +3289,6 @@ async function runArtifactScan(leftFiles, rightFiles) {
     if (hpfLeft.detected)  { hpfL = hpfLeft;  hpfClipsL.push({ label: lClip, file: pair.left.name }); }
     if (hpfRight.detected) { hpfR = hpfRight; hpfClipsR.push({ label: rClip, file: pair.right.name }); }
 
-    // Digital Zero RT — check both tracks
-    const dzLeft  = detectDigitalZero(lData, sr);
-    const dzRight = detectDigitalZero(rData, sr);
-    if (dzLeft.detected)  { digitalZeroL = true; dzClipsL.push({ label: lClip, file: pair.left.name }); }
-    if (dzRight.detected) { digitalZeroR = true; dzClipsR.push({ label: rClip, file: pair.right.name }); }
-
     // Pops
     const pL = detectPops(lData, sr, lNF);
     const pR = detectPops(rData, sr, rNF);
@@ -3343,7 +3331,7 @@ async function runArtifactScan(leftFiles, rightFiles) {
     bleedClips,
     hum:         { detected: humDetected, freq: humFreq, clips: humClips },
     interference: { detected: interfDetected, spikes: interfSpikes, left: interfLeft, right: interfRight },
-    digitalZero: { left: digitalZeroL, right: digitalZeroR, clipsL: dzClipsL, clipsR: dzClipsR },
+    hpf:         { left: hpfL, right: hpfR, clipsL: hpfClipsL, clipsR: hpfClipsR },
     pops:        { left: popsL, right: popsR, clipsL: popClipsL,    clipsR: popClipsR },
     clicks:      { left: clicksL, right: clicksR, clipsL: clickClipsL, clipsR: clickClipsR },
     impacts:     { left: impactL, right: impactR, clipsL: impactClipsL, clipsR: impactClipsR },
@@ -3470,16 +3458,6 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
     }
 
-    // ── Digital Zero RT ───────────────────────────────────
-    const dzLDet = a.digitalZero && a.digitalZero.left;
-    const dzRDet = a.digitalZero && a.digitalZero.right;
-    if (dzLDet || dzRDet) {
-      const who = (dzLDet && dzRDet) ? 'Both tracks' : dzLDet ? 'Left track' : 'Right track';
-      rows.push(aRow('Digital Zero RT', 'DETECTED', `${who} — room tone erased · stop and report · flag in Labelbox`, 'fail', []));
-    } else {
-      rows.push(aRow('Digital Zero RT', 'Clean', 'Room tone present in silence gaps', 'pass', []));
-    }
-
     // ── Headphone Bleed ───────────────────────────────────
     bleedScore = a.bleedScore || 1;
     const bleedLabels = ['','Clean','Structural','Mild HP','Moderate HP','Severe HP'];
@@ -3498,18 +3476,12 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
         : `${bleedLabels[bleedScore]} — ${bleedDescs[bleedScore]} · ${bleedActions[bleedScore]}`;
     rows.push(aRow('Headphone Bleed', a.singleChannel ? 'N/A' : qaChip(bleedScore), bleedDetail, a.singleChannel ? '' : bleedLevel, a.bleedClips, true));
   } else {
-    // Single character — still show HPF and Digital Zero RT
+    // Single character — show HPF only
     const hpfLDet = a.hpf && a.hpf.left && a.hpf.left.detected;
     if (hpfLDet) {
       rows.push(aRow('HPF', 'DETECTED', 'Left track — stop and report · flag in Labelbox', 'fail', []));
     } else {
       rows.push(aRow('HPF', 'Clean', 'No high-pass filter detected', 'pass', []));
-    }
-    const dzLDet2 = a.digitalZero && a.digitalZero.left;
-    if (dzLDet2) {
-      rows.push(aRow('Digital Zero RT', 'DETECTED', 'Left track — room tone erased · stop and report · flag in Labelbox', 'fail', []));
-    } else {
-      rows.push(aRow('Digital Zero RT', 'Clean', 'Room tone present in silence gaps', 'pass', []));
     }
   }
 
