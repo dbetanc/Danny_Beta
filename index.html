@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================
-  SOBA - Session Pre-checker v2.1
+  SOBA - Session Pre-checker v2.2
   Created by: Danny Beta
   Date: March 2026
   
@@ -14,7 +14,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="author" content="Danny Beta"/>
-<title>SOBA - Session Pre-checker v2.1</title>
+<title>SOBA - Session Pre-checker v2.2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -773,7 +773,7 @@ input[type=file] {
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.1</div>
+      <div class="version-badge">v2.2</div>
       <button class="theme-toggle" id="themeToggle" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">LIGHT</span>
@@ -1729,15 +1729,17 @@ if (!['line','lout','scene'].includes(m.token)) {
         if (!rows || rows.length === 0) return {pass: true, errors: []};
         
         // Find a file in Audio Files folder to extract the session folder name
-        const audioFileRow = rows.find(r => /[:/]Audio Files:?$/i.test(r.location || ''));
+        // Supports Mac (:) and Windows (\) path separators
+        const audioFileRow = rows.find(r => /[:/\\]Audio Files[:\\]?$/i.test(r.location || ''));
         if (!audioFileRow) return {pass: true, errors: []};
         
         const location = audioFileRow.location || '';
         
         // Extract folder name from path like:
-        // Macintosh HD:Users:...:enusbsgsan-enusbsscur0001_t1lt2r-dualcharacter007:Audio Files:
-        // Split by : or / and get the folder before "Audio Files"
-        const parts = location.split(/[:/]/);
+        // Mac: Macintosh HD:Users:...:session-name:Audio Files:
+        // Win: C:\Users\...\session-name\Audio Files\
+        // Split by : or / or \ and get the folder before "Audio Files"
+        const parts = location.split(/[:/\\]/);
         const audioFilesIdx = parts.findIndex(p => /^Audio Files$/i.test(p.trim()));
         
         if (audioFilesIdx <= 0) return {pass: true, errors: []};
@@ -1760,14 +1762,14 @@ if (!['line','lout','scene'].includes(m.token)) {
         return {pass: true, errors: []};
       }
 
-      // *** FIXED IN v1.0.4 ***
+      // *** FIXED IN v1.0.4 + Windows support ***
       function isInBouncedFiles(loc){
-        return /[:/]Bounced Files:?$/.test(loc || '');
+        return /[:/\\]Bounced Files[:\\]?$/.test(loc || '');
       }
 
-      // *** FIXED IN v1.0.4 ***
+      // *** FIXED IN v1.0.4 + Windows support ***
       function isInAudioFiles(loc){
-        return /[:/]Audio Files:?$/.test(loc || '');
+        return /[:/\\]Audio Files[:\\]?$/.test(loc || '');
       }
 
       function normalizeScriptTail(name){
@@ -1814,7 +1816,8 @@ if (!['line','lout','scene'].includes(m.token)) {
         }
 
         // Helpers (use same folder check as existing code)
-        const isInAudioFiles = loc => /[:\\\/ ]Audio Files:?$/i.test(loc||'');
+        // Supports Mac (:) and Windows (\) path separators
+        const isInAudioFiles = loc => /[:/\\]Audio Files[:\\]?$/i.test(loc||'');
 
         // SINGLECHARACTER
         if (sessionInfo.type === 'single') {
