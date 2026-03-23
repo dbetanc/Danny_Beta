@@ -3363,29 +3363,6 @@ function qaChip(score) {
 function renderQualityCard(rawLA, rawRA, artifactData) {
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 
-  // ── Acoustic Delta row — dual character only ──────────────
-  const delta   = rawLA && rawRA ? Math.abs(rawLA.rmsDb - rawRA.rmsDb) : null;
-  const dr      = deltaRating(delta);
-  const louder  = rawLA && rawRA && rawLA.rmsDb > rawRA.rmsDb ? 'Left' : 'Right';
-
-  // Linear energy position for balance meter
-  let balanceHTML = '';
-  if (rawLA && rawRA) {
-    const linL = Math.pow(10, rawLA.rmsDb / 20);
-    const linR = Math.pow(10, rawRA.rmsDb / 20);
-    const pos  = linR / (linL + linR) * 100;
-    const dev  = pos - 50;
-    const fillStyle = dev <= 0
-      ? `left:${(50+dev).toFixed(1)}%;right:50%`
-      : `left:50%;right:${(50-dev).toFixed(1)}%`;
-    const green = isDark ? '#00ff88' : '#009944';
-    balanceHTML = `<div style="position:relative;height:8px;background:var(--bar-track);border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin:4px 0 2px">
-      <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:rgba(255,255,255,0.5);transform:translateX(-50%)"></div>
-      <div style="position:absolute;top:0;bottom:0;border-radius:4px;background:${green};${fillStyle}"></div>
-    </div>
-    <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)"><span>L</span><span>R</span></div>`;
-  }
-
   // ── Collapsible clip list ──────────────────────────────
   let _collapseId = 0;
   function clipListHTML(clips) {
@@ -3423,27 +3400,53 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
 
   const a = artifactData;
   const rows = [];
-  let bleedScore = 1; // declared here so recommendations block can access it
+  let bleedScore = 1;
+  // ── Clip Gain Advisory row — dual character only ──────────
+  // Replaces Acoustic Delta: shows per-track LUFS and recommended clip gain to reach −22.5 LUFS
+  const EDIT_TARGET = -22.5;
+  const EDIT_LO = -24, EDIT_HI = -21;
 
-  // Acoustic Δ
-  const deltaScore  = delta === null ? 1 : delta < 1 ? 1 : delta < 3 ? 2 : 4;
-  const deltaVal    = delta !== null ? delta.toFixed(2) + ' dB' : 'N/A';
-  const deltaLevel  = delta === null ? '' : delta < 1 ? 'pass' : delta < 3 ? 'warn' : 'fail';
-  const deltaDetail = delta !== null
-    ? `${dr.label} &nbsp;·&nbsp; ${louder} louder &nbsp;·&nbsp; ${balanceHTML}`
-    : 'Single track only';
+  function clipGainSection(label, lufs) {
+    if (lufs == null) return '';
+    const delta   = EDIT_TARGET - lufs;
+    const inRange = lufs >= EDIT_LO && lufs <= EDIT_HI;
+    const dir     = delta > 0 ? '↑' : '↓';
+    const accentCol = inRange
+      ? (isDark ? '#00ff88' : '#009944')
+      : (isDark ? '#FFD600' : '#9A7A00');
+    const borderCol = inRange
+      ? (isDark ? 'rgba(0,255,136,0.3)' : 'rgba(0,153,68,0.3)')
+      : (isDark ? 'rgba(255,214,0,0.35)' : 'rgba(154,122,0,0.35)');
+    const bgCol = inRange
+      ? (isDark ? 'rgba(0,255,136,0.06)' : 'rgba(0,153,68,0.06)')
+      : (isDark ? 'rgba(255,214,0,0.07)' : 'rgba(154,122,0,0.07)');
+    const gainLine = inRange
+      ? `<div style="font-family:'Share Tech Mono',monospace;font-size:15px;font-weight:700;color:${accentCol};letter-spacing:.3px">In range</div>`
+      : `<div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:${accentCol};letter-spacing:.3px">${dir} ${Math.abs(delta).toFixed(1)} dB</div>`;
+    return `<div style="display:flex;flex-direction:column;gap:4px;padding:10px 16px;border:1px solid ${borderCol};border-radius:8px;background:${bgCol};min-width:160px;flex:1;max-width:240px">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">${label}</div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2)">${lufs.toFixed(1)} LUFS</div>
+      ${gainLine}
+    </div>`;
+  }
+
   const isSingleCh = !rawRA || a.singleChannel;
 
-  // Only show Acoustic Δ and Bleed for dual character
-  if (!isSingleCh) {
-  const deltaActionDetail = delta === null ? deltaDetail
-    : delta < 1 ? deltaDetail
-    : delta < 3
-      ? `${deltaDetail} · monitor — correct if noticeable`
-      : `${deltaDetail} · reduce ${louder} gain ${delta.toFixed(1)} dB or raise ${louder === 'Left' ? 'Right' : 'Left'}`;
-  rows.push(aRow('Acoustic Δ', qaChip(deltaScore), deltaActionDetail, deltaLevel, [], true));
+  // Custom clip gain row — bypasses aRow() to get full-width layout with no chip
+  function cgRow(sectionsHTML) {
+    return `<div style="display:grid;grid-template-columns:150px 120px 1fr;align-items:start;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);padding-top:12px">Clip Gain<br>Recommendation</div>
+      <div style="display:flex;flex-direction:row;gap:12px;align-items:flex-start;grid-column:2/4">${sectionsHTML}</div>
+    </div>`;
+  }
 
-    // ── HPF — moved here, below Acoustic Delta ────────────
+  // Only show for dual character
+  if (!isSingleCh) {
+    const cgLeft  = clipGainSection('Left track',  rawLA ? rawLA.lufs : null);
+    const cgRight = clipGainSection('Right track', rawRA ? rawRA.lufs : null);
+    rows.push(cgRow(cgLeft + cgRight));
+
+    // ── HPF — moved here, below Clip Gain row ────────────
     const hpfLDet = a.hpf && a.hpf.left  && a.hpf.left.detected;
     const hpfRDet = a.hpf && a.hpf.right && a.hpf.right.detected;
     if (hpfLDet || hpfRDet) {
@@ -3471,7 +3474,10 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
         : `${bleedLabels[bleedScore]} — ${bleedDescs[bleedScore]} · ${bleedActions[bleedScore]}`;
     rows.push(aRow('Headphone Bleed', a.singleChannel ? 'N/A' : qaChip(bleedScore), bleedDetail, a.singleChannel ? '' : bleedLevel, a.bleedClips, true));
   } else {
-    // Single character — show HPF only
+    // Single character — clip gain advisory + HPF only
+    if (rawLA && rawLA.lufs != null) {
+      rows.push(cgRow(clipGainSection('Track', rawLA.lufs)));
+    }
     const hpfLDet = a.hpf && a.hpf.left && a.hpf.left.detected;
     if (hpfLDet) {
       rows.push(aRow('HPF', 'DETECTED', 'Left track — stop and report · flag in Labelbox', 'fail', []));
