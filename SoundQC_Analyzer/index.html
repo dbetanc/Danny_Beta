@@ -532,7 +532,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.0.1</div>
+            <div class="version-badge">v3.0.2</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -2827,10 +2827,14 @@ function filterConsistentSpikes(spikesByTake, threshold) {
   }
   return Object.values(buckets)
     .filter(g => g.takes.size >= threshold)
-    .map(g => ({
-      freq:  Math.round(g.freqs.reduce((a,v) => a+v, 0) / g.freqs.length),
-      ratio: Math.max(...g.ratios)
-    }))
+    .map(g => {
+      const sorted = [...g.ratios].sort((a, b) => a - b);
+      const medRatio = sorted[Math.floor(sorted.length / 2)];
+      return {
+        freq:  Math.round(g.freqs.reduce((a,v) => a+v, 0) / g.freqs.length),
+        ratio: medRatio
+      };
+    })
     .sort((a, b) => b.ratio - a.ratio)
     .slice(0, 5);
 }
@@ -3510,7 +3514,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       const spikeStr = interfSpikes
         .map(s => {
           const khz   = (s.freq / 1000).toFixed(1) + 'kHz';
-          const label = s.ratio >= 14 ? 'strong' : s.ratio >= 10 ? 'moderate' : 'faint';
+          const label = s.ratio >= 20 ? 'strong' : s.ratio >= 16 ? 'moderate' : 'faint';
           return `${khz} (${label})`;
         })
         .join(', ');
@@ -3674,14 +3678,9 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('rawLMetrics').innerHTML = buildMetrics(rawLA, false, true, 'raw', hpfLDet);
   }
 
-  // Single character QA card — shows in RAW Right slot when no Right track and no stereo bounce
+  // Single character QA card — full-width below RAW (same panel as dual char)
   const singleQACard = document.getElementById('singleQACard');
-  if (hasRawL && !hasRawR && !hasStereoRaw && artifactData) {
-    singleQACard.style.display = '';
-    document.getElementById('singleQABody').innerHTML = renderQualityCard(rawLA, null, artifactData);
-  } else {
-    singleQACard.style.display = 'none';
-  }
+  singleQACard.style.display = 'none'; // always hidden — we use rawPairPanel instead
 
   // RAW Right card
   document.getElementById('rawRCard').style.display = hasRawR ? '' : 'none';
@@ -3706,19 +3705,19 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('rawStereoMetrics').innerHTML = buildMetrics(rawStereoA, false, true, 'raw') + buildStereoRawSection(rawStereoA);
   }
 
-  // Recording Quality card — row 2 right (next to RAW Bounce when stereo present)
+  // Recording Quality card — full-width for dual char (no stereo bounce) AND single char
   const rawQualityCard = document.getElementById('rawQualityCard');
   const rawPairPanel   = document.getElementById('rawPairPanel');
   if (hasStereoRaw && artifactData) {
-    // Stereo bounce present: quality card in right slot
+    // Stereo bounce present: quality card in right slot next to RAW Bounce
     rawQualityCard.style.display = '';
     document.getElementById('rawQualityBody').innerHTML = renderQualityCard(rawLA, rawRA, artifactData);
     rawPairPanel.style.display = 'none';
-  } else if (hasRawL && hasRawR && artifactData) {
-    // No stereo bounce, dual char: quality card full-width
+  } else if ((hasRawL && hasRawR && artifactData) || (hasRawL && !hasRawR && artifactData)) {
+    // Dual char without stereo bounce OR single char — quality card full-width
     rawQualityCard.style.display = 'none';
     rawPairPanel.style.display = '';
-    document.getElementById('rawPairBody').innerHTML = renderQualityCard(rawLA, rawRA, artifactData);
+    document.getElementById('rawPairBody').innerHTML = renderQualityCard(rawLA, hasRawR ? rawRA : null, artifactData);
   } else {
     rawQualityCard.style.display = 'none';
     rawPairPanel.style.display = 'none';
@@ -3789,7 +3788,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('sessionAnalysisMeta').textContent =
       'Based on Edit WAV · ' + fmtDur(eA.duration);
     document.getElementById('sessionAnalysisMetrics').innerHTML =
-      buildSpeechBlock(eA, eA.editChecks || null);
+      buildSpeechBlock(eA, (hasRawL && !hasRawR) ? null : (eA.editChecks || null));
   } else {
     sac.style.display = 'none';
   }
