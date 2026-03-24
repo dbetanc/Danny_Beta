@@ -981,6 +981,17 @@ function processFiles(files, autoRun) {
   if (edits.length) eFile = edits[0];
   if (mixes.length) mFile = mixes[0];
 
+  // If only Right track dropped (no Left), treat as single channel RAW
+  if (!rawLeftFiles.length && rawRightFiles.length && !eFile && !mFile && !rawStereoFile) {
+    rawLeftFiles = rawRightFiles;
+    rawRightFiles = [];
+  }
+
+  // Fallback: single WAV dropped with no recognised name → treat as RAW for QA analysis
+  if (wavs.length === 1 && !rawLeftFiles.length && !rawRightFiles.length && !eFile && !mFile && !rawStereoFile) {
+    rawLeftFiles = [wavs[0]];
+  }
+
   // Fallback: if nothing classified, use simple 2-file logic
   if (!rawLeftFiles.length && !rawRightFiles.length && !eFile && !mFile) {
     if (wavs.length === 1) { eFile = wavs[0]; }
@@ -2116,7 +2127,7 @@ function buildSpeechBlock(a, editChecks) {
 
   // Bounce Bleed column (if editChecks available)
   let bleedCol = '';
-  if (editChecks) {
+  if (editChecks && editChecks.bleedPct > 0) {
     const c = editChecks;
     const bc  = c.bleedPct < 3 ? 'var(--green)' : c.bleedPct < 10 ? 'var(--amber)' : 'var(--red)';
     const cls = c.bleedPct < 3 ? 'nf-pass'      : c.bleedPct < 10 ? 'nf-warn'      : 'nf-fail';
@@ -3125,7 +3136,7 @@ async function runSingleArtifactScan(files) {
   const interfThreshSingle = Math.ceil(interfSample.length / 2);
   if (interfHits >= interfThreshSingle) {
     interfSpikes = filterConsistentSpikes(interfSpikesByTakeSingle, interfThreshSingle);
-    if (interfSpikes.length) { interfDetected = true; interfLeft = true; }
+    if (interfSpikes.length) { interfDetected = true; interfLeft = true; interfSpikes = { left: interfSpikes, right: [] }; }
   }
   if (humHits >= Math.ceil(interfSample.length / 2)) {
     humDetected = true;
@@ -3239,10 +3250,14 @@ async function runArtifactScan(leftFiles, rightFiles) {
   interfRight = interfRHits >= interfThreshold;
 
   if (interfLeft || interfRight) {
-    const spikesByTake = interfLeft ? interfLSpikesByTake : interfRSpikesByTake;
-    interfSpikes = filterConsistentSpikes(spikesByTake, interfThreshold);
-    if (interfSpikes.length) interfDetected = true;
-    else { interfLeft = false; interfRight = false; } // random noise — not real interference
+    const spikesL = interfLeft  ? filterConsistentSpikes(interfLSpikesByTake, interfThreshold) : [];
+    const spikesR = interfRight ? filterConsistentSpikes(interfRSpikesByTake, interfThreshold) : [];
+    if (spikesL.length || spikesR.length) {
+      interfDetected = true;
+      interfSpikes = { left: spikesL, right: spikesR };
+    } else {
+      interfLeft = false; interfRight = false;
+    }
   }
   if (humLHits >= humThreshold || humRHits >= humThreshold) {
     humDetected = true;
@@ -3395,6 +3410,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       ? `<span class="nf-chip nf-warn">${status}</span>`
       : `<span class="nf-chip nf-pass">${status}</span>`;
     const clipsHTML = clips && clips.length ? clipListHTML(clips) : '';
+    if (level === 'pass') return ''; // hide Clean rows
     return `<div style="display:grid;grid-template-columns:150px 120px 1fr;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
       <div style="font-family:'Share Tech Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2)">${label}</div>
       <div>${chip}</div>
@@ -3494,31 +3510,43 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const humStrength = a.hum.strength || 0;
   const humScore  = !a.hum.detected ? 1 : humStrength < 50 ? 2 : humStrength < 150 ? 3 : humStrength < 300 ? 4 : 5;
   const interfDet    = a.interference && a.interference.detected;
-  const interfSpikes = interfDet ? (a.interference.spikes || []) : [];
-  // Score based on strongest spike ratio — capped at Minor (3) since these are sub-audible in most cases
-  const maxRatio     = interfSpikes.length ? Math.max(...interfSpikes.map(s => s.ratio)) : 0;
+  const interfSpikeL = interfDet ? (Array.isArray(a.interference.spikes) ? a.interference.spikes : ((a.interference.spikes && a.interference.spikes.left)  || [])) : [];
+  const interfSpikeR = interfDet ? (Array.isArray(a.interference.spikes) ? [] :                    ((a.interference.spikes && a.interference.spikes.right) || [])) : [];
+  const allSpikes    = [...interfSpikeL, ...interfSpikeR];
+  const maxRatio     = allSpikes.length ? Math.max(...allSpikes.map(s => s.ratio)) : 0;
   const interfScore  = !interfDet ? 1 : maxRatio < 12 ? 2 : 3;
   const combinedScore = Math.max(humScore, interfScore);
-  const humLevel  = combinedScore === 1 ? 'pass' : 'warn'; // interference always Minor at most
+  const humLevel  = combinedScore === 1 ? 'pass' : 'warn';
+
+  function spikeListStr(spikes) {
+    return spikes.map(s => {
+      const khz   = (s.freq / 1000).toFixed(1) + 'kHz';
+      const label = s.ratio >= 20 ? 'strong' : s.ratio >= 16 ? 'moderate' : 'faint';
+      return `${khz} (${label})`;
+    }).join(', ');
+  }
 
   let humDesc = '';
   if (!a.hum.detected && !interfDet) {
     humDesc = 'No interference detected';
   } else {
     const parts = [];
-    if (a.hum.detected) parts.push(`${a.hum.freq}Hz hum · stop and report · flag in Labelbox`);
-    if (interfDet && interfSpikes.length) {
-      const who = (a.interference.left && a.interference.right) ? 'Both tracks'
-                : a.interference.left  ? 'Left track'
-                : 'Right track';
-      const spikeStr = interfSpikes
-        .map(s => {
-          const khz   = (s.freq / 1000).toFixed(1) + 'kHz';
-          const label = s.ratio >= 20 ? 'strong' : s.ratio >= 16 ? 'moderate' : 'faint';
-          return `${khz} (${label})`;
-        })
-        .join(', ');
-      parts.push(`Tonal interference — ${who}: ${spikeStr}`);
+    if (a.hum.detected && a.hum.freq) parts.push(`${a.hum.freq}Hz hum · stop and report · flag in Labelbox`);
+    if (interfDet) {
+      if (interfSpikeL.length && interfSpikeR.length) {
+        parts.push(`Tonal interference — Left track: ${spikeListStr(interfSpikeL)} · Right track: ${spikeListStr(interfSpikeR)}`);
+      } else if (interfSpikeL.length) {
+        parts.push(`Tonal interference — Left track: ${spikeListStr(interfSpikeL)}`);
+      } else if (interfSpikeR.length) {
+        parts.push(`Tonal interference — Right track: ${spikeListStr(interfSpikeR)}`);
+      } else {
+        // Flat array fallback (legacy format or single-track)
+        const flat = Array.isArray(a.interference.spikes) ? a.interference.spikes : [];
+        const who  = a.interference.left && a.interference.right ? 'Both tracks'
+                   : a.interference.left ? 'Left track' : 'Right track';
+        if (flat.length) parts.push(`Tonal interference — ${who}: ${spikeListStr(flat)}`);
+        else parts.push('Tonal interference detected');
+      }
     }
     humDesc = parts.join(' · ');
   }
