@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================
-  SOBA - Session Pre-checker v2.2
+  SOBA - Session Pre-checker v2.3
   Created by: Danny Beta
   Date: March 2026
   
@@ -14,7 +14,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="author" content="Danny Beta"/>
-<title>SOBA - Session Pre-checker v2.2</title>
+<title>SOBA - Session Pre-checker v2.3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -773,7 +773,7 @@ input[type=file] {
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.2</div>
+      <div class="version-badge">v2.3</div>
       <button class="theme-toggle" id="themeToggle" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">LIGHT</span>
@@ -1079,6 +1079,9 @@ input[type=file] {
           // t2rt1l should be t2lt1r (Turn 2 first, so t2l)
           .replace(/t1rt2l/gi, 't1lt2r')
           .replace(/t2rt1l/gi, 't2lt1r')
+          // Fix underscore in middle of turn code (t1l_t2r -> t1lt2r)
+          .replace(/t1l_t2r/gi, 't1lt2r')
+          .replace(/t2l_t1r/gi, 't2lt1r')
           // Fix common typos in turn codes
           .replace(/t1llt2r/gi, 't1lt2r')
           .replace(/t2llt1r/gi, 't2lt1r')
