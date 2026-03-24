@@ -3423,7 +3423,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   let bleedScore = 1;
   // ── Clip Gain Advisory row — dual character only ──────────
   // Replaces Acoustic Delta: shows per-track LUFS and recommended clip gain to reach −22.5 LUFS
-  const EDIT_TARGET = -22.5;
+  const EDIT_TARGET = -24;
   const EDIT_LO = -24, EDIT_HI = -21;
 
   function clipGainSection(label, lufs) {
