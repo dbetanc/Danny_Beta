@@ -4002,13 +4002,20 @@ function exportQCReport() {
   const { theme, styles } = getReportStyles();
   const info = getSessionInfo();
 
-  const ids = ['editCard','mixCard','comparePanel','sessionAnalysisCard','recsCard'];
-  let body = '<div class="cards-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
-  ids.forEach(id => {
+  // Edit + Mix side by side
+  let body = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">';
+  ['editCard','mixCard'].forEach(id => {
     const el = document.getElementById(id);
     if (el && el.style.display !== 'none' && !el.hasAttribute('hidden')) body += el.outerHTML;
   });
   body += '</div>';
+
+  // Compare panel + Session Analysis stacked full-width
+  ['comparePanel','sessionAnalysisCard','recsCard'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.style.display !== 'none' && !el.hasAttribute('hidden'))
+      body += '<div style="margin-bottom:14px">' + el.outerHTML + '</div>';
+  });
 
   const filename = `${info.sessionName}_QC_Report_${new Date().toISOString().slice(0,10)}.html`;
   downloadHTML(buildReportShell('QC Edit/Mix Report', body, info, theme, styles), filename);
