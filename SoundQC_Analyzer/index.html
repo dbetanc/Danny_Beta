@@ -475,14 +475,14 @@ h1 span { color: var(--green); }
 .legend {
   background: var(--bg3); border: 1px solid var(--border2);
   border-radius: 9px; padding: 14px 20px;
-  display: flex; align-items: flex-start; flex-wrap: wrap; gap: 14px;
+  display: flex; align-items: flex-start; flex-wrap: nowrap; gap: 10px;
   animation: fadeUp .4s .15s ease both;
 }
 .legend-title { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
 .legend-items { display: flex; flex-wrap: wrap; gap: 16px; }
 .legend-item  { display: flex; align-items: center; gap: 6px; font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); }
 .legend-dot   { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-.divider-l    { width: 1px; height: 18px; background: var(--border2); margin: 0 6px; }
+.divider-l    { width: 1px; align-self: stretch; background: var(--border2); margin: 0 4px; }
 .legend-nf    { display: flex; flex-direction: column; gap: 6px; }
 .legend-nf-item { display: flex; align-items: center; gap: 7px; font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); }
 .nf-chip      { font-family: 'Share Tech Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: .6px; padding: 3px 9px; border-radius: 3px; }
@@ -768,7 +768,7 @@ h1 span { color: var(--green); }
 
     <div class="legend">
 
-      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:200px">
+      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:140px">
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Acoustic Delta L/R</div>
         <div class="legend-nf">
           <div class="legend-nf-item"><span class="nf-chip nf-pass">EXCELLENT</span>&lt; 1 dB</div>
@@ -780,7 +780,7 @@ h1 span { color: var(--green); }
 
       <div class="divider-l"></div>
 
-      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:200px">
+      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:140px">
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Noise Floor Threshold</div>
         <div class="legend-nf">
           <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>&gt; −50 dBFS &nbsp;<span style="color:var(--text3)">too noisy</span></div>
@@ -793,7 +793,7 @@ h1 span { color: var(--green); }
 
       <div class="divider-l"></div>
 
-      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:200px">
+      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:140px">
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Integrated LUFS</div>
         <div class="legend-nf">
           <div class="legend-nf-item"><span class="nf-chip nf-fail">LOUD</span>&gt; −14 LUFS &nbsp;<span style="color:var(--text3)">too loud</span></div>
@@ -802,9 +802,19 @@ h1 span { color: var(--green); }
         </div>
       </div>
 
-    </div>
+      <div class="divider-l"></div>
 
-  </div><!-- /results -->
+      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:140px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Mix Compression</div>
+        <div class="legend-nf">
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">NONE</span>&gt; 25 dB crest &nbsp;<span style="color:var(--text3)">no compression</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">LIGHT</span>15–25 dB crest &nbsp;<span style="color:var(--text3)">natural dynamics</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-warn">MODERATE</span>10–15 dB crest &nbsp;<span style="color:var(--text3)">audible limiting</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-fail">HEAVY</span>&lt; 10 dB crest &nbsp;<span style="color:var(--text3)">over-compressed</span></div>
+        </div>
+      </div>
+
+    </div>
 </div><!-- /app -->
 
 <script>
@@ -1984,8 +1994,16 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
     mRow('Noise Floor',    a.noiseFloorDb.toFixed(1)+' dBFS', nfBadgeHTML(a.noiseFloorDb, hpf), nfColorCls(a.noiseFloorDb, hpf)),
     dbBarHTML(a.noiseFloorDb, 'nf'),
     ...(a.lufs != null ? [
-      mRow('Integrated LUFS', a.lufs.toFixed(1)+' LUFS', '',
-        lufsColorCls(a.lufs, lufsTarget)),
+      (() => {
+        let compPill = '';
+        if (lufsTarget === 'mixed') {
+          const crest = a.peakDb - a.rmsDb;
+          const clabel = crest >= 25 ? 'None' : crest >= 15 ? 'Light' : crest >= 10 ? 'Moderate' : 'Heavy';
+          const ccls   = crest >= 15 ? 'nf-pass' : crest >= 10 ? 'nf-warn' : 'nf-fail';
+          compPill = '<span class="nf-chip ' + ccls + '" style="font-size:10px">' + clabel + '</span>';
+        }
+        return mRow('Integrated LUFS', a.lufs.toFixed(1)+' LUFS', compPill, lufsColorCls(a.lufs, lufsTarget));
+      })(),
       lufsBarHTML(a.lufs, lufsTarget),
     ] : []),
     mRow('RMS Level',      a.rmsDb.toFixed(1)+' dBFS', '',
@@ -2081,9 +2099,9 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
   if (mixA) {
     const mixCrest  = mixA.peakDb  - mixA.rmsDb;
     // Compression: Mix Crest only. < 10dB = Heavy, 10–15dB = Moderate, ≥ 15dB = Light
-    const mixPct     = Math.max(0, Math.min(100, mixCrest / 25 * 100));
-    const crestLabel = mixCrest >= 15 ? 'Light' : mixCrest >= 10 ? 'Moderate' : 'Heavy';
-    const crestCol   = mixCrest >= 15 ? 'var(--green)' : mixCrest >= 10 ? '#ff9100' : '#d50000';
+    const mixPct     = Math.max(0, Math.min(100, mixCrest / 35 * 100));
+    const crestLabel = mixCrest >= 25 ? 'None' : mixCrest >= 15 ? 'Light' : mixCrest >= 10 ? 'Moderate' : 'Heavy';
+    const crestCol   = mixCrest >= 25 ? 'var(--green)' : mixCrest >= 15 ? 'var(--green)' : mixCrest >= 10 ? '#ff9100' : '#d50000';
 
     compressionCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
       <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Mixed WAV Compression</div>
@@ -2098,7 +2116,7 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
         </div>
       </div>
       <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:4px">
-        <div style="height:100%;width:${(100 - mixPct).toFixed(1)}%;background:${crestCol};border-radius:3px"></div>
+        <div style="height:100%;width:${mixCrest >= 25 ? '0' : (100 - mixPct).toFixed(1)}%;background:${crestCol};border-radius:3px"></div>
       </div>
       <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">
         <span>Light</span><span>Moderate</span><span>Heavy</span>
