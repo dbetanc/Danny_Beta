@@ -805,12 +805,12 @@ h1 span { color: var(--green); }
       <div class="divider-l"></div>
 
       <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:140px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Mix Compression</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Mix Compression (PLR)</div>
         <div class="legend-nf">
-          <div class="legend-nf-item"><span class="nf-chip nf-pass">NONE</span>&gt; 25 dB crest &nbsp;<span style="color:var(--text3)">no compression</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-pass">LIGHT</span>15–25 dB crest &nbsp;<span style="color:var(--text3)">natural dynamics</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-warn">MODERATE</span>10–15 dB crest &nbsp;<span style="color:var(--text3)">audible limiting</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-fail">HEAVY</span>&lt; 10 dB crest &nbsp;<span style="color:var(--text3)">over-compressed</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">NONE</span>&gt; 20 dB PLR &nbsp;<span style="color:var(--text3)">no compression</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">LIGHT</span>14–20 dB PLR &nbsp;<span style="color:var(--text3)">natural dynamics</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-warn">MODERATE</span>8–14 dB PLR &nbsp;<span style="color:var(--text3)">audible limiting</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-fail">HEAVY</span>&lt; 8 dB PLR &nbsp;<span style="color:var(--text3)">over-compressed</span></div>
         </div>
       </div>
 
@@ -1437,6 +1437,15 @@ async function runAnalysis() {
       const mBuf = await decodeFile(mFile);
       mA = analyzeBuffer(mBuf);
       mA.lufs = computeIntegratedLUFS(mBuf);
+      // Per-channel LUFS for PLR compression metric
+      if (mBuf.numberOfChannels >= 2) {
+        const chL = new AudioBuffer({ numberOfChannels:1, length:mBuf.length, sampleRate:mBuf.sampleRate });
+        const chR = new AudioBuffer({ numberOfChannels:1, length:mBuf.length, sampleRate:mBuf.sampleRate });
+        chL.getChannelData(0).set(mBuf.getChannelData(0));
+        chR.getChannelData(0).set(mBuf.getChannelData(1));
+        mA.lufsL = computeIntegratedLUFS(chL);
+        mA.lufsR = computeIntegratedLUFS(chR);
+      }
       const mss = computeSignalSilence(mBuf);
       mA.signalPct = mss.signalPct; mA.silencePct = mss.silencePct;
       mA.signalDur = mss.signalDur; mA.silenceDur = mss.silenceDur;
@@ -2001,8 +2010,8 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
         let compPill = '';
         if (lufsTarget === 'mixed') {
           const crest = a.peakDb - a.rmsDb;
-          const clabel = crest >= 25 ? 'None' : crest >= 15 ? 'Light' : crest >= 10 ? 'Moderate' : 'Heavy';
-          const ccls   = crest >= 15 ? 'nf-pass' : crest >= 10 ? 'nf-warn' : 'nf-fail';
+          const clabel = crest >= 20 ? 'None' : crest >= 14 ? 'Light' : crest >= 8 ? 'Moderate' : 'Heavy';
+          const ccls   = crest >= 14 ? 'nf-pass' : crest >= 8 ? 'nf-warn' : 'nf-fail';
           compPill = '<span class="nf-chip ' + ccls + '" style="font-size:10px">' + clabel + '</span>';
         }
         return mRow('Integrated LUFS', a.lufs.toFixed(1)+' LUFS', compPill, lufsColorCls(a.lufs, lufsTarget));
@@ -2100,17 +2109,24 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
   // Mixed WAV Compression column
   let compressionCol = '';
   if (mixA) {
-    const mixCrest  = mixA.peakDb  - mixA.rmsDb;
-    // Compression: Mix Crest only. < 10dB = Heavy, 10–15dB = Moderate, ≥ 15dB = Light
-    const mixPct     = Math.max(0, Math.min(100, mixCrest / 35 * 100));
-    const crestLabel = mixCrest >= 25 ? 'None' : mixCrest >= 15 ? 'Light' : mixCrest >= 10 ? 'Moderate' : 'Heavy';
-    const crestCol   = mixCrest >= 25 ? 'var(--green)' : mixCrest >= 15 ? 'var(--green)' : mixCrest >= 10 ? '#ff9100' : '#d50000';
+    // PLR per channel — use worst (most compressed) channel
+    const plrL = (mixA.ch0 && mixA.lufsL != null) ? mixA.ch0.peakDb - mixA.lufsL : null;
+    const plrR = (mixA.ch1 && mixA.lufsR != null) ? mixA.ch1.peakDb - mixA.lufsR : null;
+    const plr  = (plrL !== null && plrR !== null) ? Math.min(plrL, plrR)
+               : (plrL !== null ? plrL : plrR !== null ? plrR : mixA.peakDb - mixA.lufs);
+    const worstCh = (plrL !== null && plrR !== null) ? (plrL <= plrR ? 'L' : 'R') : null;
+
+    const mixCrest  = plr;  // reuse variable name for display logic
+    const mixPct     = Math.max(0, Math.min(100, (25 - Math.min(mixCrest, 25)) / 25 * 100));
+    const crestLabel = mixCrest >= 20 ? 'None' : mixCrest >= 14 ? 'Light' : mixCrest >= 8 ? 'Moderate' : 'Heavy';
+    const crestCol   = mixCrest >= 14 ? 'var(--green)' : mixCrest >= 8 ? '#ff9100' : '#d50000';
+    const chNote     = worstCh ? ` <span style="font-size:9px;color:var(--text3)">(${worstCh} ch)</span>` : '';
 
     compressionCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
       <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Mixed WAV Compression</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">CREST</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">PLR${chNote}</div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${crestCol}">${mixCrest.toFixed(1)} dB</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
@@ -2119,7 +2135,7 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
         </div>
       </div>
       <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:4px">
-        <div style="height:100%;width:${mixCrest >= 25 ? '0' : (100 - mixPct).toFixed(1)}%;background:${crestCol};border-radius:3px"></div>
+        <div style="height:100%;width:${mixCrest >= 25 ? '0' : mixPct.toFixed(1)}%;background:${crestCol};border-radius:3px"></div>
       </div>
       <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">
         <span>Light</span><span>Moderate</span><span>Heavy</span>
@@ -2156,25 +2172,57 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
 
   // Overlaps column (if stereo data available)
   let overlapCol = '';
-  if (a.stereo) {
+  if (editChecks && editChecks.overlapCount != null) {
+    const ov    = editChecks.overlapCount;
+    const dur   = editChecks.sessionDur || 1;
+    const ovPct = (ov / Math.max(1, Math.round(dur / 30))) * 10; // rough % relative to expected turns
+    const oc    = ov === 0 ? 'var(--green)' : ov <= 3 ? 'var(--amber)' : 'var(--red)';
+    const fmtTS = t => { const m = Math.floor(t/60); const s = Math.floor(t%60).toString().padStart(2,'0'); return `${m}:${s}`; };
+    let timestamps = '';
+    if (ov > 0 && editChecks.overlapTimestamps && editChecks.overlapTimestamps.length) {
+      const id = 'ovCol_' + Date.now();
+      const items = editChecks.overlapTimestamps.map(t =>
+        `<span style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px">${fmtTS(t)}</span>`
+      ).join(' ');
+      timestamps = `<div style="margin-top:5px">
+        <div onclick="const el=document.getElementById('${id}');const arr=this.querySelector('.arr');el.style.display=el.style.display==='none'?'flex':'none';arr.textContent=el.style.display==='none'?'▶':'▼';"
+          style="cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px;user-select:none">
+          <span class="arr">▶</span> ${editChecks.overlapTimestamps.length} event${editChecks.overlapTimestamps.length>1?'s':''}
+        </div>
+        <div id="${id}" style="display:none;flex-wrap:wrap;gap:4px;margin-top:5px">${items}</div>
+      </div>`;
+    }
+    overlapCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(&lt;450ms gap)</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">VIOLATIONS</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:${oc};line-height:1">${ov}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-top:2px">${ov === 0 ? 'Clean' : ov <= 3 ? 'Minor' : 'Flag session'}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OF TRANSITIONS</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:${oc};line-height:1">${editChecks.overlapPct != null ? editChecks.overlapPct + '%' : '—'}</div>
+        </div>
+      </div>
+      ${timestamps}
+    </div>`;
+  } else if (a.stereo) {
+    // Fallback to old stereo overlap display if no editChecks overlap data
     const s = a.stereo;
     const oc = s.overlapPct < 5 ? 'var(--green)' : s.overlapPct < 15 ? 'var(--amber)' : 'var(--red)';
     const or = s.overlapPct < 5 ? 'Low' : s.overlapPct < 15 ? 'Moderate' : 'High';
     overlapCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(simultaneous only)</span></div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OVERLAPS</div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(s.overlapDur)}</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${oc}">${or}</div>
         </div>
-      </div>
-      <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
-        <div style="height:100%;width:${Math.min(100,s.overlapPct).toFixed(1)}%;background:${oc};border-radius:3px"></div>
       </div>
     </div>`;
   }
@@ -2543,20 +2591,98 @@ async function computeEditChecks(buf) {
   }
 
   const avgPanCorr = panCount > 0 ? panCorrSum / panCount : 0;
-  const panningError = avgPanCorr > 0.85; // channels nearly identical
+  const panningError = avgPanCorr > 0.85;
   const digitalZeroGaps = silenceWindows > 5 && (digitalZeroWindows / silenceWindows) > 0.05;
 
-  // Merge digital zero timestamps into sections - only report start of each contiguous section
-  // Use 3s threshold to bridge brief speech pauses within a zeroed region
+  // Merge digital zero timestamps
   const mergedDZTimestamps = [];
   for (const e of digitalZeroTimestamps.sort((a,b) => a.t - b.t)) {
     const last = mergedDZTimestamps[mergedDZTimestamps.length - 1];
-    if (!last || e.t - last.t > 3.0) {
-      mergedDZTimestamps.push(e);
+    if (!last || e.t - last.t > 3.0) mergedDZTimestamps.push(e);
+  }
+
+  // ── Two-pass overlap detection ────────────────────────────
+  // Threshold: -35 dBFS (speech only, ignores breaths/sibilants)
+  // Per-channel fill: 400ms (smooths micro-pauses within turns)
+  const OV_THRESH  = Math.pow(10, -35 / 20);
+  const OV_FILL    = Math.floor(0.4 / 0.05);  // 400ms in 50ms windows
+  const OV_TIGHT   = 0.45;                     // 450ms minimum clean gap
+  const OV_SIMUL   = 2;                         // 100ms minimum simultaneous
+
+  // Build per-window RMS arrays
+  const rwL = [], rwR = [];
+  for (let i = 0; i < n; i++) {
+    const st = i * wsz;
+    let s0 = 0, s1 = 0;
+    for (let j = st; j < st + wsz; j++) { s0 += ch0[j]*ch0[j]; s1 += ch1[j]*ch1[j]; }
+    rwL.push(Math.sqrt(s0/wsz));
+    rwR.push(Math.sqrt(s1/wsz));
+  }
+  const spL = rwL.map(v => v >= OV_THRESH);
+  const spR = rwR.map(v => v >= OV_THRESH);
+
+  // Fill short gaps within each channel independently
+  function fillCh(arr, fw) {
+    const out = arr.slice();
+    let i = 0;
+    while (i < out.length) {
+      if (!out[i]) {
+        let j = i;
+        while (j < out.length && !out[j]) j++;
+        if (j - i < fw) for (let k = i; k < j; k++) out[k] = true;
+        i = j;
+      } else i++;
+    }
+    return out;
+  }
+  const smL = fillCh(spL, OV_FILL);
+  const smR = fillCh(spR, OV_FILL);
+
+  // Pass 1 — simultaneous speech on raw channels
+  const ovSimul = [];
+  let inSim = false, simStart = 0;
+  for (let i = 0; i < n; i++) {
+    const both = spL[i] && spR[i];
+    if (both && !inSim)  { simStart = i; inSim = true; }
+    else if (!both && inSim) {
+      if (i - simStart >= OV_SIMUL) ovSimul.push(simStart * 0.05);
+      inSim = false;
+    }
+  }
+  if (inSim && n - simStart >= OV_SIMUL) ovSimul.push(simStart * 0.05);
+
+  // Pass 2 — cross-speaker tight gaps on smoothed channels
+  const ovTight = [];
+  let ovTotalTransitions = 0;
+  let inGap = false, gapStart = 0;
+  for (let i = 0; i < n; i++) {
+    const bothSilent = !smL[i] && !smR[i];
+    if (bothSilent && !inGap)  { gapStart = i; inGap = true; }
+    else if (!bothSilent && inGap) {
+      const dur = (i - gapStart) * 0.05;
+      if (dur >= 0.05) {
+        let pre = gapStart - 1;
+        while (pre >= 0 && !smL[pre] && !smR[pre]) pre--;
+        const preCh  = pre >= 0 ? (smL[pre] ? 'L' : 'R') : null;
+        const postCh = smL[i] ? 'L' : 'R';
+        if (preCh && preCh !== postCh) {
+          ovTotalTransitions++;
+          if (dur < OV_TIGHT) ovTight.push(gapStart * 0.05);
+        }
+      }
+      inGap = false;
     }
   }
 
-  return { bleedPct, bleedTimestamps: mergedTimestamps, panningError, avgPanCorr, digitalZeroGaps, digitalZeroRatio: silenceWindows > 0 ? digitalZeroWindows / silenceWindows : 0, digitalZeroTimestamps: mergedDZTimestamps };
+  const ovCount = ovSimul.length + ovTight.length;
+  const ovTrans = Math.max(1, ovTotalTransitions + ovSimul.length); // simul have no gap so add them
+  const ovPct   = Math.round(ovCount / ovTrans * 100);
+  const ovTimestamps = [...ovSimul, ...ovTight].sort((a,b) => a-b);
+
+  return { bleedPct, bleedTimestamps: mergedTimestamps, panningError, avgPanCorr, digitalZeroGaps,
+           digitalZeroRatio: silenceWindows > 0 ? digitalZeroWindows / silenceWindows : 0,
+           digitalZeroTimestamps: mergedDZTimestamps,
+           overlapCount: ovCount, overlapPct: ovPct, overlapTimestamps: ovTimestamps, sessionDur: n * 0.05 };
 }
 
 function detectBleed(leftData, rightData, sr, nfDb) {
