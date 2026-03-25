@@ -532,7 +532,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.0.5</div>
+            <div class="version-badge">v3.0.6</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -555,7 +555,8 @@ h1 span { color: var(--green); }
       <div class="drop-title">Drop Folder or WAV Files — Analyzes Automatically</div>
       <div class="drop-sub">
         Auto-detects <code>_edit.wav</code> + <code>_mixed.wav</code> — or any 2 WAV files<br>
-        Supports <code>Bounced Files/</code> folder drop
+        Include <code>RAW Files/</code> folder or individual RAW <code>.wav</code> files<br>
+        Supports <code>Bounced Files/</code> or <code>Audio Files/</code> folder drop
       </div>
     </div>
     <input type="file" id="fileInput" accept=".wav,audio/*" multiple hidden>
@@ -1039,6 +1040,29 @@ function processFiles(files, autoRun) {
 
 function fmtSize(b) { return b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(1)+' MB'; }
 function fmtDur(s)  { const m = Math.floor(s/60), sc = Math.floor(s%60); return m+':'+String(sc).padStart(2,'0'); }
+function fmtCardName(name) { return name.replace(/(_t[12][lr])/, '<br>$1'); }
+
+// Extract MMDD recording date from RAW filename (e.g. engblykbar_1117_ → Nov 17)
+// Year: use lastModified year, but if that puts the date in the future, subtract 1
+function fmtRecordingDate(file) {
+  const m = file.name.match(/_(\d{4})_/);
+  if (!m) return null;
+  const mmdd = m[1];
+  const month = parseInt(mmdd.slice(0,2), 10);
+  const day   = parseInt(mmdd.slice(2,4), 10);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const modified = new Date(file.lastModified);
+  let year = modified.getFullYear();
+  const candidate = new Date(year, month-1, day);
+  // If candidate is more than 30 days in the future relative to lastModified, use prior year
+  if (candidate - modified > 30 * 24 * 60 * 60 * 1000) year--;
+  return new Date(year, month-1, day).toLocaleDateString('en-US', { month:'2-digit', day:'2-digit', year:'2-digit' });
+}
+
+// Bounce date from file.lastModified
+function fmtBounceDate(file) {
+  return new Date(file.lastModified).toLocaleDateString('en-US', { month:'2-digit', day:'2-digit', year:'2-digit' });
+}
 
 function refreshSlots() {
   const hasAny = rawLeftFiles.length || rawRightFiles.length || eFile || mFile;
@@ -1067,12 +1091,12 @@ function refreshSlots() {
   document.getElementById('slotEditInfo').textContent = '';
   document.getElementById('slotMixInfo').textContent  = '';
   if (eFile) {
-    document.getElementById('slotEditName').textContent = eFile.name;
+    document.getElementById('slotEditName').innerHTML = fmtCardName(eFile.name);
     document.getElementById('slotEditInfo').textContent = fmtSize(eFile.size);
     document.getElementById('slotEdit').classList.add('filled');
   }
   if (mFile) {
-    document.getElementById('slotMixName').textContent = mFile.name;
+    document.getElementById('slotMixName').innerHTML = fmtCardName(mFile.name);
     document.getElementById('slotMixInfo').textContent = fmtSize(mFile.size);
     document.getElementById('slotMix').classList.add('filled');
   }
@@ -2465,18 +2489,24 @@ function buildEditChecksSection(c) {
 
 // ── QA ARTIFACT DETECTION ────────────────────────────────────
 
-// Pair Left and Right files by take suffix (last _NN before .wav)
+// Pair Left and Right files by identical file size in bytes.
+// Two files recorded simultaneously share the same sample count and
+// therefore the same byte size — regardless of take suffix divergence.
 function pairRawFiles(leftFiles, rightFiles) {
-  const getSuffix = f => {
-    const m = f.name.match(/_(\d+)\.wav$/i);
-    return m ? m[1] : f.name;
-  };
   const rightMap = {};
-  rightFiles.forEach(f => { rightMap[getSuffix(f)] = f; });
+  rightFiles.forEach(f => {
+    if (!rightMap[f.size]) rightMap[f.size] = [];
+    rightMap[f.size].push(f);
+  });
   const pairs = [];
+  const used  = new Set();
   leftFiles.forEach(f => {
-    const s = getSuffix(f);
-    if (rightMap[s]) pairs.push({ left: f, right: rightMap[s], suffix: s });
+    const candidates = (rightMap[f.size] || []).filter(r => !used.has(r.name));
+    if (candidates.length) {
+      const match = candidates[0];
+      used.add(match.name);
+      pairs.push({ left: f, right: match, suffix: f.size });
+    }
   });
   return pairs;
 }
@@ -2485,6 +2515,47 @@ function pairRawFiles(leftFiles, rightFiles) {
 function sliceSamples(buf, ch, seconds) {
   const n = Math.min(buf.getChannelData(ch).length, Math.floor(buf.sampleRate * seconds));
   return buf.getChannelData(ch).subarray(0, n);
+}
+
+// ── Option B: Speech-gated artifact mask ─────────────────
+// Returns a copy of `data` where only speech regions (plus pre/post
+// offset windows) are non-zero. Artifact detectors run on this masked
+// array so they ignore silence between takes and between lines.
+//
+// Windows:
+//   Pre-speech  : 125ms before each speech region onset  (line offset)
+//   Post-speech : 300ms after each speech region end      (lout offset)
+//
+// Threshold: NF+12dB — same gate used by computeSignalSilence.
+function buildSpeechMask(data, sr, nfDb) {
+  const WIN_SZ    = Math.floor(sr * 0.050); // 50ms classification windows
+  const PRE_SAMP  = Math.floor(sr * 0.125); // 125ms pre-speech keep
+  const POST_SAMP = Math.floor(sr * 0.300); // 300ms post-speech keep
+  const thresh    = Math.pow(10, (nfDb + 12) / 20);
+  const n         = data.length;
+  const nWin      = Math.floor(n / WIN_SZ);
+
+  // Build per-window speech flag
+  const isSpeech = new Uint8Array(nWin);
+  for (let i = 0; i < nWin; i++) {
+    let sq = 0;
+    for (let j = i * WIN_SZ; j < (i + 1) * WIN_SZ; j++) sq += data[j] * data[j];
+    if (Math.sqrt(sq / WIN_SZ) > thresh) isSpeech[i] = 1;
+  }
+
+  // Build sample-level keep mask with pre/post expansion
+  const keep = new Uint8Array(n);
+  for (let wi = 0; wi < nWin; wi++) {
+    if (!isSpeech[wi]) continue;
+    const start = Math.max(0,     wi * WIN_SZ - PRE_SAMP);
+    const end   = Math.min(n - 1, (wi + 1) * WIN_SZ + POST_SAMP);
+    for (let s = start; s <= end; s++) keep[s] = 1;
+  }
+
+  // Apply mask — zero out everything outside keep regions
+  const masked = new Float32Array(data.length);
+  for (let i = 0; i < n; i++) masked[i] = keep[i] ? data[i] : 0;
+  return masked;
 }
 
 // Cross-correlation coefficient (Pearson) between two equal-length arrays
@@ -2783,105 +2854,152 @@ async function computeEditChecks(buf) {
 }
 
 function detectBleed(leftData, rightData, sr, nfDb) {
-  const winSz = Math.floor(sr * 0.05); // 50ms windows
+  // ── Envelope-correlation bleed detector ─────────────────
+  // Real headphone bleed and wall transfer both produce a band-limited
+  // mirror of the speaking channel's rhythmic pattern on the silent
+  // channel. We detect this by correlating the smoothed amplitude
+  // envelopes of specific frequency bands between the two channels.
+  //
+  // HF band (4kHz–12kHz): sibilants — S, T, Z onsets are a unique
+  //   rhythmic fingerprint. Headphones leak this range clearly.
+  //   Breathing, room noise and stand rumble have no HF content,
+  //   so the baseline correlation is near zero.
+  //
+  // LF band (80–250Hz): wall structure transfer — physical vibration
+  //   carries low-frequency vowel/fundamental energy through walls.
+  //   Purely structural — no HF component.
+  //
+  // If HF correlates → headphone bleed
+  // If LF correlates but HF does not → wall leakage
+  // If both correlate → combined / severe
+  //
+  // Thresholds calibrated against real files with no bleed (floor ~0.07 HF,
+  // ~0.21 LF) and synthetic injection (1% bleed → HF r=0.949, LF r=0.937):
+  //   HF_THRESH = 0.40  (5× above floor, well below 1% bleed detection)
+  //   LF_THRESH = 0.50
+
   const dt    = 1 / sr;
+  const W10   = Math.floor(sr * 0.010); // 10ms RMS window
+  const W50   = Math.floor(sr * 0.050); // 50ms speech gate window
+  const SMOOTH = 6;                      // 60ms envelope smoothing
+  const HF_THRESH = 0.40;
+  const LF_THRESH = 0.50;
+  const MIN_WINDOWS = 20;
 
-  // Speech presence guard — top 10% median approach (same as pop/transient detectors)
-  const rmsArr = [];
-  for (let i = 0; i + winSz <= leftData.length; i += winSz) {
-    let sq = 0;
-    for (let j = i; j < i+winSz; j++) sq += leftData[j]*leftData[j];
-    rmsArr.push(Math.sqrt(sq/winSz));
-  }
-  rmsArr.sort((a,b) => a-b);
-  const top10Start    = Math.floor(rmsArr.length * 0.90);
-  const top10         = rmsArr.slice(top10Start);
-  const speechRms     = top10[Math.floor(top10.length * 0.5)];
-  const bottom10      = rmsArr[Math.floor(rmsArr.length * 0.10)];
-  const dynRange      = 20 * Math.log10((speechRms + 1e-12) / (bottom10 + 1e-12));
-  const minSpeechLin  = Math.pow(10, -45 / 20);
-  if (dynRange < 30 || speechRms < minSpeechLin) return { low: 0, mid: 0, high: 0, count: 0 };
-  const threshL = speechRms * Math.pow(10, -20/20);
-
-  // Compute right channel speech threshold independently
-  const rmsArrR = [];
-  for (let i = 0; i + winSz <= rightData.length; i += winSz) {
-    let sq = 0;
-    for (let j = i; j < i+winSz; j++) sq += rightData[j]*rightData[j];
-    rmsArrR.push(Math.sqrt(sq/winSz));
-  }
-  rmsArrR.sort((a,b) => a-b);
-  const top10R     = rmsArrR.slice(Math.floor(rmsArrR.length * 0.90));
-  const speechRmsR = top10R[Math.floor(top10R.length * 0.5)];
-  const bottom10R  = rmsArrR[Math.floor(rmsArrR.length * 0.10)];
-  const dynRangeR  = 20 * Math.log10((speechRmsR + 1e-12) / (bottom10R + 1e-12));
-  // If right has no speech, skip — no meaningful bleed windows
-  if (dynRangeR < 30 || speechRmsR < minSpeechLin) return { low: 0, mid: 0, high: 0, count: 0 };
-  const threshR = speechRmsR * Math.pow(10, -20/20);
-
-  // Build three band-limited versions of right channel via IIR filters
-  // Low:  <300Hz  — structural/wall bleed
-  // Mid:  300Hz-3kHz — speech fundamentals (headphone bleed marker)
-  // High: >3kHz  — sibilance/presence (severe headphone bleed)
-  function lpFilter(data, fc) {
+  // ── First-order IIR filters ───────────────────────────
+  function lpf(data, fc) {
     const a = dt / (1/(2*Math.PI*fc) + dt);
     const out = new Float32Array(data.length);
     out[0] = data[0];
     for (let i = 1; i < data.length; i++) out[i] = a*data[i] + (1-a)*out[i-1];
     return out;
   }
+  function hpf(data, fc) {
+    const a = dt / (1/(2*Math.PI*fc) + dt);
+    const out = new Float32Array(data.length);
+    out[0] = data[0];
+    for (let i = 1; i < data.length; i++)
+      out[i] = (1-a) * (out[i-1] + data[i] - data[i-1]);
+    return out;
+  }
+  function lfBand(data) { return lpf(hpf(data, 80),   250);   }  // 80–250Hz
+  function hfBand(data) { return hpf(lpf(data, 12000), 4000); }  // 4k–12kHz
 
-  const lp300  = lpFilter(rightData, 300);
-  const lp3k   = lpFilter(rightData, 3000);
-  const bandLow  = lp300;                                        // <300Hz
-  const bandMid  = new Float32Array(rightData.length);           // 300Hz-3kHz
-  const bandHigh = new Float32Array(rightData.length);           // >3kHz
-  for (let i = 0; i < rightData.length; i++) {
-    bandMid[i]  = lp3k[i] - lp300[i];
-    bandHigh[i] = rightData[i] - lp3k[i];
+  // ── Smoothed RMS envelope at 10ms resolution ─────────
+  function envelope(data) {
+    const n = Math.floor(data.length / W10);
+    const rms = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      let sq = 0;
+      for (let j = i*W10; j < (i+1)*W10; j++) sq += data[j]*data[j];
+      rms[i] = Math.sqrt(sq / W10);
+    }
+    // Running average (60ms smooth)
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      let sum = 0, cnt = 0;
+      for (let k = Math.max(0, i-SMOOTH+1); k <= i; k++) { sum += rms[k]; cnt++; }
+      out[i] = sum / cnt;
+    }
+    return out;
   }
 
-  // Same bands for left channel (source signal to correlate against)
-  const lp300L = lpFilter(leftData, 300);
-  const lp3kL  = lpFilter(leftData, 3000);
-  const leftLow  = lp300L;
-  const leftMid  = new Float32Array(leftData.length);
-  const leftHigh = new Float32Array(leftData.length);
-  for (let i = 0; i < leftData.length; i++) {
-    leftMid[i]  = lp3kL[i] - lp300L[i];
-    leftHigh[i] = leftData[i] - lp3kL[i];
+  // ── Speech gate: 10ms mask where source is actively speaking ──
+  function speechMask(data) {
+    const n50 = Math.floor(data.length / W50);
+    const rms50 = new Float32Array(n50);
+    for (let i = 0; i < n50; i++) {
+      let sq = 0;
+      for (let j = i*W50; j < (i+1)*W50; j++) sq += data[j]*data[j];
+      rms50[i] = Math.sqrt(sq / W50);
+    }
+    const sorted = Float32Array.from(rms50).sort();
+    const speechRms = sorted[Math.floor(n50 * 0.95)];
+    const dynRange  = 20 * Math.log10((speechRms + 1e-12) /
+                      (sorted[Math.floor(n50 * 0.10)] + 1e-12));
+    if (dynRange < 30 || speechRms < Math.pow(10, -45/20)) return null;
+    const thresh = speechRms * Math.pow(10, -20/20);
+    // Expand to 10ms grid
+    const n10   = Math.floor(data.length / W10);
+    const mask  = new Uint8Array(n10);
+    for (let i = 0; i < n10; i++) {
+      const wi = Math.floor((i * W10) / W50);
+      if (wi < n50 && rms50[wi] >= thresh) mask[i] = 1;
+    }
+    return mask;
   }
 
-  let corrLowSum = 0, corrMidSum = 0, corrHighSum = 0, count = 0;
-
-  // Band-limited Pearson correlation between two arrays at window offset
-  function bandCorr(a, b, offset) {
-    let sa=0, sb=0;
-    for (let j=offset; j<offset+winSz; j++) { sa+=a[j]; sb+=b[j]; }
-    const ma=sa/winSz, mb=sb/winSz;
-    let cov=0, va=0, vb=0;
-    for (let j=offset; j<offset+winSz; j++) { cov+=(a[j]-ma)*(b[j]-mb); va+=(a[j]-ma)**2; vb+=(b[j]-mb)**2; }
+  // ── Pearson correlation over masked windows ───────────
+  function pearson(a, b, mask) {
+    const n = Math.min(a.length, b.length, mask.length);
+    let idx = [];
+    for (let i = 0; i < n; i++) if (mask[i]) idx.push(i);
+    if (idx.length < MIN_WINDOWS) return 0;
+    let ma = 0, mb = 0;
+    for (const i of idx) { ma += a[i]; mb += b[i]; }
+    ma /= idx.length; mb /= idx.length;
+    let cov = 0, va = 0, vb = 0;
+    for (const i of idx) {
+      const da = a[i]-ma, db = b[i]-mb;
+      cov += da*db; va += da*da; vb += db*db;
+    }
     return cov / (Math.sqrt(va*vb) + 1e-12);
   }
 
-  for (let i = 0; i + winSz <= leftData.length; i += winSz) {
-    let lSq = 0, rSq = 0;
-    for (let j = i; j < i+winSz; j++) { lSq += leftData[j]*leftData[j]; rSq += rightData[j]*rightData[j]; }
-    const rmsL = Math.sqrt(lSq/winSz), rmsR = Math.sqrt(rSq/winSz);
-
-    // Direction: source (leftData) speaking, target (rightData) quiet → check target for bleed
-    const leftSpeaking = rmsL >= threshL && rmsR < threshR;
-    if (!leftSpeaking) continue;
-
-    corrLowSum  += Math.abs(bandCorr(leftLow,  bandLow,  i));
-    corrMidSum  += Math.abs(bandCorr(leftMid,  bandMid,  i));
-    corrHighSum += Math.abs(bandCorr(leftHigh, bandHigh, i));
-    count++;
+  // ── Run both bands, both directions ──────────────────
+  function measure(srcData, tgtData) {
+    const mask = speechMask(srcData);
+    if (!mask) return { hf: 0, lf: 0 };
+    const envSrcHF = envelope(hfBand(srcData));
+    const envTgtHF = envelope(hfBand(tgtData));
+    const envSrcLF = envelope(lfBand(srcData));
+    const envTgtLF = envelope(lfBand(tgtData));
+    return {
+      hf: Math.max(0, pearson(envSrcHF, envTgtHF, mask)),
+      lf: Math.max(0, pearson(envSrcLF, envTgtLF, mask)),
+    };
   }
 
-  if (count === 0) return { low: 0, mid: 0, high: 0, count: 0 };
+  const LR = measure(leftData,  rightData); // L speaking → R bleed
+  const RL = measure(rightData, leftData);  // R speaking → L bleed
 
-  return { low: corrLowSum/count, mid: corrMidSum/count, high: corrHighSum/count, count };
+  // Worst direction per band
+  const hf = Math.max(LR.hf, RL.hf);
+  const lf = Math.max(LR.lf, RL.lf);
+
+  const hfBleed   = hf >= HF_THRESH;
+  const wallBleed = lf >= LF_THRESH && !hfBleed;
+  const combined  = hf >= HF_THRESH && lf >= LF_THRESH;
+
+  // Score 1–5
+  // 1 = clean, 2 = borderline, 3 = mild, 4 = moderate, 5 = severe
+  let score = 1;
+  if (combined)       score = hf >= 0.80 ? 5 : 4;
+  else if (hfBleed)   score = hf >= 0.80 ? 4 : hf >= 0.60 ? 3 : 2;
+  else if (wallBleed) score = lf >= 0.80 ? 4 : lf >= 0.65 ? 3 : 2;
+
+  return { low: lf, mid: hf, high: 0, count: score > 1 ? 1 : 0,
+           hfCorr: hf, lfCorr: lf, hfBleed, wallBleed, combined, score };
 }
 
 // FFT — returns magnitude spectrum
@@ -3004,7 +3122,7 @@ function detectHum(data, sr, nfDb) {
   return { detected: true, freq, strength };
 }
 
-// Detect high-frequency tonal interference (8kHz–23kHz)
+// Detect high-frequency tonal interference (8kHz–Nyquist)
 // Uses silence windows + high-res FFT, looks for narrow spikes >8dB above local noise floor
 function detectInterference(data, sr, nfDb, winSecs = 2) {
   const winSz   = Math.floor(sr * winSecs);  // silence window size — 2s for dual, 0.5s for single character
@@ -3055,9 +3173,9 @@ function detectInterference(data, sr, nfDb, winSecs = 2) {
     }
   }
 
-  // Scan 8kHz–23kHz for tonal spikes
+  // Scan 8kHz–Nyquist for tonal spikes
   const loScan = Math.round(8000  / binHz);
-  const hiScan = Math.round(Math.min(23000, sr / 2 - 100) / binHz);
+  const hiScan = Math.round((sr / 2 - 200) / binHz);
   const TONAL_DB   = 8.0;
   const LOCAL_BINS = Math.round(200 / binHz);
   const excl       = Math.round(30  / binHz);
@@ -3133,109 +3251,104 @@ function filterConsistentSpikes(spikesByTake, threshold) {
 }
 
 function detectPops(data, sr, nfDb) {
-  const wsz = Math.floor(sr * 0.005); // 5ms windows
+  // ── Four-gate mic pop detector ──────────────────────────
+  // A real mic pop is a diaphragm displacement event caused by a plosive
+  // air column hitting the capsule. It has four physical signatures that
+  // distinguish it from every normal consonant onset (K, T, D, G, P, B):
+  //
+  //  Gate 1 — Pre-silence: the burst must emerge from complete silence
+  //           (NF+10dB). Consonant bursts mid-speech always fail this.
+  //  Gate 2 — Waveform asymmetry: the air pressure wave pushes the
+  //           diaphragm one-sided. mean(|pos|)/mean(|neg|) > 2.0.
+  //           Consonant stop bursts are symmetric noise (ratio ≈ 1.0).
+  //  Gate 3 — Infrasonic dominance: sub-20Hz LP / full-band RMS ≥ 0.70.
+  //           Real pops have a near-DC displacement; consonants do not.
+  //  Gate 4 — Infrasonic sustain: the sub-20Hz component must hold for
+  //           ≥4 consecutive 5ms windows (20ms). The diaphragm recovers
+  //           slowly. A consonant burst is transient (<10ms).
+  //
+  // The old LP/jump approach detected every word-initial stop consonant.
+  // These four gates are derived from the physical event, not the phoneme.
 
-  // Compute speech-level-relative threshold from actual data
-  // Top 10% median of window RMS = actual speech peaks (robust to pre-roll silence)
-  // 75th percentile fails when the sample window contains mostly silence/pre-roll
-  const rmsArr = [];
+  const wsz    = Math.floor(sr * 0.005); // 5ms windows
+  const PRE_WIN     = 6;    // 30ms pre-silence look-back
+  const ASYM_THRESH = 2.0;  // one-sided push ratio
+  const LP20_RATIO  = 0.70; // infrasonic dominance threshold
+  const SUSTAIN_WIN = 4;    // minimum consecutive infrasonic windows
+  const dt = 1 / sr;
+
+  // Noise floor from median window RMS
   const nWin = Math.floor(data.length / wsz);
+  const rmsArr = new Float32Array(nWin);
   for (let i = 0; i < nWin; i++) {
     let sq = 0;
     for (let j = i*wsz; j < (i+1)*wsz; j++) sq += data[j]*data[j];
-    rmsArr.push(Math.sqrt(sq/wsz));
+    rmsArr[i] = Math.sqrt(sq / wsz);
   }
-  rmsArr.sort((a,b) => a-b);
-  // Median of top 10% = robust speech RMS regardless of NF or pre-roll content
-  const top10Start = Math.floor(rmsArr.length * 0.90);
-  const top10 = rmsArr.slice(top10Start);
-  const speechRms = top10[Math.floor(top10.length * 0.5)];
-  const bottom10  = rmsArr[Math.floor(rmsArr.length * 0.10)];
-  const dynRange  = 20 * Math.log10((speechRms + 1e-12) / (bottom10 + 1e-12));
-  const minSpeechLin = Math.pow(10, -45 / 20); // -45 dBFS minimum for real speech
-  // If dynamic range < 30dB OR top 10% below -45 dBFS → not real speech (breathing, room tone)
-  if (dynRange < 30 || speechRms < minSpeechLin) return { events: 0, pct: 0 };
+  const sorted = Float32Array.from(rmsArr).sort();
+  const nfLin     = sorted[Math.floor(nWin * 0.50)];
+  const silThresh = nfLin * Math.pow(10, 10 / 20); // NF+10dB silence gate
+  const minLevel  = nfLin * Math.pow(10, 15 / 20); // NF+15dB minimum burst
 
-  // Plosive bursts sit BELOW speech level — momentary air pressure release
-  // before the vowel onset. Use 30dB below speech RMS to catch them while
-  // staying speech-relative (consistent with other detectors, not NF-relative).
-  const popThresh = speechRms * Math.pow(10, -30/20);
+  // 20Hz low-pass — captures sub-infrasonic diaphragm displacement
+  const RC20   = 1 / (2 * Math.PI * 20);
+  const a20    = dt / (RC20 + dt);
+  const lp20   = new Float32Array(data.length);
+  lp20[0] = data[0];
+  for (let i = 1; i < data.length; i++)
+    lp20[i] = a20 * data[i] + (1 - a20) * lp20[i - 1];
 
-  // Calibrated thresholds:
-  // LP/Full 0.90–1.00  (ratio >1.0 = IIR artifact, not a real burst)
-  // infra_gap ≤ 15 dB  (real pop has sub-10Hz air pressure wave)
-  // Jump ≥ 12 dB       (vowel onset after burst)
-  const LP_THRESH   = 0.90;
-  const JUMP_THRESH = 12;
-  const INFRA_MAX   = 15;
-
-  // 80Hz low-pass (existing)
-  const RC80 = 1 / (2 * Math.PI * 80);
-  const dt = 1 / sr;
-  const alpha80 = dt / (RC80 + dt);
-  const lp80 = new Float32Array(data.length);
-  lp80[0] = data[0];
-  for (let i = 1; i < data.length; i++) lp80[i] = alpha80 * data[i] + (1 - alpha80) * lp80[i - 1];
-
-  // 10Hz low-pass — captures infrasonic air pressure burst of real pop
-  const RC10 = 1 / (2 * Math.PI * 10);
-  const alpha10 = dt / (RC10 + dt);
-  const lp10 = new Float32Array(data.length);
-  lp10[0] = data[0];
-  for (let i = 1; i < data.length; i++) lp10[i] = alpha10 * data[i] + (1 - alpha10) * lp10[i - 1];
-
-  // Envelope per 5ms window
-  const n = Math.floor(data.length / wsz);
-  const lpEnv   = new Float32Array(n);
-  const lp10Env = new Float32Array(n);
+  // Per-window: full-band RMS, LP20 RMS, waveform asymmetry
+  const n       = nWin;
   const fullEnv = new Float32Array(n);
+  const lp20Env = new Float32Array(n);
+  const asymArr = new Float32Array(n);
+
   for (let i = 0; i < n; i++) {
-    let sq = 0, sqL = 0, sqL10 = 0;
-    for (let j = i * wsz; j < (i + 1) * wsz; j++) {
-      sq    += data[j]  * data[j];
-      sqL   += lp80[j]  * lp80[j];
-      sqL10 += lp10[j]  * lp10[j];
+    let sq = 0, sq20 = 0, posSum = 0, negSum = 0, posN = 0, negN = 0;
+    for (let j = i*wsz; j < (i+1)*wsz; j++) {
+      sq   += data[j] * data[j];
+      sq20 += lp20[j] * lp20[j];
+      if (data[j] > 0) { posSum += data[j]; posN++; }
+      else if (data[j] < 0) { negSum -= data[j]; negN++; }
     }
     fullEnv[i] = Math.sqrt(sq / wsz);
-    lpEnv[i]   = Math.sqrt(sqL / wsz);
-    lp10Env[i] = Math.sqrt(sqL10 / wsz);
+    lp20Env[i] = Math.sqrt(sq20 / wsz);
+    const posM = posN > 0 ? posSum / posN : 1e-12;
+    const negM = negN > 0 ? negSum / negN : 1e-12;
+    asymArr[i] = posM > negM ? posM / negM : negM / posM; // always >= 1.0
   }
 
   const candidates = [];
-  for (let i = 3; i < n - 3; i++) {
-    const ratio = lpEnv[i] / (fullEnv[i] + 1e-12);
-    if (ratio < LP_THRESH)        continue; // not LP-dominant
-    if (fullEnv[i] < popThresh)   continue; // below speech-relative floor
+  for (let i = PRE_WIN + 1; i < n - SUSTAIN_WIN - 1; i++) {
+    // Gate 1: minimum burst level
+    if (fullEnv[i] < minLevel) continue;
 
-    // Isolation check: a real pop is a sudden isolated burst — if the previous
-    // window is also LP-dominant (≥0.85) AND above threshold, this is a
-    // sustained consonant onset ramp, not a discrete pop.
-    const prevRatio = lpEnv[i - 1] / (fullEnv[i - 1] + 1e-12);
-    if (fullEnv[i - 1] >= popThresh && prevRatio >= 0.85) continue;
+    // Gate 2: pre-silence — all 30ms before must be below NF+10dB
+    let silOk = true;
+    for (let k = i - PRE_WIN; k < i; k++) {
+      if (fullEnv[k] >= silThresh) { silOk = false; break; }
+    }
+    if (!silOk) continue;
 
-    // Infrasonic check: real mic pop has sub-10Hz air pressure wave
-    const infraDb = 20 * Math.log10(Math.max(lp10Env[i], 1e-12));
-    const fullDb  = 20 * Math.log10(Math.max(fullEnv[i], 1e-12));
-    if (fullDb - infraDb > INFRA_MAX) continue; // not enough infrasonic content
+    // Gate 3: waveform asymmetry > 2.0
+    if (asymArr[i] < ASYM_THRESH) continue;
 
-    // Amplitude jump check: >= 15 dB in next 15ms
-    const burstDb  = fullDb;
-    const followDb = Math.max(
-      20 * Math.log10(Math.max(fullEnv[i + 1], 1e-9)),
-      20 * Math.log10(Math.max(fullEnv[i + 2], 1e-9)),
-      20 * Math.log10(Math.max(fullEnv[i + 3], 1e-9))
-    );
-    const jump = followDb - burstDb;
-    if (jump < JUMP_THRESH) continue;
+    // Gate 4: infrasonic sustain — LP20/full ≥ 0.70 for ≥4 consecutive windows
+    let sustainCount = 0;
+    for (let k = i; k < Math.min(i + SUSTAIN_WIN + 4, n); k++) {
+      if (lp20Env[k] / (fullEnv[k] + 1e-12) >= LP20_RATIO) sustainCount++;
+    }
+    if (sustainCount < SUSTAIN_WIN) continue;
 
-    candidates.push({ t: i * 0.005, jump });
+    candidates.push({ t: i * 0.005, asym: asymArr[i] });
   }
 
-  // Merge events within 50ms, keep strongest
+  // Merge events within 80ms, keep highest asymmetry
   const merged = [];
   for (const p of candidates) {
-    if (merged.length && p.t - merged[merged.length - 1].t < 0.05) {
-      if (p.jump > merged[merged.length - 1].jump) merged[merged.length - 1] = p;
+    if (merged.length && p.t - merged[merged.length - 1].t < 0.08) {
+      if (p.asym > merged[merged.length - 1].asym) merged[merged.length - 1] = p;
     } else {
       merged.push(p);
     }
@@ -3542,15 +3655,17 @@ async function runSingleArtifactScan(files) {
     const hpf = detectHPF(data, sr, nfDb);
     if (hpf.detected) { hpfL = hpf; hpfLClips.push({ label: clip, file: f.name }); }
 
-    const p = detectPops(data, sr, nfDb);
+    const maskedData = buildSpeechMask(data, sr, nfDb);
+
+    const p = detectPops(maskedData, sr, nfDb);
     pops += p.events;
     if (p.events > 0) popClips.push({ label: clip, file: f.name, count: p.events });
 
-    const c = detectClicks(data, sr, nfDb);
+    const c = detectClicks(maskedData, sr, nfDb);
     clicks += c.events;
     if (c.events > 0) clickClips.push({ label: clip, file: f.name, count: c.events });
 
-    const i = detectTransients(data, sr, nfDb, { maxHz:80, minDurMs:50, maxDurMs:200, threshMult:50, silenceOnly:true });
+    const i = detectTransients(maskedData, sr, nfDb, { maxHz:80, minDurMs:50, maxDurMs:200, threshMult:50, silenceOnly:true });
     impacts += i.events;
     if (i.events > 0) impactClips.push({ label: clip, file: f.name, count: i.events });
     n++;
@@ -3581,7 +3696,7 @@ async function runArtifactScan(leftFiles, rightFiles) {
     return `Clip ${side}-${m ? m[1] : '?'}`;
   };
 
-  let bleedLowArr = [], bleedMidArr = [], bleedHighArr = [];
+  let bleedScoreArr = [], bleedHfArr = [], bleedLfArr = [];
   let bleedN = 0;
   let humDetected = false, humFreq = null;
   let interfDetected = false, interfSpikes = [], interfLeft = false, interfRight = false;
@@ -3665,24 +3780,17 @@ async function runArtifactScan(leftFiles, rightFiles) {
     const lClip = clipLabel(pair.left,  'L');
     const rClip = clipLabel(pair.right, 'R');
 
-    // Bleed — run both directions separately to flag correct clip
-    const bleedLR = detectBleed(lData, rData, sr, lNF); // L speaking → R bleed
-    const bleedRL = detectBleed(rData, lData, sr, rNF); // R speaking → L bleed
-    // Accumulate worst direction per take
-    const bleedTake = {
-      low:   Math.max(bleedLR.low,   bleedRL.low),
-      mid:   Math.max(bleedLR.mid,   bleedRL.mid),
-      high:  Math.max(bleedLR.high,  bleedRL.high),
-      count: bleedLR.count + bleedRL.count
-    };
-    if (bleedTake.count > 0) {
-      bleedLowArr.push(bleedTake.low);
-      bleedMidArr.push(bleedTake.mid);
-      bleedHighArr.push(bleedTake.high);
-      bleedN++;
+    // Bleed — new envelope-correlation detector returns score + type per take
+    const bleedLR = detectBleed(lData, rData, sr, lNF);
+    const bleedRL = detectBleed(rData, lData, sr, rNF);
+    const takeScore = Math.max(bleedLR.score, bleedRL.score);
+    if (takeScore > 1) {
+      bleedScoreArr.push(takeScore);
+      bleedHfArr.push(Math.max(bleedLR.hfCorr || 0, bleedRL.hfCorr || 0));
+      bleedLfArr.push(Math.max(bleedLR.lfCorr || 0, bleedRL.lfCorr || 0));
+      if (bleedLR.hfBleed || bleedLR.combined) bleedClips.push({ label: rClip, file: pair.right.name });
+      if (bleedRL.hfBleed || bleedRL.combined) bleedClips.push({ label: lClip, file: pair.left.name });
     }
-    if (bleedLR.mid >= 0.08 || bleedLR.high >= 0.05) bleedClips.push({ label: rClip, file: pair.right.name });
-    if (bleedRL.mid >= 0.08 || bleedRL.high >= 0.05) bleedClips.push({ label: lClip, file: pair.left.name });
 
     // HPF — check both tracks independently
     const hpfLeft  = detectHPF(lData, sr, lNF);
@@ -3690,23 +3798,28 @@ async function runArtifactScan(leftFiles, rightFiles) {
     if (hpfLeft.detected)  { hpfL = hpfLeft;  hpfClipsL.push({ label: lClip, file: pair.left.name }); }
     if (hpfRight.detected) { hpfR = hpfRight; hpfClipsR.push({ label: rClip, file: pair.right.name }); }
 
+    // Speech-gated masks — restrict pop/click/impact detection to
+    // speech regions + line/lout offset windows (125ms pre, 300ms post)
+    const lMasked = buildSpeechMask(lData, sr, lNF);
+    const rMasked = buildSpeechMask(rData, sr, rNF);
+
     // Pops
-    const pL = detectPops(lData, sr, lNF);
-    const pR = detectPops(rData, sr, rNF);
+    const pL = detectPops(lMasked, sr, lNF);
+    const pR = detectPops(rMasked, sr, rNF);
     popsL += pL.events; popsR += pR.events;
     if (pL.events > 0) popClipsL.push({ label: lClip, file: pair.left.name,  count: pL.events });
     if (pR.events > 0) popClipsR.push({ label: rClip, file: pair.right.name, count: pR.events });
 
     // Clicks
-    const cL = detectClicks(lData, sr, lNF);
-    const cR = detectClicks(rData, sr, rNF);
+    const cL = detectClicks(lMasked, sr, lNF);
+    const cR = detectClicks(rMasked, sr, rNF);
     clicksL += cL.events; clicksR += cR.events;
     if (cL.events > 0) clickClipsL.push({ label: lClip, file: pair.left.name,  count: cL.events });
     if (cR.events > 0) clickClipsR.push({ label: rClip, file: pair.right.name, count: cR.events });
 
     // Stand impacts
-    const iL = detectTransients(lData, sr, lNF, { maxHz:80, minDurMs:50, maxDurMs:200, threshMult:50, silenceOnly:true });
-    const iR = detectTransients(rData, sr, rNF, { maxHz:80, minDurMs:50, maxDurMs:200, threshMult:50, silenceOnly:true });
+    const iL = detectTransients(lMasked, sr, lNF, { maxHz:80, minDurMs:50, maxDurMs:200, threshMult:50, silenceOnly:true });
+    const iR = detectTransients(rMasked, sr, rNF, { maxHz:80, minDurMs:50, maxDurMs:200, threshMult:50, silenceOnly:true });
     impactL += iL.events; impactR += iR.events;
     if (iL.events > 0) impactClipsL.push({ label: lClip, file: pair.left.name,  count: iL.events });
     if (iR.events > 0) impactClipsR.push({ label: rClip, file: pair.right.name, count: iR.events });
@@ -3714,21 +3827,21 @@ async function runArtifactScan(leftFiles, rightFiles) {
     n++;
   }
 
-    // Compute bleed score from session-averaged band correlations
-    // Scoring based purely on correlation strength — occurrence count doesn't inflate score
+    // Bleed score: median across takes, using per-take scores from envelope correlation
     const med = arr => { if (!arr.length) return 0; const s=[...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; };
-    const avgLow  = med(bleedLowArr);
-    const avgMid  = med(bleedMidArr);
-    const avgHigh = med(bleedHighArr);
-    let bleedScore = 1;
-    if      (avgLow > 0.08 && avgMid < 0.15 && avgHigh < 0.06)  bleedScore = 2; // structural only
-    else if (avgLow > 0.08 && avgMid >= 0.15 && avgMid < 0.25)  bleedScore = 3; // mild HP
-    else if (avgMid >= 0.25 && avgHigh < 0.10)                   bleedScore = 4; // moderate HP
-    else if (avgMid >= 0.25 && avgHigh >= 0.10)                  bleedScore = 5; // severe HP
+    const medHf  = med(bleedHfArr);
+    const medLf  = med(bleedLfArr);
+    let bleedScore = bleedScoreArr.length ? med(bleedScoreArr) : 1;
+    bleedScore = Math.round(bleedScore); // median may be non-integer
+    // Attach type info for display
+    const bleedType = medHf >= 0.40 && medLf >= 0.50 ? 'combined'
+                    : medHf >= 0.40 ? 'headphone'
+                    : medLf >= 0.50 ? 'wall' : 'clean';
 
   return {
     takesAnalyzed: n,
     bleedScore,
+    bleedType,
     bleedClips,
     hum:         { detected: humDetected, freq: humFreq, clips: humClips },
     interference: { detected: interfDetected, spikes: interfSpikes, left: interfLeft, right: interfRight },
@@ -3758,12 +3871,23 @@ function scoreSpan(score) {
   return `<span style="font-family:'Share Tech Mono',monospace;font-size:12px;margin-left:4px;vertical-align:middle;color:${textCol};font-weight:700">${score}/5</span>`;
 }
 
-// QA 3-state pill: Clean / Minor / Serious
+// QA 3-state pill: Clean / Minor / Serious — theme-aware
 function qaChip(score) {
-  const base = `display:inline-block;padding:3px 10px;border-radius:4px;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.4px;border:1px solid`;
-  if (score <= 1) return `<span style="${base} #1A7A4A;background:#D6F0E2;color:#1A7A4A">Clean</span>`;
-  if (score <= 3) return `<span style="${base} #B8970A;background:#FFD600;color:#2C2C2A">Minor</span>`;
-  return `<span style="${base} #C0392B;background:#FAD7D3;color:#C0392B">Serious</span>`;
+  const base = `display:inline-block;padding:3px 10px;border-radius:4px;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.4px;border:1.5px solid`;
+  const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+  if (score <= 1) {
+    return dark
+      ? `<span style="${base} #1dff8a;background:rgba(29,255,138,0.12);color:#1dff8a">Clean</span>`
+      : `<span style="${base} #1A7A4A;background:#D6F0E2;color:#1A7A4A">Clean</span>`;
+  }
+  if (score <= 3) {
+    return dark
+      ? `<span style="${base} #FFD600;background:rgba(255,214,0,0.13);color:#FFD600">Minor</span>`
+      : `<span style="${base} #B8970A;background:#FFD600;color:#2C2C2A">Minor</span>`;
+  }
+  return dark
+    ? `<span style="${base} #ff3d57;background:rgba(255,61,87,0.13);color:#ff3d57">Serious</span>`
+    : `<span style="${base} #C0392B;background:#FAD7D3;color:#C0392B">Serious</span>`;
 }
 
 function renderQualityCard(rawLA, rawRA, artifactData) {
@@ -3797,7 +3921,6 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       ? `<span class="nf-chip nf-warn">${status}</span>`
       : `<span class="nf-chip nf-pass">${status}</span>`;
     const clipsHTML = clips && clips.length ? clipListHTML(clips) : '';
-    if (level === 'pass') return ''; // hide Clean rows
     return `<div style="display:grid;grid-template-columns:150px 120px 1fr;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
       <div style="font-family:'Share Tech Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2)">${label}</div>
       <div>${chip}</div>
@@ -3824,13 +3947,13 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     const dir        = delta > 0 ? '↑' : '↓';
     const accentCol = inRange
       ? (isDark ? '#00ff88' : '#009944')
-      : (isDark ? '#FFD600' : '#9A7A00');
+      : (isDark ? '#FF8C00' : '#9A7A00');
     const borderCol = inRange
-      ? (isDark ? 'rgba(0,255,136,0.3)' : 'rgba(0,153,68,0.3)')
-      : (isDark ? 'rgba(255,214,0,0.35)' : 'rgba(154,122,0,0.35)');
+      ? (isDark ? 'rgba(0,255,136,0.3)'   : 'rgba(0,153,68,0.3)')
+      : (isDark ? 'rgba(255,140,0,0.55)'  : 'rgba(154,122,0,0.35)');
     const bgCol = inRange
-      ? (isDark ? 'rgba(0,255,136,0.06)' : 'rgba(0,153,68,0.06)')
-      : (isDark ? 'rgba(255,214,0,0.07)' : 'rgba(154,122,0,0.07)');
+      ? (isDark ? 'rgba(0,255,136,0.06)'  : 'rgba(0,153,68,0.06)')
+      : (isDark ? 'rgba(255,140,0,0.10)'  : 'rgba(154,122,0,0.07)');
     const peakNote = peakLimited
       ? `<div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-top:2px">Peak limited · ${peakDb.toFixed(1)} dBFS</div>`
       : '';
@@ -3873,20 +3996,27 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
 
     // ── Headphone Bleed ───────────────────────────────────
     bleedScore = a.bleedScore || 1;
-    const bleedLabels = ['','Clean','Structural','Mild HP','Moderate HP','Severe HP'];
+    const bleedType   = a.bleedType || 'clean';
+    const bleedLabels = ['','Clean','Borderline','Mild','Moderate','Severe'];
     const bleedActions = ['',
-      'No correlation detected',
-      'Review and proceed or flag',
+      'No pattern correlation detected',
+      'Review by ear — possible early bleed',
       'Review and proceed or flag',
       'Stop and report · flag in Labelbox',
       'Stop and report · flag in Labelbox'];
-    const bleedDescs  = ['','','Low-freq only — wall/structural (100–300Hz)','Speech fundamentals in opposite channel','Clear headphone bleed across speech range','Strong full-band bleed — headphones too loud'];
+    const bleedDescs = {
+      clean:     ['','No correlation detected','Trace correlation — likely coincidence','','',''],
+      headphone: ['','','Faint sibilant pattern in silent channel','Sibilant rhythm mirrored (4k–12kHz) — headphone leak','Clear HF pattern clone — headphones too loud','Strong HF clone across session — severe headphone bleed'],
+      wall:      ['','','Faint LF correlation — possible structural','LF rhythm mirrored (80–250Hz) — wall/floor transfer','Clear LF pattern clone — check room isolation','Strong LF transfer across session — structural issue'],
+      combined:  ['','','','Combined HF + LF pattern match','HF + LF clone — headphones loud AND room isolation issue','Severe HF + LF — stop and report · flag in Labelbox'],
+    };
     const bleedLevel  = bleedScore <= 2 ? 'pass' : bleedScore <= 3 ? 'warn' : 'fail';
+    const bleedDesc   = (bleedDescs[bleedType] || bleedDescs.clean)[bleedScore] || '';
     const bleedDetail = a.singleChannel
       ? 'N/A — single character session'
       : bleedScore === 1
-        ? 'No correlation detected'
-        : `${bleedLabels[bleedScore]} — ${bleedDescs[bleedScore]} · ${bleedActions[bleedScore]}`;
+        ? 'No pattern correlation detected'
+        : `${bleedLabels[bleedScore]} — ${bleedDesc} · ${bleedActions[bleedScore]}`;
     rows.push(aRow('Headphone Bleed', a.singleChannel ? 'N/A' : qaChip(bleedScore), bleedDetail, a.singleChannel ? '' : bleedLevel, a.bleedClips, true));
   } else {
     // Single character — clip gain advisory + HPF only
@@ -4093,7 +4223,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('rawLCardType').innerHTML = '<span class="card-type-qa">QA</span> — RAW' + (isSingle ? '' : ' Left');
     document.getElementById('rawLCardName').textContent = rawLA._talentCode + ' (' + rawLA._fileCount + ' file' + (rawLA._fileCount>1?'s':'') + ')';
     const rawLSL = getStudioLocation(rawLA._talentCode);
-    document.getElementById('rawLCardMeta').textContent = (rawLSL ? 'Studio: ' + rawLSL.studio + ' (' + rawLSL.location + ') · ' : '') + rawLA.sampleRate/1000+' kHz · '+(rawLA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawLA.duration)+' total';
+    document.getElementById('rawLCardMeta').innerHTML = (rawLSL ? 'Studio: ' + rawLSL.studio + ' (' + rawLSL.location + ') · ' : '') + rawLA.sampleRate/1000+' kHz · 24-Bit · '+(rawLA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawLA.duration)+'&nbsp;total' + (fmtRecordingDate(rawLeftFiles[0]) ? ' · ' + fmtRecordingDate(rawLeftFiles[0]) : '');
     const hpfLDet = artifactData && artifactData.hpf && artifactData.hpf.left && artifactData.hpf.left.detected;
     document.getElementById('rawLNFBadge').innerHTML = hpfLDet
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
@@ -4110,7 +4240,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   if (hasRawR) {
     document.getElementById('rawRCardName').textContent = rawRA._talentCode + ' (' + rawRA._fileCount + ' file' + (rawRA._fileCount>1?'s':'') + ')';
     const rawRSL = getStudioLocation(rawRA._talentCode);
-    document.getElementById('rawRCardMeta').textContent = (rawRSL ? 'Studio: ' + rawRSL.studio + ' (' + rawRSL.location + ') · ' : '') + rawRA.sampleRate/1000+' kHz · '+(rawRA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawRA.duration)+' total';
+    document.getElementById('rawRCardMeta').innerHTML = (rawRSL ? 'Studio: ' + rawRSL.studio + ' (' + rawRSL.location + ') · ' : '') + rawRA.sampleRate/1000+' kHz · 24-Bit · '+(rawRA.channels===1?'Mono':'Stereo')+' · '+fmtDur(rawRA.duration)+'&nbsp;total' + (fmtRecordingDate(rawRightFiles[0]) ? ' · ' + fmtRecordingDate(rawRightFiles[0]) : '');
     const hpfRDet = artifactData && artifactData.hpf && artifactData.hpf.right && artifactData.hpf.right.detected;
     document.getElementById('rawRNFBadge').innerHTML = hpfRDet
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
@@ -4123,7 +4253,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   if (hasStereoRaw) {
     document.getElementById('rawStereoCardName').textContent = rawStereoFile.name;
     document.getElementById('rawStereoCardMeta').textContent =
-      fmtSize(rawStereoFile.size) + ' · ' + rawStereoA.sampleRate/1000 + ' kHz · Stereo · ' + fmtDur(rawStereoA.duration);
+      fmtSize(rawStereoFile.size) + ' · ' + rawStereoA.sampleRate/1000 + ' kHz · 24-Bit · Stereo · ' + fmtDur(rawStereoA.duration);
     document.getElementById('rawStereoNFBadge').innerHTML = nfBadgeHTML(rawStereoA.noiseFloorDb);
     document.getElementById('rawStereoMetrics').innerHTML = buildMetrics(rawStereoA, false, true, 'raw') + buildStereoRawSection(rawStereoA);
   }
@@ -4164,7 +4294,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   if (hasEdit) {
     document.getElementById('editCardType').innerHTML = '<span class="card-type-qc">QC</span> — Edit WAV';
     document.getElementById('editCardName').textContent = eFile.name;
-    document.getElementById('editCardMeta').textContent = fmtSize(eFile.size)+' · '+eA.sampleRate/1000+' kHz · '+(eA.channels===1?'Mono':'Stereo')+' · '+fmtDur(eA.duration);
+    document.getElementById('editCardMeta').innerHTML = fmtSize(eFile.size)+' · '+eA.sampleRate/1000+' kHz · 24-Bit · '+(eA.channels===1?'Mono':'Stereo')+' · '+fmtDur(eA.duration)+' · '+fmtBounceDate(eFile);
     document.getElementById('editNFBadge').innerHTML = (eA.hpf && eA.hpf.detected)
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
       : nfBadgeHTML(eA.noiseFloorDb);
@@ -4174,7 +4304,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   document.getElementById('mixCard').style.display = hasMix ? '' : 'none';
   if (hasMix) {
     document.getElementById('mixCardName').textContent = mFile.name;
-    document.getElementById('mixCardMeta').textContent = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration);
+    document.getElementById('mixCardMeta').innerHTML = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · 24-Bit · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration)+' · '+fmtBounceDate(mFile);
     document.getElementById('mixNFBadge').innerHTML    = nfBadgeHTML(mA.noiseFloorDb);
     document.getElementById('mixMetrics').innerHTML    = buildMetrics(mA, false, false, 'mixed');
   }
