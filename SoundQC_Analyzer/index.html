@@ -532,7 +532,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.0.4</div>
+            <div class="version-badge">v3.0.5</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -1419,6 +1419,14 @@ async function runAnalysis() {
       const eBuf = await decodeFile(eFile);
       eA = analyzeBuffer(eBuf);
       eA.lufs = computeIntegratedLUFS(eBuf);
+      if (eBuf.numberOfChannels >= 2) {
+        const chL = new AudioBuffer({ numberOfChannels:1, length:eBuf.length, sampleRate:eBuf.sampleRate });
+        const chR = new AudioBuffer({ numberOfChannels:1, length:eBuf.length, sampleRate:eBuf.sampleRate });
+        chL.getChannelData(0).set(eBuf.getChannelData(0));
+        chR.getChannelData(0).set(eBuf.getChannelData(1));
+        eA.lufsL = computeIntegratedLUFS(chL);
+        eA.lufsR = computeIntegratedLUFS(chR);
+      }
       const ss = computeSignalSilence(eBuf);
       eA.signalPct  = ss.signalPct;  eA.silencePct  = ss.silencePct;
       eA.signalDur  = ss.signalDur;  eA.silenceDur  = ss.silenceDur;
@@ -2109,25 +2117,55 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
   // Mixed WAV Compression column
   let compressionCol = '';
   if (mixA) {
-    // PLR per channel — use worst (most compressed) channel
-    const plrL = (mixA.ch0 && mixA.lufsL != null) ? mixA.ch0.peakDb - mixA.lufsL : null;
-    const plrR = (mixA.ch1 && mixA.lufsR != null) ? mixA.ch1.peakDb - mixA.lufsR : null;
-    const plr  = (plrL !== null && plrR !== null) ? Math.min(plrL, plrR)
-               : (plrL !== null ? plrL : plrR !== null ? plrR : mixA.peakDb - mixA.lufs);
-    const worstCh = (plrL !== null && plrR !== null) ? (plrL <= plrR ? 'L' : 'R') : null;
+    // PLR per channel — compare Edit vs Mixed when both present, else absolute PLR
+    const mixPlrL = (mixA.ch0 && mixA.lufsL != null) ? mixA.ch0.peakDb - mixA.lufsL : null;
+    const mixPlrR = (mixA.ch1 && mixA.lufsR != null) ? mixA.ch1.peakDb - mixA.lufsR : null;
+    const editPlrL = (editA && editA.ch0 && editA.lufsL != null) ? editA.ch0.peakDb - editA.lufsL : null;
+    const editPlrR = (editA && editA.ch1 && editA.lufsR != null) ? editA.ch1.peakDb - editA.lufsR : null;
 
-    const mixCrest  = plr;  // reuse variable name for display logic
-    const mixPct     = Math.max(0, Math.min(100, (25 - Math.min(mixCrest, 25)) / 25 * 100));
-    const crestLabel = mixCrest >= 20 ? 'None' : mixCrest >= 14 ? 'Light' : mixCrest >= 8 ? 'Moderate' : 'Heavy';
-    const crestCol   = mixCrest >= 14 ? 'var(--green)' : mixCrest >= 8 ? '#ff9100' : '#d50000';
-    const chNote     = worstCh ? ` <span style="font-size:9px;color:var(--text3)">(${worstCh} ch)</span>` : '';
+    const usesDelta = editPlrL !== null && mixPlrL !== null;
+    // Delta: how much PLR was reduced by compression (positive = more compressed)
+    const deltaL = usesDelta ? editPlrL - mixPlrL : null;
+    const deltaR = (editPlrR !== null && mixPlrR !== null) ? editPlrR - mixPlrR : null;
+
+    // Worst channel = largest delta (most compressed) or lowest absolute PLR
+    let plr, worstCh, worstDelta;
+    if (usesDelta) {
+      const d = (deltaL !== null && deltaR !== null) ? Math.max(deltaL, deltaR)
+              : deltaL !== null ? deltaL : deltaR;
+      worstCh    = (deltaL !== null && deltaR !== null) ? (deltaL >= deltaR ? 'L' : 'R') : (deltaL !== null ? 'L' : 'R');
+      worstDelta = d;
+      plr        = d; // use delta as the primary metric
+    } else {
+      const aL = mixPlrL, aR = mixPlrR;
+      plr     = (aL !== null && aR !== null) ? Math.min(aL, aR)
+              : (aL !== null ? aL : aR !== null ? aR : mixA.peakDb - mixA.lufs);
+      worstCh = (aL !== null && aR !== null) ? (aL <= aR ? 'L' : 'R') : null;
+    }
+
+    // Thresholds differ: delta mode (compression added) vs absolute PLR
+    let crestLabel, crestCol;
+    if (usesDelta) {
+      crestLabel = plr <= 1 ? 'None' : plr <= 4 ? 'Light' : plr <= 8 ? 'Moderate' : 'Heavy';
+      crestCol   = plr <= 4 ? 'var(--green)' : plr <= 8 ? '#ff9100' : '#d50000';
+    } else {
+      crestLabel = plr >= 20 ? 'None' : plr >= 14 ? 'Light' : plr >= 8 ? 'Moderate' : 'Heavy';
+      crestCol   = plr >= 14 ? 'var(--green)' : plr >= 8 ? '#ff9100' : '#d50000';
+    }
+
+    const mixCrest = plr;
+    const mixPct   = usesDelta
+      ? Math.max(0, Math.min(100, plr / 12 * 100))           // delta: 0–12 dB range
+      : Math.max(0, Math.min(100, (25 - Math.min(plr, 25)) / 25 * 100)); // absolute
+    const metricLabel = usesDelta ? `ΔPLR vs Edit` : `PLR`;
+    const chNote = worstCh ? ` <span style="font-size:9px;color:var(--text3)">(${worstCh} ch)</span>` : '';
 
     compressionCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
       <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Mixed WAV Compression</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">PLR${chNote}</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${crestCol}">${mixCrest.toFixed(1)} dB</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">${metricLabel}${chNote}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${crestCol}">${usesDelta ? '+' : ''}${mixCrest.toFixed(1)} dB</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
