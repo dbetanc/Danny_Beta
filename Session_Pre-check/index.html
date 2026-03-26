@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================
-  SOBA - Session Pre-checker v2.3
+  SOBA - Session Pre-checker v2.4
   Created by: Danny Beta
   Date: March 2026
   
@@ -14,7 +14,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="author" content="Danny Beta"/>
-<title>SOBA - Session Pre-checker v2.3</title>
+<title>SOBA - Session Pre-checker v2.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -773,7 +773,7 @@ input[type=file] {
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.3</div>
+      <div class="version-badge">v2.4</div>
       <button class="theme-toggle" id="themeToggle" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">LIGHT</span>
@@ -1022,18 +1022,16 @@ input[type=file] {
         // Dualcharacter session: {speaker1}-{speaker2}{code}_(t1lt2r|t2lt1r)-{script}
         const dualMatch = sessionName.match(/^([a-z]{9,10})-([a-z]{9,10})(\d{4})_(t1lt2r|t2lt1r)-([a-z0-9-]+)$/i);
         if (dualMatch) {
-          let speaker1 = dualMatch[1];
-          let speaker2 = dualMatch[2];
-          
-          // Always store speakers in alphabetical order (speaker1 < speaker2)
-          if (speaker1.toLowerCase() > speaker2.toLowerCase()) {
-            [speaker1, speaker2] = [speaker2, speaker1];
-          }
+          // Keep speakers in session name order (first-second)
+          // For t1lt2r: first speaker = Talent 1 (Left), second speaker = Talent 2 (Right)
+          // For t2lt1r: first speaker = Talent 2 (Left), second speaker = Talent 1 (Right)
+          const firstSpeaker = dualMatch[1];
+          const secondSpeaker = dualMatch[2];
           
           return {
             type: 'dual',
-            speaker1: speaker1,
-            speaker2: speaker2,
+            speaker1: firstSpeaker,  // First in session name (Left channel speaker)
+            speaker2: secondSpeaker, // Second in session name (Right channel speaker)
             code: dualMatch[3],
             mode: dualMatch[4].toLowerCase(),
             script: dualMatch[5]
@@ -1280,7 +1278,7 @@ input[type=file] {
         }
 
         // DUALCHARACTER: original 5-track logic
-        // speaker1 is always alphabetically first (Left), speaker2 is always alphabetically second (Right)
+        // speaker1 is first in session name (Left channel), speaker2 is second (Right channel)
         const date1 = tracks[0]?.match(/_(\d{4})_/)?.[1] || '';
         const date2 = tracks[1]?.match(/_(\d{4})_/)?.[1] || '';
         
@@ -1900,8 +1898,11 @@ if (!['line','lout','scene'].includes(m.token)) {
           for (const scr of scriptVariants) {
             const leftNoPrefix  = `${sessionInfo.speaker1}_${date1}_${scr}`;
             const rightNoPrefix = `${sessionInfo.speaker2}_${date2}_${scr}`;
-            const leftWith      = `Left_Talent 1_${leftNoPrefix}`;
-            const rightWith     = `Right_Talent 2_${rightNoPrefix}`;
+            // Use correct talent numbers based on mode
+            const leftTalentNum = sessionInfo.mode === 't2lt1r' ? '2' : '1';
+            const rightTalentNum = sessionInfo.mode === 't2lt1r' ? '1' : '2';
+            const leftWith      = `Left_Talent ${leftTalentNum}_${leftNoPrefix}`;
+            const rightWith     = `Right_Talent ${rightTalentNum}_${rightNoPrefix}`;
 
             if (prefix === 'left') {
               if (base === leftWith || base.startsWith(leftWith + '_') || base.startsWith(leftWith + '-')) { anyValid = true; break; }
