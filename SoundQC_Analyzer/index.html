@@ -4360,8 +4360,8 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     return i === 0 ? (hpfDet && hpfDet.left  && hpfDet.left.detected)
                    : (hpfDet && hpfDet.right && hpfDet.right.detected);
   });
-  const anyFail = allA.some(a => a.noiseFloorDb >= -50 || (a.noiseFloorDb <= -90 && hpfAny));
-  const allPass = allA.every(a => a.noiseFloorDb > -90 && a.noiseFloorDb <= -57);
+  const anyFail = hpfAny || allA.some(a => a.noiseFloorDb >= -50);
+  const allPass = !hpfAny && allA.every(a => a.noiseFloorDb > -90 && a.noiseFloorDb <= -57);
   const overall = anyFail ? 'FAIL' : allPass ? 'PASS' : 'WARN';
   const cls = overall==='PASS'?'pass':overall==='FAIL'?'fail':'warn';
   document.getElementById('resultsBar').style.display = 'flex';
