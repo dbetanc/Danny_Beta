@@ -504,8 +504,7 @@ h1 span { color: var(--green); }
 }
 [hidden]{display:none!important;}
 </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <style>
+<style>
     @media print {
       header, .drop-section, .file-list-section, #analyzeBtn, #exportBtn, #progressWrap, .theme-toggle, .version-badge { display: none !important; }
       body { background: white !important; }
@@ -532,7 +531,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.0.6</div>
+            <div class="version-badge">v3.0.7</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -620,7 +619,7 @@ h1 span { color: var(--green); }
     <div id="overallBadge"></div>
     <div style="display:flex;gap:8px">
       <button id="exportQABtn" onclick="exportQAReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QA Report</button>
-      <button id="exportQCBtn" onclick="exportQCReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QC Report</button>
+      <button id="exportQCBtn" onclick="showQCQuestionnaire()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">QC Report</button>
     </div>
   </div>
 
@@ -846,6 +845,9 @@ function toggleTheme() {
     document.getElementById('themeLabel').textContent = 'LIGHT';
   }
 })();
+
+// ── Analysis state (module-level for questionnaire access) ───
+let _rawLA = null, _rawRA = null, _eA = null, _mA = null, _rawStereoA = null, _artifactData = null;
 
 // ── File state ───────────────────────────────────────────────
 let eFile = null, mFile = null;
@@ -1521,6 +1523,8 @@ async function runAnalysis() {
     window._qcData = { eA, mA, eFile, mFile };
 
     try {
+      _rawLA = rawLA; _rawRA = rawRA; _eA = eA; _mA = mA;
+      _rawStereoA = rawStereoA; _artifactData = artifactData;
       renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData);
     } catch(renderErr) {
       document.getElementById('cardsGrid').innerHTML =
@@ -2112,12 +2116,12 @@ function buildQASessionAnalysis(a) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
       <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
         <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.signalDur)}</div>
       </div>
       <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
         <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
       </div>
     </div>
@@ -2140,12 +2144,12 @@ function buildQASessionAnalysis(a) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OVERLAPS</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(s.overlapDur)}</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${oc}">${or}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${or}</div>
         </div>
       </div>
       <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
@@ -2214,11 +2218,11 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">${metricLabel}${chNote}</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${crestCol}">${usesDelta ? '+' : ''}${mixCrest.toFixed(1)} dB</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${crestCol}">${usesDelta ? '+' : ''}${mixCrest.toFixed(1)} dB</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${crestCol}">${crestLabel}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${crestCol}">${crestLabel}</div>
         </div>
       </div>
       <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:4px">
@@ -2247,7 +2251,7 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SESSION TOTAL</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${fmtDur(markersData.grossSeconds)}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${fmtDur(markersData.grossSeconds)}</div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${markersData.pairs} pairs</div>
         </div>
       </div>
@@ -2310,12 +2314,12 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">VIOLATIONS</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:${oc};line-height:1">${ov}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${ov}</div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-top:2px">${ov === 0 ? 'Clean' : ov <= 3 ? 'Minor' : 'Flag session'}</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OF TRANSITIONS</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:${oc};line-height:1">${editChecks.overlapPct != null ? editChecks.overlapPct + '%' : '—'}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${editChecks.overlapPct != null ? editChecks.overlapPct + '%' : '—'}</div>
           ${warn > 0 ? `<div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:${wc};margin-top:2px">${warn} tight (400–425ms)</div>` : ''}
         </div>
       </div>
@@ -2333,52 +2337,51 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OVERLAPS</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${oc}">${or}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${or}</div>
         </div>
       </div>
     </div>`;
   }
 
-  // Bounce Bleed column (if editChecks available)
+  // Edit Bleed column — uses envelope-correlation score from computeEditChecks
   let bleedCol = '';
-  if (editChecks && editChecks.bleedPct > 0) {
-    const c = editChecks;
-    const bc  = c.bleedPct < 3 ? 'var(--green)' : c.bleedPct < 10 ? 'var(--amber)' : 'var(--red)';
-    const cls = c.bleedPct < 3 ? 'nf-pass'      : c.bleedPct < 10 ? 'nf-warn'      : 'nf-fail';
-    const lbl = c.bleedPct < 3 ? 'Clean'        : c.bleedPct < 10 ? 'Moderate'     : 'Significant';
-    const fmtTS = t => { const m = Math.floor(t/60); const s = Math.floor(t%60).toString().padStart(2,'0'); const ms = Math.round((t%1)*1000).toString().padStart(3,'0'); return `${m}:${s}:${ms}`; };
-    let timestamps = '';
-    if (c.bleedPct >= 3 && c.bleedTimestamps && c.bleedTimestamps.length > 0) {
-      const id = 'bleedCol_' + Date.now();
-      const items = c.bleedTimestamps.map(t => `<span onclick="copyTS(this,this.dataset.ts)"  data-ts="${fmtTS(t)}" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px;cursor:pointer" title="Click to copy">${fmtTS(t)}</span>`).join(' ');
-      timestamps = `<div style="margin-top:5px">
-        <div onclick="const el=document.getElementById('${id}');const arr=this.querySelector('.arr');el.style.display=el.style.display==='none'?'flex':'none';arr.textContent=el.style.display==='none'?'▶':'▼';"
-          style="cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px;user-select:none">
-          <span class="arr">▶</span> ${c.bleedTimestamps.length} event${c.bleedTimestamps.length>1?'s':''}
-        </div>
-        <div id="${id}" style="display:none;flex-wrap:wrap;gap:4px;margin-top:5px">${items}</div>
-      </div>`;
+  if (editChecks) {
+    const bs = editChecks.bleedScore || 1;
+    const chip = qaChip(bs);
+
+    // Bleed reduction: compare RAW median corr vs Edit corr
+    let reductionLabel = '—';
+    if (_artifactData && _artifactData.bleedHfCorr != null &&
+        editChecks.bleedHfCorr != null) {
+      const rawCorr  = Math.max(_artifactData.bleedHfCorr,  _artifactData.bleedLfCorr  || 0);
+      const editCorr = Math.max(editChecks.bleedHfCorr, editChecks.bleedLfCorr || 0);
+      if (rawCorr > 0.05) {
+        const pct = Math.round(Math.max(0, Math.min(100, (1 - editCorr / rawCorr) * 100)));
+        const col = pct >= 70 ? 'var(--green)' : pct >= 30 ? 'var(--amber)' : 'var(--red)';
+        reductionLabel = `<span style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${col}">${pct}<span style="font-size:20px;font-weight:400;color:var(--text3)">%</span></span>`;
+      } else {
+        reductionLabel = '<span style="font-size:10px;color:var(--text3)">No RAW bleed</span>';
+      }
+    } else if (!_artifactData) {
+      reductionLabel = '<span style="font-size:10px;color:var(--text3)">No RAW files</span>';
     }
-    bleedCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Bounce Bleed</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+
+    bleedCol = `<div style="flex:0 0 auto;width:110px;padding:0 14px;border-left:1px solid var(--border)">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Edit Bleed</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">BLEED</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:${bc}">${c.bleedPct.toFixed(1)}%</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:4px">SCORE</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${(6-bs)>=4?'var(--green)':(6-bs)>=3?'var(--amber)':'var(--red)'}">${6-bs}<span style="font-size:20px;font-weight:400;color:var(--text3)"> /5</span></div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
-          <div><span class="nf-badge ${cls}" style="font-size:10px;padding:3px 8px">${lbl}</span></div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:4px">Reduction from RAW</div>
+          ${reductionLabel}
         </div>
       </div>
-      <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
-        <div style="height:100%;width:${Math.min(100,c.bleedPct*4).toFixed(1)}%;background:${bc};border-radius:3px"></div>
-      </div>
-      ${timestamps}
     </div>`;
   }
 
@@ -2389,12 +2392,12 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.signalDur)}</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
         </div>
       </div>
@@ -2423,12 +2426,12 @@ function buildStereoRawSection(a, skipSpeech) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
       <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
         <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--green)">${speechPct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${speechPct.toFixed(1)}%</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.duration * speechPct / 100)}</div>
       </div>
       <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
         <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${s.silencePct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${s.silencePct.toFixed(1)}%</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(s.silenceDur)}</div>
       </div>
     </div>
@@ -2442,7 +2445,7 @@ function buildStereoRawSection(a, skipSpeech) {
     <div style="flex:1;min-width:0;${skipSpeech ? '' : 'padding:0 14px;border-left:1px solid var(--border)'}">
       <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">${overlapLabel}</span></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:${oc};line-height:1">${s.overlapPct.toFixed(1)}%</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
         <div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(s.overlapDur)}</div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;color:${oc}">${or}</div>
@@ -2684,8 +2687,23 @@ async function computeEditChecks(buf) {
   const speechThresh = nfLin * Math.pow(10, 12 / 20); // NF+12dB
   const digitalZeroThresh = Math.pow(10, -120 / 20);  // −120 dBFS
 
-  let bleedCorrSum = 0, bleedCount = 0;
-  let bleedTimestamps = [];
+  // ── Edit bleed: envelope-correlation using the same detectBleed detector ──
+  // Slice to 120s max — bleed correlation converges quickly, full file would hang browser
+  const BLEED_SECS = 120;
+  const bleedMaxSamples = sr * BLEED_SECS;
+  const ch0b = ch0.length > bleedMaxSamples ? ch0.subarray(0, bleedMaxSamples) : ch0;
+  const ch1b = ch1.length > bleedMaxSamples ? ch1.subarray(0, bleedMaxSamples) : ch1;
+  const editBleedLR = detectBleed(ch0b, ch1b, sr, 0);
+  const editBleedRL = detectBleed(ch1b, ch0b, sr, 0);
+  const editBleedScore = Math.max(editBleedLR.score || 1, editBleedRL.score || 1);
+  const editBleedHf    = Math.max(editBleedLR.hfCorr || 0, editBleedRL.hfCorr || 0);
+  const editBleedLf    = Math.max(editBleedLR.lfCorr || 0, editBleedRL.lfCorr || 0);
+  const editBleedType  = editBleedLR.combined || editBleedRL.combined ? 'combined'
+                       : editBleedHf >= 0.40 ? 'headphone'
+                       : editBleedLf >= 0.50 ? 'wall' : 'clean';
+
+  const bleedPct = 0; // legacy field — kept for compatibility
+
   let panCorrSum = 0, panCount = 0;
   let silenceWindows = 0, digitalZeroWindows = 0;
   let digitalZeroTimestamps = [];
@@ -2702,57 +2720,26 @@ async function computeEditChecks(buf) {
     const rms1 = Math.sqrt(sq1 / wsz);
     const corr = cross / (Math.sqrt(sq0 * sq1) + 1e-12);
 
-    // Headphone bleed: during CH1 speech, CH0 mic should be near NF
-    // If CH0 is elevated above NF but below speech threshold → bleed from headphones
-    // Same check symmetric: during CH0 speech, CH1 should be near NF
-    const bleedThreshHi = speechThresh;
-    const bleedThreshLo = nfLin * Math.pow(10, 18 / 20); // NF+18dB — clearly above room tone and breathing
-
-    // CH0 bleed during CH1 speech: CH0 elevated AND correlated with CH1
-    if (rms1 > speechThresh && rms0 < bleedThreshHi && rms0 > bleedThreshLo && corr > 0.3) {
-      bleedCorrSum += rms0 / (rms1 + 1e-12);
-      bleedCount++;
-      bleedTimestamps.push(i * wsz / sr);
-    }
-    // CH1 bleed during CH0 speech: CH1 elevated AND correlated with CH0
-    if (rms0 > speechThresh && rms1 < bleedThreshHi && rms1 > bleedThreshLo && corr > 0.3) {
-      bleedCorrSum += rms1 / (rms0 + 1e-12);
-      bleedCount++;
-      bleedTimestamps.push(i * wsz / sr);
-    }
-
-    // Panning: correlation across all speech windows (both speaking or either)
+    // Panning check
     if (rms0 > speechThresh || rms1 > speechThresh) {
       panCorrSum += Math.abs(corr);
       panCount++;
     }
 
-    // Digital zero: engineer erased silence in one channel while the other has speech
-    // Correct edit: fill with room tone. Wrong edit: delete to digital zero.
-    // Signature: one channel speaking (> speechThresh), other channel at digital zero (< -120 dBFS)
+    // Digital zero gaps
     if (rms0 > speechThresh && rms1 < digitalZeroThresh) { silenceWindows++; digitalZeroWindows++; digitalZeroTimestamps.push({ t: i * wsz / sr, ch: 'Right' }); }
     else if (rms1 > speechThresh && rms0 < digitalZeroThresh) { silenceWindows++; digitalZeroWindows++; digitalZeroTimestamps.push({ t: i * wsz / sr, ch: 'Left' }); }
     else if (rms0 < speechThresh && rms1 < speechThresh) {
       silenceWindows++;
-      // Both channels zeroed (pre-roll or inter-speech gap erased entirely)
       if (rms0 < digitalZeroThresh && rms1 < digitalZeroThresh) {
         digitalZeroWindows++; digitalZeroTimestamps.push({ t: i * wsz / sr, ch: 'Both' });
       }
-      // One channel zeroed, other has room tone
       else if (rms0 < digitalZeroThresh && rms1 >= nfLin * 0.25) { digitalZeroWindows++; digitalZeroTimestamps.push({ t: i * wsz / sr, ch: 'Left' }); }
       else if (rms1 < digitalZeroThresh && rms0 >= nfLin * 0.25) { digitalZeroWindows++; digitalZeroTimestamps.push({ t: i * wsz / sr, ch: 'Right' }); }
     }
   }
 
-  const bleedPct = bleedCount > 0 ? (bleedCorrSum / bleedCount) * 100 : 0;
-
-  // Merge bleed timestamps within 1 second of each other
-  const mergedTimestamps = [];
-  for (const t of bleedTimestamps.sort((a,b) => a-b)) {
-    if (mergedTimestamps.length && t - mergedTimestamps[mergedTimestamps.length-1] < 1) continue;
-    mergedTimestamps.push(t);
-  }
-
+  const mergedTimestamps = []; // legacy — kept for compatibility
   const avgPanCorr = panCount > 0 ? panCorrSum / panCount : 0;
   const panningError = avgPanCorr > 0.85;
   const digitalZeroGaps = silenceWindows > 5 && (digitalZeroWindows / silenceWindows) > 0.05;
@@ -2845,7 +2832,9 @@ async function computeEditChecks(buf) {
   const ovPct   = Math.round(ovCount / ovTrans * 100);
   const ovTimestamps = [...ovSimul, ...ovTight].sort((a,b) => a-b);
 
-  return { bleedPct, bleedTimestamps: mergedTimestamps, panningError, avgPanCorr, digitalZeroGaps,
+  return { bleedPct, bleedScore: editBleedScore, bleedType: editBleedType,
+           bleedHfCorr: editBleedHf, bleedLfCorr: editBleedLf,
+           bleedTimestamps: mergedTimestamps, panningError, avgPanCorr, digitalZeroGaps,
            digitalZeroRatio: silenceWindows > 0 ? digitalZeroWindows / silenceWindows : 0,
            digitalZeroTimestamps: mergedDZTimestamps,
            overlapCount: ovCount, overlapPct: ovPct, overlapTimestamps: ovTimestamps,
@@ -3842,6 +3831,8 @@ async function runArtifactScan(leftFiles, rightFiles) {
     takesAnalyzed: n,
     bleedScore,
     bleedType,
+    bleedHfCorr: medHf,
+    bleedLfCorr: medLf,
     bleedClips,
     hum:         { detected: humDetected, freq: humFreq, clips: humClips },
     interference: { detected: interfDetected, spikes: interfSpikes, left: interfLeft, right: interfRight },
@@ -3959,7 +3950,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       : '';
     const gainLine = inRange
       ? `<div style="font-family:'Share Tech Mono',monospace;font-size:15px;font-weight:700;color:${accentCol};letter-spacing:.3px">In range</div>`
-      : `<div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:${accentCol};letter-spacing:.3px">${dir} ${Math.abs(delta).toFixed(1)} dB</div>`;
+      : `<div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${accentCol};letter-spacing:.3px">${dir} ${Math.abs(delta).toFixed(1)} dB</div>`;
     return `<div style="display:flex;flex-direction:column;gap:4px;padding:10px 16px;border:1px solid ${borderCol};border-radius:8px;background:${bgCol};min-width:160px;flex:1;max-width:240px">
       <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">${label}</div>
       <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2)">${lufs.toFixed(1)} LUFS</div>
@@ -4039,7 +4030,12 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const interfSpikeR = interfDet ? (Array.isArray(a.interference.spikes) ? [] :                    ((a.interference.spikes && a.interference.spikes.right) || [])) : [];
   const allSpikes    = [...interfSpikeL, ...interfSpikeR];
   const maxRatio     = allSpikes.length ? Math.max(...allSpikes.map(s => s.ratio)) : 0;
-  const interfScore  = !interfDet ? 1 : maxRatio < 12 ? 2 : 3;
+  const interfScore  = !interfDet ? 1
+    : maxRatio < 12 ? 2   // faint — just above detection floor
+    : maxRatio < 16 ? 2   // faint upper range — still score 2
+    : maxRatio < 20 ? 3   // moderate
+    : maxRatio < 28 ? 4   // strong
+    : 5;                  // very strong
   const combinedScore = Math.max(humScore, interfScore);
   const humLevel  = combinedScore === 1 ? 'pass' : 'warn';
 
@@ -4456,29 +4452,212 @@ function exportQAReport() {
   downloadHTML(buildReportShell('QA Recording Report', body, info, theme, styles), filename);
 }
 
-function exportQCReport() {
-  const { theme, styles } = getReportStyles();
-  const info = getSessionInfo();
-
-  // Edit + Mix side by side
-  let body = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">';
-  ['editCard','mixCard'].forEach(id => {
+const _qHideIds = ['dropZone', 'fileSlots', 'analyzeBtn', 'progressWrap'];
+function _qSetTopSections(hide) {
+  _qHideIds.forEach(id => {
     const el = document.getElementById(id);
-    if (el && el.style.display !== 'none' && !el.hasAttribute('hidden')) body += el.outerHTML;
+    if (!el) return;
+    if (hide) el.setAttribute('data-q-hidden', el.getAttribute('hidden') ?? 'false');
+    if (hide) el.setAttribute('hidden', '');
+    else {
+      const prev = el.getAttribute('data-q-hidden');
+      if (prev === 'false') el.removeAttribute('hidden');
+      el.removeAttribute('data-q-hidden');
+    }
   });
-  body += '</div>';
-
-  // Compare panel + Session Analysis stacked full-width
-  ['comparePanel','sessionAnalysisCard','recsCard'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el && el.style.display !== 'none' && !el.hasAttribute('hidden'))
-      body += '<div style="margin-bottom:14px">' + el.outerHTML + '</div>';
-  });
-
-  const filename = `${info.sessionName}_QC_Report_${new Date().toISOString().slice(0,10)}.html`;
-  downloadHTML(buildReportShell('QC Edit/Mix Report', body, info, theme, styles), filename);
+  // Also hide header drop section visually
+  const ds = document.querySelector('.drop-section');
+  if (ds) ds.style.display = hide ? 'none' : '';
 }
+
+function showQCQuestionnaire() {
+  _qSetTopSections(true);
+  document.getElementById('results').setAttribute('hidden','');
+  const page = document.getElementById('qcQuestionnairePage');
+  page.innerHTML = buildQCQuestionnaire();
+  page.removeAttribute('hidden');
+  page.style.display = '';
+  window.scrollTo(0,0);
+}
+
+function hideQCQuestionnaire() {
+  document.getElementById('qcQuestionnairePage').setAttribute('hidden','');
+  document.getElementById('results').removeAttribute('hidden');
+  _qSetTopSections(false);
+  window.scrollTo(0,0);
+}
+
+function copyQField(btn) {
+  const text = btn.getAttribute('data-val') || '';
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+  const orig = btn.textContent;
+  btn.textContent = 'Copied!';
+  btn.style.background = 'var(--green)'; btn.style.color = '#000';
+  setTimeout(() => { btn.textContent = orig; btn.style.background=''; btn.style.color=''; }, 900);
+}
+
+function buildQCQuestionnaire() {
+  const e  = _eA,  m  = _mA,  a  = _artifactData;
+  const ec = e && e.editChecks;
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+
+  const na = 'N/A';
+  const fmt1 = v => v != null ? v.toFixed(1) : na;
+
+  // ── Helper: question row ──────────────────────────────────
+  function qRow(num, label, value, isScore, copyOverride) {
+    const valStr = value != null && value !== '' ? String(value) : '';
+    const scoreRaw  = isScore && valStr ? parseInt(valStr) : null;
+    const scoreDisp = isScore && scoreRaw ? `${6 - scoreRaw} / 5` : valStr;
+    const copyVal   = copyOverride || (isScore && scoreRaw ? `${label}: ${6 - scoreRaw}/5` : `${label}: ${valStr}`);
+    const scoreColor = isScore && scoreRaw ? (
+      (6 - scoreRaw) >= 4 ? 'var(--green)' :
+      (6 - scoreRaw) >= 3 ? 'var(--amber)' : 'var(--red)'
+    ) : 'var(--text)';
+    const hasVal = valStr !== '' && valStr !== na;
+
+    return `<div style="display:grid;grid-template-columns:28px 1fr auto auto;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--text3);font-weight:700">${num}.</div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">${label}</div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:${isScore?'18px':'14px'};font-weight:700;color:${scoreColor};min-width:60px;text-align:right">${scoreDisp || '<span style="color:var(--text3);font-size:12px">—</span>'}</div>
+      <button onclick="copyQField(this);return false;" data-val="${hasVal ? copyVal.replace(/"/g,'&quot;') : ''}" style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s" ${!hasVal?'disabled':''}>${hasVal ? 'Copy' : '—'}</button>
+    </div>`;
+  }
+
+  // ── Derive values ─────────────────────────────────────────
+
+  // 1. Edit Room Tone (NF)
+  const editNF = e ? fmt1(e.noiseFloorDb) + ' dBFS' : na;
+
+  // 2. Mixed Room Tone (NF)
+  const mixNF  = m ? fmt1(m.noiseFloorDb) + ' dBFS' : na;
+
+  // 3. L/R Acoustic Delta + RMS diff Edit and Mixed
+  const eDelta = e && e.lrDelta != null ? fmt1(e.lrDelta) + ' dB' : na;
+  const eRmsLR = e && e.ch0 && e.ch1 ? `L ${fmt1(e.ch0.rmsDb)} / R ${fmt1(e.ch1.rmsDb)} dBFS` : na;
+  const mDelta = m && m.lrDelta != null ? fmt1(m.lrDelta) + ' dB' : na;
+  const mRmsLR = m && m.ch0 && m.ch1 ? `L ${fmt1(m.ch0.rmsDb)} / R ${fmt1(m.ch1.rmsDb)} dBFS` : na;
+  const q3 = `Edit Δ: ${eDelta} | Edit RMS: ${eRmsLR} | Mix Δ: ${mDelta} | Mix RMS: ${mRmsLR}`;
+
+  // 4. Peak Level Edit L/R and Mixed L/R
+  const ePeakLR = e && e.ch0 && e.ch1 ? `L ${fmt1(e.ch0.peakDb)} / R ${fmt1(e.ch1.peakDb)} dBFS` : (e ? fmt1(e.peakDb) + ' dBFS' : na);
+  const mPeakLR = m && m.ch0 && m.ch1 ? `L ${fmt1(m.ch0.peakDb)} / R ${fmt1(m.ch1.peakDb)} dBFS` : (m ? fmt1(m.peakDb) + ' dBFS' : na);
+  const q4 = `Edit: ${ePeakLR} | Mix: ${mPeakLR}`;
+
+  // 5. Headphone Bleed — Edit score (delivered file), RAW as fallback
+  let bleedScore = na;
+  if (ec && ec.bleedScore) bleedScore = ec.bleedScore;
+  else if (a && a.bleedScore) bleedScore = a.bleedScore;
+
+  // 5b. Bleed reduction RAW → Edit
+  let bleedReduction = na;
+  if (a && a.bleedHfCorr != null && ec && ec.bleedHfCorr != null) {
+    const rawCorr  = Math.max(a.bleedHfCorr,  a.bleedLfCorr  || 0);
+    const editCorr = Math.max(ec.bleedHfCorr, ec.bleedLfCorr || 0);
+    if (rawCorr > 0.05) {
+      const pct = Math.round(Math.max(0, Math.min(100, (1 - editCorr / rawCorr) * 100)));
+      bleedReduction = pct + '%';
+    } else {
+      bleedReduction = 'N/A — no raw bleed detected';
+    }
+  }
+
+  // 6. HVAC / Hum / Interference score
+  let humScore = na;
+  if (a) {
+    const humStr  = a.hum && a.hum.detected ? a.hum.strength || 0 : 0;
+    const interfDet = a.interference && a.interference.detected;
+    const allSpikes = interfDet ? (Array.isArray(a.interference.spikes) ? a.interference.spikes : [...(a.interference.spikes?.left||[]), ...(a.interference.spikes?.right||[])]) : [];
+    const maxRatio  = allSpikes.length ? Math.max(...allSpikes.map(s => s.ratio)) : 0;
+    const hS = !a.hum.detected ? 1 : humStr < 50 ? 2 : humStr < 150 ? 3 : humStr < 300 ? 4 : 5;
+    const iS = !interfDet ? 1
+      : maxRatio < 16 ? 2
+      : maxRatio < 20 ? 3
+      : maxRatio < 28 ? 4
+      : 5;
+    humScore = Math.max(hS, iS);
+  }
+
+  // 7. # of Overlaps from QA stereo bounce (if available) or Edit checks
+  let overlapCount = na;
+  if (_rawStereoA && _rawStereoA.stereo && _rawStereoA.stereo.overlapCount != null)
+    overlapCount = _rawStereoA.stereo.overlapCount;
+  else if (ec && ec.overlapCount != null)
+    overlapCount = ec.overlapCount;
+
+  // 8. Noises score (Physical Noises)
+  let noisesScore = na;
+  if (a) {
+    const impTotal = a.impacts.left + a.impacts.right;
+    const impAvg   = a.takesAnalyzed > 0 ? impTotal / a.takesAnalyzed : impTotal;
+    noisesScore = impAvg === 0 ? 1 : impAvg < 0.5 ? 2 : impAvg < 1 ? 3 : impAvg < 2 ? 4 : 5;
+  }
+
+  // 9. Mic Pops score
+  let popsScore = na;
+  if (a) {
+    const popTotal = a.pops.left + a.pops.right;
+    const popAvg   = a.takesAnalyzed > 0 ? popTotal / a.takesAnalyzed : popTotal;
+    popsScore = popAvg === 0 ? 1 : popAvg < 0.5 ? 2 : popAvg < 1.5 ? 3 : popAvg < 3 ? 4 : 5;
+  }
+
+  // 10. Mouth Clicks score
+  let clicksScore = na;
+  if (a) {
+    const clickTotal = a.clicks.left + a.clicks.right;
+    const clickAvg   = a.takesAnalyzed > 0 ? clickTotal / a.takesAnalyzed : clickTotal;
+    clicksScore = clickAvg === 0 ? 1 : clickAvg < 1 ? 2 : clickAvg < 3 ? 3 : clickAvg < 6 ? 4 : 5;
+  }
+
+  // 11. Overlaps score (1=good, 5=bad)
+  let overlapScore = na;
+  if (overlapCount !== na) {
+    const ov = parseInt(overlapCount);
+    overlapScore = ov <= 1 ? 1 : ov <= 5 ? 2 : ov <= 10 ? 3 : ov <= 15 ? 4 : 5;
+  }
+
+  // Session name for header
+  const sessionName = (eFile ? eFile.name.replace(/_edit\.wav$/i,'') : (mFile ? mFile.name.replace(/_mixed\.wav$/i,'') : 'Session'));
+
+  return `
+  <div style="margin-top:1.75rem;animation:fadeUp .4s ease both">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;padding:10px 16px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button onclick="hideQCQuestionnaire()" style="font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;padding:5px 12px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;letter-spacing:.5px;transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">← Go Back</button>
+        <div style="font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:var(--amber);text-transform:uppercase;letter-spacing:1px">QC Report</div>
+      </div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">${sessionName}</div>
+    </div>
+
+    <!-- Questions card -->
+    <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
+      <div style="background:var(--bg3);padding:12px 20px;border-bottom:1px solid var(--border2)">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px">QC — Edit / Mix Evaluation</div>
+      </div>
+      ${qRow(1,  'Edit Room Tone',                                        editNF,      false)}
+      ${qRow(2,  'Mixed Room Tone',                                       mixNF,       false)}
+      ${qRow(3,  'Acoustic Delta + L/R RMS',   q3,  false, q3)}
+      ${qRow(4,  'Peak Level',                 q4,  false, `Peak Level: ${q4}`)}
+      ${qRow(5,  'Headphone Bleed',                                       bleedScore,   true)}
+      ${qRow(6,  'HVAC / Hum / Interference',                            humScore,    true)}
+      ${qRow(7,  '# of Overlaps',                                        overlapCount,false)}
+      ${qRow(8,  'Physical Noises',                                       noisesScore, true)}
+      ${qRow(9,  'Mic Pops',                                             popsScore,   true)}
+      ${qRow(10, 'Mouth Clicks',                                         clicksScore, true)}
+      ${qRow(11, 'Overlaps Score',                                       overlapScore,true)}
+    </div>
+  </div>`;
+}
+
 </script>
+
+  <!-- QC QUESTIONNAIRE PAGE -->
+  <div id="qcQuestionnairePage" hidden></div>
 
   <footer style="text-align:center;padding:32px 0 20px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);letter-spacing:.8px;border-top:1px solid var(--border2);margin-top:40px">
     Created by Danny Beta
