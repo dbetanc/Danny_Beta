@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================
-  SOBA - Session Pre-checker v2.5
+  SOBA - Session Pre-checker v2.6
   Created by: Danny Beta
   Date: March 2026
   
@@ -14,7 +14,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="author" content="Danny Beta"/>
-<title>SOBA - Session Pre-checker v2.5</title>
+<title>SOBA - Session Pre-checker v2.6</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -773,7 +773,7 @@ input[type=file] {
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.5</div>
+      <div class="version-badge">v2.6</div>
       <button class="theme-toggle" id="themeToggle" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">LIGHT</span>
@@ -1284,15 +1284,21 @@ input[type=file] {
 
         // DUALCHARACTER: original 5-track logic
         // speaker1 is alphabetically first (Left channel), speaker2 is alphabetically second (Right channel)
-        // Track names are ALWAYS Left_Talent 1 and Right_Talent 2 regardless of turn code
+        // Track names change based on mode:
+        // t1lt2r: Left_Talent 1 (speaker1 plays Talent1), Right_Talent 2 (speaker2 plays Talent2)
+        // t2lt1r: Left_Talent 2 (speaker1 plays Talent2), Right_Talent 1 (speaker2 plays Talent1)
         const date1 = tracks[0]?.match(/_(\d{4})_/)?.[1] || '';
         const date2 = tracks[1]?.match(/_(\d{4})_/)?.[1] || '';
+        
+        // Determine talent numbers based on mode
+        const leftTalentNum = sessionInfo.mode === 't2lt1r' ? '2' : '1';
+        const rightTalentNum = sessionInfo.mode === 't2lt1r' ? '1' : '2';
         
         const expected = [
           `${sessionInfo.speaker1}_${date1}_${sessionInfo.script}`,
           `${sessionInfo.speaker2}_${date2}_${sessionInfo.script}`,
-          `Left_Talent 1_${sessionInfo.speaker1}_${date1}_${sessionInfo.script}`,
-          `Right_Talent 2_${sessionInfo.speaker2}_${date2}_${sessionInfo.script}`,
+          `Left_Talent ${leftTalentNum}_${sessionInfo.speaker1}_${date1}_${sessionInfo.script}`,
+          `Right_Talent ${rightTalentNum}_${sessionInfo.speaker2}_${date2}_${sessionInfo.script}`,
           `${sessionInfo.speaker1}-${sessionInfo.speaker2}_${date1}_${sessionInfo.script}_mixed`
         ];
         return tracks.map((track, i) => expected[i] && track !== expected[i] ? expected[i] : null);
@@ -1850,16 +1856,22 @@ if (!['line','lout','scene'].includes(m.token)) {
         const scriptNoDash = scriptBase.replace(/-([bB]\d{2,4})$/, '$1');
         const scriptVariants = scriptNoDash === scriptBase ? [scriptBase] : [scriptBase, scriptNoDash];
 
+        // Determine talent numbers based on mode
+        const leftTalentNum = sessionInfo.mode === 't2lt1r' ? '2' : '1';
+        const rightTalentNum = sessionInfo.mode === 't2lt1r' ? '1' : '2';
+        const leftPrefix = `Left_Talent ${leftTalentNum}_`;
+        const rightPrefix = `Right_Talent ${rightTalentNum}_`;
+
         rows.forEach(r => {
           if (!isInAudioFiles(r.location)) return;
           const file = (r.file||'').trim(); if (!file) return;
           const base = stripExt(file);
 
-          // Optional prefixes - ALWAYS Left_Talent 1 and Right_Talent 2 regardless of turn code
+          // Optional prefixes - change based on mode (t1lt2r vs t2lt1r)
           let prefix = null;
           let rest = base;
-          if (rest.startsWith('Left_Talent 1_')) { prefix='left';  rest = rest.substring('Left_Talent 1_'.length); }
-          else if (rest.startsWith('Right_Talent 2_')) { prefix='right'; rest = rest.substring('Right_Talent 2_'.length); }
+          if (rest.startsWith(leftPrefix)) { prefix='left';  rest = rest.substring(leftPrefix.length); }
+          else if (rest.startsWith(rightPrefix)) { prefix='right'; rest = rest.substring(rightPrefix.length); }
           else if (rest.startsWith('Talent 1_')) {
             // Invalid for dual
             const expectedBase = `${sessionInfo.speaker1}_${date1}_${scriptBase} OR ${sessionInfo.speaker2}_${date2}_${scriptBase}`;
@@ -1873,9 +1885,9 @@ if (!['line','lout','scene'].includes(m.token)) {
           for (const scr of scriptVariants) {
             const leftNoPrefix  = `${sessionInfo.speaker1}_${date1}_${scr}`;
             const rightNoPrefix = `${sessionInfo.speaker2}_${date2}_${scr}`;
-            // Always use Talent 1 for Left, Talent 2 for Right
-            const leftWith      = `Left_Talent 1_${leftNoPrefix}`;
-            const rightWith     = `Right_Talent 2_${rightNoPrefix}`;
+            // Use mode-based talent numbers
+            const leftWith      = `Left_Talent ${leftTalentNum}_${leftNoPrefix}`;
+            const rightWith     = `Right_Talent ${rightTalentNum}_${rightNoPrefix}`;
 
             if (prefix === 'left') {
               if (base === leftWith || base.startsWith(leftWith + '_') || base.startsWith(leftWith + '-')) { anyValid = true; break; }
@@ -2433,9 +2445,29 @@ if (!['line','lout','scene'].includes(m.token)) {
                 sessionNameHasError = true;
                 return;
               }
-              // Note: Session name speaker order does NOT need to be alphabetical
-              // The turn code (t1lt2r/t2lt1r) indicates which speaker is Talent 1 vs Talent 2
-              // But track/file names ALWAYS use alphabetical order with Left_Talent 1 and Right_Talent 2
+              
+              // Speaker IDs must be in alphabetical order (Speaker 1 first, Speaker 2 second)
+              if (speaker1.toLowerCase() > speaker2.toLowerCase()) {
+                sessionDisplay.className = "session-name bad";
+                const correctedSessionName = sessionName.replace(
+                  new RegExp(`^${speaker1}-${speaker2}`, 'i'),
+                  `${speaker2}-${speaker1}`
+                ).toLowerCase();
+                sessionError.innerHTML = `
+                  <strong>SESSION NAME: Speaker IDs must be in alphabetical order.</strong><br>
+                  '${speaker1}' should come after '${speaker2}'
+                  <div class="should-be" style="margin-top:12px;">Should Be:</div>
+                  <div class="should-be-container">
+                    <div class="should-be-box">
+                      <code id="text-copy-speaker-order">${esc(correctedSessionName)}</code>
+                    </div>
+                    <button class="copy-btn" id="btn-copy-speaker-order" onclick="copyToClipboard('text-copy-speaker-order', 'btn-copy-speaker-order')" title="Copy to clipboard"></button>
+                  </div>`;
+                sessionError.style.display = "block";
+                output.innerHTML = "";
+                sessionNameHasError = true;
+                return;
+              }
             }
           } catch(e) { /* fail-safe */ }
         })();
