@@ -922,7 +922,7 @@ function classifyFiles(files) {
   function isValidTalentFile(f) {
     const name = f.name.toLowerCase();
     // Must be dualcharacter or singlecharacter session
-    if (!/dualcharacter|dualemotioncharacter|dualreasoning|singlecharacter/i.test(name)) return false;
+    if (!/dualcharacter|dualemotioncharacter|dualreasoning|dualconversation|singlecharacter/i.test(name)) return false;
     // Must NOT be a room tone file
     if (/roomtone|room.?tone|\brt_/i.test(name)) return false;
     // Must NOT be an edit or mix bounce
@@ -1031,9 +1031,12 @@ function processFiles(files, autoRun) {
   }
 
   // Fallback: if nothing classified, use simple 2-file logic
+  // Only applies to files with NO recognisable session type — never to RAW-style names
+  const SESSION_TYPE = /dualcharacter|dualemotioncharacter|dualreasoning|dualconversation|singlecharacter/i;
+  const unclassifiedWavs = wavs.filter(f => !SESSION_TYPE.test(f.name));
   if (!rawLeftFiles.length && !rawRightFiles.length && !eFile && !mFile) {
-    if (wavs.length === 1) { eFile = wavs[0]; }
-    else { eFile = wavs[0]; mFile = wavs[1]; }
+    if (unclassifiedWavs.length === 1) { eFile = unclassifiedWavs[0]; }
+    else if (unclassifiedWavs.length >= 2) { eFile = unclassifiedWavs[0]; mFile = unclassifiedWavs[1]; }
   }
 
   refreshSlots();
