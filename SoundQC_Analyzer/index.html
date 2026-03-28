@@ -531,7 +531,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.0.7</div>
+            <div class="version-badge">v3.0.8</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -1308,6 +1308,8 @@ async function analyzeGroup(files) {
     channels: results[0].channels, sampleRate: results[0].sampleRate,
     duration:      results.reduce((s,r) => s+r.duration, 0),
     rmsDb:         avg('rmsDb'),    peakDb:       avg('peakDb'),
+    maxPeakDb:     Math.max(...results.map(r => r.peakDb)),
+    p95PeakDb:     (arr => arr[Math.floor(arr.length * 0.95)])(results.map(r => r.peakDb).sort((a,b) => a-b)),
     noiseFloorDb:  avg('noiseFloorDb'), snr:       avg('snr'),
     dynamicRange:  avg('dynamicRange'),
     lrDelta:       lrArr.length ? lrArr.reduce((s,r)=>s+r.lrDelta,0)/lrArr.length : null,
@@ -2354,24 +2356,6 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
   let bleedCol = '';
   if (editChecks) {
     const bs = editChecks.bleedScore || 1;
-    const chip = qaChip(bs);
-
-    // Bleed reduction: compare RAW median corr vs Edit corr
-    let reductionLabel = '—';
-    if (_artifactData && _artifactData.bleedHfCorr != null &&
-        editChecks.bleedHfCorr != null) {
-      const rawCorr  = Math.max(_artifactData.bleedHfCorr,  _artifactData.bleedLfCorr  || 0);
-      const editCorr = Math.max(editChecks.bleedHfCorr, editChecks.bleedLfCorr || 0);
-      if (rawCorr > 0.05) {
-        const pct = Math.round(Math.max(0, Math.min(100, (1 - editCorr / rawCorr) * 100)));
-        const col = pct >= 70 ? 'var(--green)' : pct >= 30 ? 'var(--amber)' : 'var(--red)';
-        reductionLabel = `<span style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${col}">${pct}<span style="font-size:20px;font-weight:400;color:var(--text3)">%</span></span>`;
-      } else {
-        reductionLabel = '<span style="font-size:10px;color:var(--text3)">No RAW bleed</span>';
-      }
-    } else if (!_artifactData) {
-      reductionLabel = '<span style="font-size:10px;color:var(--text3)">No RAW files</span>';
-    }
 
     bleedCol = `<div style="flex:0 0 auto;width:110px;padding:0 14px;border-left:1px solid var(--border)">
       <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Edit Bleed</div>
@@ -2379,10 +2363,6 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:4px">SCORE</div>
           <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${(6-bs)>=4?'var(--green)':(6-bs)>=3?'var(--amber)':'var(--red)'}">${6-bs}<span style="font-size:20px;font-weight:400;color:var(--text3)"> /5</span></div>
-        </div>
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:4px">Reduction from RAW</div>
-          ${reductionLabel}
         </div>
       </div>
     </div>`;
@@ -4555,19 +4535,6 @@ function buildQCQuestionnaire() {
   let bleedScore = na;
   if (ec && ec.bleedScore) bleedScore = ec.bleedScore;
   else if (a && a.bleedScore) bleedScore = a.bleedScore;
-
-  // 5b. Bleed reduction RAW → Edit
-  let bleedReduction = na;
-  if (a && a.bleedHfCorr != null && ec && ec.bleedHfCorr != null) {
-    const rawCorr  = Math.max(a.bleedHfCorr,  a.bleedLfCorr  || 0);
-    const editCorr = Math.max(ec.bleedHfCorr, ec.bleedLfCorr || 0);
-    if (rawCorr > 0.05) {
-      const pct = Math.round(Math.max(0, Math.min(100, (1 - editCorr / rawCorr) * 100)));
-      bleedReduction = pct + '%';
-    } else {
-      bleedReduction = 'N/A — no raw bleed detected';
-    }
-  }
 
   // 6. HVAC / Hum / Interference score
   let humScore = na;
