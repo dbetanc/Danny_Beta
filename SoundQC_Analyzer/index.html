@@ -531,7 +531,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.0.8</div>
+            <div class="version-badge">v3.0.9</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -1220,7 +1220,7 @@ function computeIntegratedLUFS(buf) {
       for (let i = start; i < start + blockSize; i++) bsum += filtered[c][i] ** 2;
       sum += bsum / blockSize;
     }
-    blockMeans.push(sum / nc);
+    blockMeans.push(sum);
   }
 
   if (!blockMeans.length) return null;
@@ -2074,11 +2074,22 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
     ...(a.lufs != null ? [
       (() => {
         let compPill = '';
-        if (lufsTarget === 'mixed') {
-          const crest = a.peakDb - a.rmsDb;
-          const clabel = crest >= 20 ? 'None' : crest >= 14 ? 'Light' : crest >= 8 ? 'Moderate' : 'Heavy';
-          const ccls   = crest >= 14 ? 'nf-pass' : crest >= 8 ? 'nf-warn' : 'nf-fail';
-          compPill = '<span class="nf-chip ' + ccls + '" style="font-size:10px">' + clabel + '</span>';
+        if (lufsTarget === 'mixed' || lufsTarget === 'edit') {
+          const zoneHi   = lufsTarget === 'mixed' ? -18 : -21;
+          const zoneLo   = lufsTarget === 'mixed' ? -20 : -24;
+          const TOL      = 0.5;
+          const inRange  = a.lufs >= zoneLo && a.lufs <= zoneHi + TOL;
+          let clabel, ccls;
+          if (inRange) {
+            clabel = 'Target'; ccls = 'nf-pass';
+          } else if (a.lufs > zoneHi + TOL) {
+            const over = (a.lufs - zoneHi).toFixed(1);
+            clabel = '+' + over + ' LU'; ccls = 'nf-warn';
+          } else {
+            const under = (zoneLo - a.lufs).toFixed(1);
+            clabel = '\u2212' + under + ' LU'; ccls = 'nf-blue';
+          }
+          compPill = '<span class="nf-chip ' + ccls + '" style="font-size:10px;text-transform:uppercase">' + clabel + '</span>';
         }
         return mRow('Integrated LUFS', a.lufs.toFixed(1)+' LUFS', compPill, lufsColorCls(a.lufs, lufsTarget));
       })(),
@@ -2104,6 +2115,9 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
     ...(a.ch1 ? [
       mRow('L / R RMS',   a.ch0.rmsDb.toFixed(1)+' / '+a.ch1.rmsDb.toFixed(1)+' dBFS', '', ''),
       mRow('L / R Noise', a.ch0.noiseFloorDb.toFixed(1)+' / '+a.ch1.noiseFloorDb.toFixed(1)+' dBFS', '', ''),
+      ...(a.lufsL != null && a.lufsR != null ? [
+        mRow('L / R LUFS', a.lufsL.toFixed(1)+' / '+a.lufsR.toFixed(1)+' LUFS', '', ''),
+      ] : []),
     ] : []),
   ].join('');
 }
@@ -2178,8 +2192,11 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     // PLR per channel — compare Edit vs Mixed when both present, else absolute PLR
     const mixPlrL = (mixA.ch0 && mixA.lufsL != null) ? mixA.ch0.peakDb - mixA.lufsL : null;
     const mixPlrR = (mixA.ch1 && mixA.lufsR != null) ? mixA.ch1.peakDb - mixA.lufsR : null;
-    const editPlrL = (editA && editA.ch0 && editA.lufsL != null) ? editA.ch0.peakDb - editA.lufsL : null;
-    const editPlrR = (editA && editA.ch1 && editA.lufsR != null) ? editA.ch1.peakDb - editA.lufsR : null;
+    // Cap Edit peak at -1 dBFS — a clipping Edit artificially inflates the PLR delta
+    const editPeakCapL = editA && editA.ch0 ? Math.min(editA.ch0.peakDb, -1.0) : null;
+    const editPeakCapR = editA && editA.ch1 ? Math.min(editA.ch1.peakDb, -1.0) : null;
+    const editPlrL = (editPeakCapL !== null && editA.lufsL != null) ? editPeakCapL - editA.lufsL : null;
+    const editPlrR = (editPeakCapR !== null && editA.lufsR != null) ? editPeakCapR - editA.lufsR : null;
 
     const usesDelta = editPlrL !== null && mixPlrL !== null;
     // Delta: how much PLR was reduced by compression (positive = more compressed)
