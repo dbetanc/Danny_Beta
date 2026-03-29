@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================
-  SOBA - Session Pre-checker v2.6
+  SOBA - Session Pre-checker v2.7
   Created by: Danny Beta
   Date: March 2026
   
@@ -14,7 +14,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="author" content="Danny Beta"/>
-<title>SOBA - Session Pre-checker v2.6</title>
+<title>SOBA - Session Pre-checker v2.7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -773,7 +773,7 @@ input[type=file] {
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.6</div>
+      <div class="version-badge">v2.7</div>
       <button class="theme-toggle" id="themeToggle" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">LIGHT</span>
@@ -1508,12 +1508,37 @@ input[type=file] {
       }
 
       function extractMarker(name){
+        // Check for valid 4-digit format for line/lout markers
+        const strictMatch = name.match(/^(line|lout)(\d{4})$/i);
+        if (strictMatch) {
+          return {
+            token: strictMatch[1].toLowerCase(),
+            num: parseInt(strictMatch[2], 10),
+            raw: name,
+            validFormat: true
+          };
+        }
+        
+        // Check for invalid format (wrong number of digits)
+        const invalidLineMatch = name.match(/^(line|lout)(\d+)$/i);
+        if (invalidLineMatch) {
+          return {
+            token: invalidLineMatch[1].toLowerCase(),
+            num: parseInt(invalidLineMatch[2], 10),
+            raw: name,
+            validFormat: false,
+            formatError: `Invalid format: "${name}" should be ${invalidLineMatch[1].toLowerCase()}${String(parseInt(invalidLineMatch[2], 10)).padStart(4, '0')}`
+          };
+        }
+        
+        // Scene markers and others
         const m = name.match(/^([A-Za-z]+)\s*[-_ ]*\s*0*([0-9]*)/);
-        if (!m) return {token:'unknown', num:null, raw:name};
+        if (!m) return {token:'unknown', num:null, raw:name, validFormat: true};
         return {
           token:m[1].toLowerCase(),
           num:m[2] ? parseInt(m[2], 10) : null,
-          raw:name
+          raw:name,
+          validFormat: true
         };
       }
 
@@ -1574,6 +1599,10 @@ input[type=file] {
           const markerTrackName = m.track || '';
           const markerTrackIndex = getTrackIndexByName(markerTrackName);
 
+          // Check for invalid marker format (wrong number of digits)
+          if (m.validFormat === false && m.formatError) {
+            errors.push(m.formatError);
+          }
           
           // Units check
           if (m.units && m.units.toLowerCase() === 'ticks') {
