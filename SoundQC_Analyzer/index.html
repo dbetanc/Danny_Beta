@@ -915,14 +915,12 @@ function classifyFiles(files) {
 
   // ── Valid talent RAW file filter ─────────────────────────
   // Accept only files that:
-  // 1. Contain 'dualcharacter' or 'singlecharacter' (case insensitive)
-  // 2. Start with talent code pattern [a-z]{8,12}_ OR Left_Talent/Right_Talent prefix
-  // 3. Do NOT contain room tone markers
+  // 1. Start with talent code pattern [a-z]{8,12}_ OR Left_Talent/Right_Talent prefix
+  // 2. Do NOT contain room tone markers
+  // 3. Do NOT contain edit or mix bounce suffixes
   // Stereo files are rejected at decode time (mono-only for RAW)
   function isValidTalentFile(f) {
     const name = f.name.toLowerCase();
-    // Must be dualcharacter or singlecharacter session
-    if (!/dualcharacter|dualemotioncharacter|dualreasoning|dualconversation|singlecharacter/i.test(name)) return false;
     // Must NOT be a room tone file
     if (/roomtone|room.?tone|\brt_/i.test(name)) return false;
     // Must NOT be an edit or mix bounce
@@ -1031,9 +1029,9 @@ function processFiles(files, autoRun) {
   }
 
   // Fallback: if nothing classified, use simple 2-file logic
-  // Only applies to files with NO recognisable session type — never to RAW-style names
-  const SESSION_TYPE = /dualcharacter|dualemotioncharacter|dualreasoning|dualconversation|singlecharacter/i;
-  const unclassifiedWavs = wavs.filter(f => !SESSION_TYPE.test(f.name));
+  // Only applies to files with NO talent code pattern — never to RAW-style names
+  const TALENT_CODE = /^[a-z]{8,12}_/i;
+  const unclassifiedWavs = wavs.filter(f => !TALENT_CODE.test(f.name));
   if (!rawLeftFiles.length && !rawRightFiles.length && !eFile && !mFile) {
     if (unclassifiedWavs.length === 1) { eFile = unclassifiedWavs[0]; }
     else if (unclassifiedWavs.length >= 2) { eFile = unclassifiedWavs[0]; mFile = unclassifiedWavs[1]; }
