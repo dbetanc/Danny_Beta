@@ -1,8 +1,8 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.1
+  SOBA — Audio QA & QC Checker v3.2
   Created by: Danny Beta
-  Date: March 2026
+  Date: April 2026
 
   Description: Browser-based audio quality assurance and quality
   control tool for dual-character and single-character voice
@@ -547,7 +547,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.1</div>
+            <div class="version-badge">v3.2</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -824,9 +824,9 @@ h1 span { color: var(--green); }
         <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Mix Compression (PLR)</div>
         <div class="legend-nf">
           <div class="legend-nf-item"><span class="nf-chip nf-pass">NONE</span>&gt; 20 dB PLR &nbsp;<span style="color:var(--text3)">no compression</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-pass">LIGHT</span>14–20 dB PLR &nbsp;<span style="color:var(--text3)">natural dynamics</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-warn">MODERATE</span>8–14 dB PLR &nbsp;<span style="color:var(--text3)">audible limiting</span></div>
-          <div class="legend-nf-item"><span class="nf-chip nf-fail">HEAVY</span>&lt; 8 dB PLR &nbsp;<span style="color:var(--text3)">over-compressed</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-pass">LIGHT TOUCH</span>14–20 dB PLR &nbsp;<span style="color:var(--text3)">natural dynamics</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-warn">PROCESSED</span>8–14 dB PLR &nbsp;<span style="color:var(--text3)">audible processing</span></div>
+          <div class="legend-nf-item"><span class="nf-chip nf-warn">COMPRESSED</span>&lt; 8 dB PLR &nbsp;<span style="color:var(--text3)">heavy compression</span></div>
         </div>
       </div>
 
@@ -1324,6 +1324,7 @@ async function analyzeGroup(files) {
     rmsDb:         avg('rmsDb'),    peakDb:       avg('peakDb'),
     maxPeakDb:     Math.max(...results.map(r => r.peakDb)),
     p95PeakDb:     (arr => arr[Math.floor(arr.length * 0.95)])(results.map(r => r.peakDb).sort((a,b) => a-b)),
+    clipFiles:     files.filter((f,i) => results[i] && results[i].peakDb >= -0.1).map(f => f.name),
     noiseFloorDb:  avg('noiseFloorDb'), snr:       avg('snr'),
     dynamicRange:  avg('dynamicRange'),
     lrDelta:       lrArr.length ? lrArr.reduce((s,r)=>s+r.lrDelta,0)/lrArr.length : null,
@@ -2109,29 +2110,40 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
       })(),
       lufsBarHTML(a.lufs, lufsTarget),
     ] : []),
+    mRow('Peak Level',     a.peakDb.toFixed(1)+' dBFS',
+      (a.maxPeakDb != null && a.maxPeakDb >= -0.1)
+        ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP</span>`
+        : '',
+      a.peakDb >= -1  ? 'hl-red'
+      : a.peakDb > -20 ? 'hl-amber'
+      : a.peakDb > -70 ? 'hl-green'
+      : 'hl-purple'),
+    dbBarHTML(a.peakDb, 'peak'),
     mRow('RMS Level',      a.rmsDb.toFixed(1)+' dBFS', '',
       a.rmsDb >= -1  ? 'hl-red'
       : a.rmsDb > -20 ? 'hl-amber'
       : a.rmsDb > -70 ? 'hl-green'
       : 'hl-purple'),
     dbBarHTML(a.rmsDb, 'rms'),
-    mRow('Peak Level',     a.peakDb.toFixed(1)+' dBFS', '',
-      a.peakDb >= -1  ? 'hl-red'
-      : a.peakDb > -20 ? 'hl-amber'
-      : a.peakDb > -70 ? 'hl-green'
-      : 'hl-purple'),
-    dbBarHTML(a.peakDb, 'peak'),
     snrDrBarHTML(a.noiseFloorDb, a.rmsDb, a.peakDb),
     ...(hideDeltas ? [] : [
       mRow('Acoustic Δ',     lrVal, rTag, ''),
       (a.lrDelta !== null && a.ch0 && a.ch1) ? lrBalanceBarHTML(a.lrDelta, a.ch0.rmsDb, a.ch1.rmsDb) : '',
     ]),
     ...(a.ch1 ? [
-      mRow('L / R RMS',   a.ch0.rmsDb.toFixed(1)+' / '+a.ch1.rmsDb.toFixed(1)+' dBFS', '', ''),
-      mRow('L / R Noise', a.ch0.noiseFloorDb.toFixed(1)+' / '+a.ch1.noiseFloorDb.toFixed(1)+' dBFS', '', ''),
       ...(a.lufsL != null && a.lufsR != null ? [
         mRow('L / R LUFS', a.lufsL.toFixed(1)+' / '+a.lufsR.toFixed(1)+' LUFS', '', ''),
       ] : []),
+      (() => {
+        const lp = a.ch0.peakDb, rp = a.ch1.peakDb;
+        const lClip = lp >= -0.1, rClip = rp >= -0.1;
+        const badge = (lClip || rClip)
+          ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP${lClip && rClip ? ' L+R' : lClip ? ' L' : ' R'}</span>`
+          : '';
+        return mRow('L / R Peak', lp.toFixed(1)+' / '+rp.toFixed(1)+' dBFS', badge, lClip || rClip ? 'hl-red' : '');
+      })(),
+      mRow('L / R RMS',   a.ch0.rmsDb.toFixed(1)+' / '+a.ch1.rmsDb.toFixed(1)+' dBFS', '', ''),
+      mRow('L / R Noise', a.ch0.noiseFloorDb.toFixed(1)+' / '+a.ch1.noiseFloorDb.toFixed(1)+' dBFS', '', ''),
     ] : []),
   ].join('');
 }
@@ -2235,11 +2247,11 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     // Thresholds differ: delta mode (compression added) vs absolute PLR
     let crestLabel, crestCol;
     if (usesDelta) {
-      crestLabel = plr <= 1 ? 'None' : plr <= 4 ? 'Light' : plr <= 8 ? 'Moderate' : 'Heavy';
-      crestCol   = plr <= 4 ? 'var(--green)' : plr <= 8 ? '#ff9100' : '#d50000';
+      crestLabel = plr <= 1 ? 'None' : plr <= 4 ? 'Light Touch' : plr <= 8 ? 'Processed' : 'Compressed';
+      crestCol   = plr <= 1 ? 'var(--green)' : '#ff9100';
     } else {
-      crestLabel = plr >= 20 ? 'None' : plr >= 14 ? 'Light' : plr >= 8 ? 'Moderate' : 'Heavy';
-      crestCol   = plr >= 14 ? 'var(--green)' : plr >= 8 ? '#ff9100' : '#d50000';
+      crestLabel = plr >= 20 ? 'None' : plr >= 14 ? 'Light Touch' : plr >= 8 ? 'Processed' : 'Compressed';
+      crestCol   = plr >= 20 ? 'var(--green)' : '#ff9100';
     }
 
     const mixCrest = plr;
@@ -2265,7 +2277,7 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
         <div style="height:100%;width:${mixCrest >= 25 ? '0' : mixPct.toFixed(1)}%;background:${crestCol};border-radius:3px"></div>
       </div>
       <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">
-        <span>Light</span><span>Moderate</span><span>Heavy</span>
+        <span>Light Touch</span><span>Processed</span><span>Compressed</span>
       </div>
     </div>`;
   }
@@ -3941,15 +3953,20 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const EDIT_TARGET = -24;
   const EDIT_LO = -24, EDIT_HI = -21;
 
-  function clipGainSection(label, lufs, peakDb) {
+  function clipGainSection(label, lufs, peakDb, p95PeakDb) {
     if (lufs == null) return '';
     const PEAK_CEILING = -1.0;
-    const lufsGain   = EDIT_TARGET - lufs;
+    const PEAK_WARN    = -3.0;
+    const lufsGain   = EDIT_TARGET - lufs;          // pure LUFS-based gain
     const peakRoom   = peakDb != null ? PEAK_CEILING - peakDb : Infinity;
-    const delta      = Math.min(lufsGain, peakRoom);  // cap by peak headroom
-    const peakLimited = peakDb != null && peakRoom < lufsGain;
+    const delta      = Math.min(lufsGain, peakRoom); // still cap by avg peak ceiling
     const inRange    = lufs >= EDIT_LO && lufs <= EDIT_HI;
     const dir        = delta > 0 ? '↑' : '↓';
+
+    // Peak warning: will p95 peak exceed -3 dBFS after applying the gain?
+    const p95After   = p95PeakDb != null ? p95PeakDb + delta : null;
+    const peakWarn   = p95After != null && p95After > PEAK_WARN && !inRange;
+
     const accentCol = inRange
       ? (isDark ? '#00ff88' : '#009944')
       : (isDark ? '#FF8C00' : '#9A7A00');
@@ -3959,17 +3976,17 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     const bgCol = inRange
       ? (isDark ? 'rgba(0,255,136,0.06)'  : 'rgba(0,153,68,0.06)')
       : (isDark ? 'rgba(255,140,0,0.10)'  : 'rgba(154,122,0,0.07)');
-    const peakNote = peakLimited
-      ? `<div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-top:2px">Peak limited · ${peakDb.toFixed(1)} dBFS</div>`
-      : '';
     const gainLine = inRange
       ? `<div style="font-family:'Share Tech Mono',monospace;font-size:15px;font-weight:700;color:${accentCol};letter-spacing:.3px">In range</div>`
       : `<div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${accentCol};letter-spacing:.3px">${dir} ${Math.abs(delta).toFixed(1)} dB</div>`;
+    const warnNote = peakWarn
+      ? `<div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--amber);margin-top:3px">⚠ Check peaks after applying</div>`
+      : '';
     return `<div style="display:flex;flex-direction:column;gap:4px;padding:10px 16px;border:1px solid ${borderCol};border-radius:8px;background:${bgCol};min-width:160px;flex:1;max-width:240px">
       <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">${label}</div>
       <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2)">${lufs.toFixed(1)} LUFS</div>
       ${gainLine}
-      ${peakNote}
+      ${warnNote}
     </div>`;
   }
 
@@ -3985,8 +4002,8 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
 
   // Only show for dual character
   if (!isSingleCh) {
-    const cgLeft  = clipGainSection('Left track',  rawLA ? rawLA.lufs : null, rawLA ? rawLA.peakDb : null);
-    const cgRight = clipGainSection('Right track', rawRA ? rawRA.lufs : null, rawRA ? rawRA.peakDb : null);
+    const cgLeft  = clipGainSection('Left track',  rawLA ? rawLA.lufs : null, rawLA ? rawLA.peakDb : null, rawLA ? rawLA.p95PeakDb : null);
+    const cgRight = clipGainSection('Right track', rawRA ? rawRA.lufs : null, rawRA ? rawRA.peakDb : null, rawRA ? rawRA.p95PeakDb : null);
     rows.push(cgRow(cgLeft + cgRight));
 
     // ── HPF — moved here, below Clip Gain row ────────────
@@ -4026,7 +4043,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   } else {
     // Single character — clip gain advisory + HPF only
     if (rawLA && rawLA.lufs != null) {
-      rows.push(cgRow(clipGainSection('Track', rawLA.lufs, rawLA.peakDb)));
+      rows.push(cgRow(clipGainSection('Track', rawLA.lufs, rawLA.peakDb, rawLA.p95PeakDb)));
     }
     const hpfLDet = a.hpf && a.hpf.left && a.hpf.left.detected;
     if (hpfLDet) {
@@ -4156,6 +4173,22 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
     </div>`);
   }
 
+  // ── RAW Clipping ─────────────────────────────────────────
+  const clipL = rawLA && rawLA.clipFiles && rawLA.clipFiles.length;
+  const clipR = rawRA && rawRA.clipFiles && rawRA.clipFiles.length;
+  if (clipL || clipR) {
+    const parts = [];
+    if (clipL) {
+      const names = rawLA.clipFiles.map(f => f.replace(/\.wav$/i,'')).join(', ');
+      parts.push(`Left: ${rawLA.clipFiles.length} file${rawLA.clipFiles.length>1?'s':''} — Detected in: ${names}`);
+    }
+    if (clipR) {
+      const names = rawRA.clipFiles.map(f => f.replace(/\.wav$/i,'')).join(', ');
+      parts.push(`Right: ${rawRA.clipFiles.length} file${rawRA.clipFiles.length>1?'s':''} — Detected in: ${names}`);
+    }
+    rec('fail', 'RAW — Clipping Detected', parts.join(' · ') + ' · Reduce input gain and re-record.');
+  }
+
   // ── RAW Noise Floor (Left + Right combined) ───────────────
   const rawArr   = [rawLA, rawRA].filter(Boolean);
   const rawOnly  = rawArr.length > 0 && !eA && !mA;
@@ -4187,9 +4220,14 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
     if (eA.lufs > -21)
       rec('warn', 'Edit LUFS Too High',
         eA.lufs.toFixed(1) + ' LUFS · ↓ Reduce clip gain by ' + (eA.lufs - (-21)).toFixed(1) + ' dB.');
-    else if (eA.lufs < -24)
+    else if (eA.lufs < -24) {
+      const gain = (-24) - eA.lufs;
+      const p95  = rawLA ? rawLA.p95PeakDb : (rawRA ? rawRA.p95PeakDb : null);
+      const peakAfter = p95 != null ? p95 + gain : null;
+      const peakNote  = peakAfter != null && peakAfter > -3 ? ' · ⚠ Check peaks after applying.' : '';
       rec('warn', 'Edit LUFS Too Low',
-        eA.lufs.toFixed(1) + ' LUFS · ↑ Raise clip gain by ' + ((-24) - eA.lufs).toFixed(1) + ' dB.');
+        eA.lufs.toFixed(1) + ' LUFS · ↑ Raise clip gain by ' + gain.toFixed(1) + ' dB.' + peakNote);
+    }
   }
 
   // ── Mixed LUFS: −18 to −20 ───────────────────────────────
@@ -4568,6 +4606,25 @@ function buildQCQuestionnaire() {
   const mPeakLR = m && m.ch0 && m.ch1 ? `L ${fmt1(m.ch0.peakDb)} / R ${fmt1(m.ch1.peakDb)} dBFS` : (m ? fmt1(m.peakDb) + ' dBFS' : na);
   const q4 = `Edit: ${ePeakLR} | Mix: ${mPeakLR}`;
 
+  // Clip gain recommendation (from RAW)
+  const EDIT_TARGET = -24, EDIT_LO = -24, EDIT_HI = -21, PEAK_CEILING = -1.0, PEAK_WARN = -3.0;
+  function cgRec(rawA) {
+    if (!rawA || rawA.lufs == null) return na;
+    const lufsGain = EDIT_TARGET - rawA.lufs;
+    const peakRoom = rawA.peakDb != null ? PEAK_CEILING - rawA.peakDb : Infinity;
+    const delta    = Math.min(lufsGain, peakRoom);
+    if (rawA.lufs >= EDIT_LO && rawA.lufs <= EDIT_HI) return 'In range';
+    const dir = delta > 0 ? '↑' : '↓';
+    const p95After = rawA.p95PeakDb != null ? rawA.p95PeakDb + delta : null;
+    const warn = p95After != null && p95After > PEAK_WARN ? ' ⚠ Check peaks' : '';
+    return `${dir} ${Math.abs(delta).toFixed(1)} dB${warn}`;
+  }
+  const cgL = _rawLA ? cgRec(_rawLA) : na;
+  const cgR = _rawRA ? cgRec(_rawRA) : na;
+  const q0 = cgL !== na || cgR !== na
+    ? `L: ${cgL} | R: ${cgR}`
+    : na;
+
   // 5. Headphone Bleed — Edit score (delivered file), RAW as fallback
   let bleedScore = na;
   if (ec && ec.bleedScore) bleedScore = ec.bleedScore;
@@ -4648,6 +4705,7 @@ function buildQCQuestionnaire() {
       <div style="background:var(--bg3);padding:12px 20px;border-bottom:1px solid var(--border2)">
         <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px">QC — Edit / Mix Evaluation</div>
       </div>
+      ${qRow('—', 'Clip Gain Recommendation',                            q0,          false)}
       ${qRow(1,  'Edit Room Tone',                                        editNF,      false)}
       ${qRow(2,  'Mixed Room Tone',                                       mixNF,       false)}
       ${qRow(3,  'Acoustic Delta + L/R RMS',   q3,  false, q3)}
