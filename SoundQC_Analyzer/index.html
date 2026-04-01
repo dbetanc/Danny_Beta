@@ -1,3 +1,19 @@
+<!--
+  ============================================================
+  SOBA — Audio QA & QC Checker v3.1
+  Created by: Danny Beta
+  Date: March 2026
+
+  Description: Browser-based audio quality assurance and quality
+  control tool for dual-character and single-character voice
+  recording sessions. Analyzes RAW talent takes, Edit WAV bounces,
+  and Mixed WAV bounces for noise floor, LUFS, headphone bleed,
+  mic pops, clicks, physical noises, hum, interference, overlaps,
+  compression, and acoustic balance. Includes a QC Report panel
+  with pre-filled questionnaire and per-field copy buttons for
+  SOBA audio production workflows.
+  ============================================================
+-->
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -818,22 +834,6 @@ h1 span { color: var(--green); }
 </div><!-- /app -->
 
 <script>
-/*
-  ============================================================
-  SOBA — Audio QA & QC Checker v3.1
-  Created by: Danny Beta
-  Date: March 2026
-
-  Description: Browser-based audio quality assurance and quality
-  control tool for dual-character and single-character voice
-  recording sessions. Analyzes RAW talent takes, Edit WAV bounces,
-  and Mixed WAV bounces for noise floor, LUFS, headphone bleed,
-  mic pops, clicks, physical noises, hum, interference, overlaps,
-  compression, and acoustic balance. Includes a QC Report panel
-  with pre-filled questionnaire and per-field copy buttons for
-  SOBA audio production workflows.
-  ============================================================
-*/
 // ── Theme ────────────────────────────────────────────────────
 function copyTS(el, txt) {
   var ta = document.createElement('textarea');
