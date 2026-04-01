@@ -531,7 +531,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.0.9</div>
+            <div class="version-badge">v3.1</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -818,6 +818,22 @@ h1 span { color: var(--green); }
 </div><!-- /app -->
 
 <script>
+/*
+  ============================================================
+  SOBA — Audio QA & QC Checker v3.1
+  Created by: Danny Beta
+  Date: March 2026
+
+  Description: Browser-based audio quality assurance and quality
+  control tool for dual-character and single-character voice
+  recording sessions. Analyzes RAW talent takes, Edit WAV bounces,
+  and Mixed WAV bounces for noise floor, LUFS, headphone bleed,
+  mic pops, clicks, physical noises, hum, interference, overlaps,
+  compression, and acoustic balance. Includes a QC Report panel
+  with pre-filled questionnaire and per-field copy buttons for
+  SOBA audio production workflows.
+  ============================================================
+*/
 // ── Theme ────────────────────────────────────────────────────
 function copyTS(el, txt) {
   var ta = document.createElement('textarea');
@@ -4027,20 +4043,26 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const interfSpikeL = interfDet ? (Array.isArray(a.interference.spikes) ? a.interference.spikes : ((a.interference.spikes && a.interference.spikes.left)  || [])) : [];
   const interfSpikeR = interfDet ? (Array.isArray(a.interference.spikes) ? [] :                    ((a.interference.spikes && a.interference.spikes.right) || [])) : [];
   const allSpikes    = [...interfSpikeL, ...interfSpikeR];
+  // Cap score at 2 for spikes entirely above 18kHz (ultrasonic — inaudible)
+  const allAudible = allSpikes.some(s => s.freq < 18000);
   const maxRatio     = allSpikes.length ? Math.max(...allSpikes.map(s => s.ratio)) : 0;
   const interfScore  = !interfDet ? 1
-    : maxRatio < 12 ? 2   // faint — just above detection floor
-    : maxRatio < 16 ? 2   // faint upper range — still score 2
-    : maxRatio < 20 ? 3   // moderate
-    : maxRatio < 28 ? 4   // strong
-    : 5;                  // very strong
+    : !allAudible ? 2              // ultrasonic only — observation, not a quality issue
+    : maxRatio < 12 ? 2
+    : maxRatio < 16 ? 2
+    : maxRatio < 20 ? 3
+    : maxRatio < 28 ? 4
+    : 5;
   const combinedScore = Math.max(humScore, interfScore);
   const humLevel  = combinedScore === 1 ? 'pass' : 'warn';
 
   function spikeListStr(spikes) {
     return spikes.map(s => {
       const khz   = (s.freq / 1000).toFixed(1) + 'kHz';
-      const label = s.ratio >= 20 ? 'strong' : s.ratio >= 16 ? 'moderate' : 'faint';
+      const label = s.freq >= 18000 ? 'ultrasonic'
+                  : s.ratio >= 20   ? 'strong'
+                  : s.ratio >= 16   ? 'moderate'
+                  : 'faint';
       return `${khz} (${label})`;
     }).join(', ');
   }
@@ -4559,7 +4581,9 @@ function buildQCQuestionnaire() {
     const allSpikes = interfDet ? (Array.isArray(a.interference.spikes) ? a.interference.spikes : [...(a.interference.spikes?.left||[]), ...(a.interference.spikes?.right||[])]) : [];
     const maxRatio  = allSpikes.length ? Math.max(...allSpikes.map(s => s.ratio)) : 0;
     const hS = !a.hum.detected ? 1 : humStr < 50 ? 2 : humStr < 150 ? 3 : humStr < 300 ? 4 : 5;
+    const allAudibleQ = allSpikes.some(s => s.freq < 18000);
     const iS = !interfDet ? 1
+      : !allAudibleQ ? 2
       : maxRatio < 16 ? 2
       : maxRatio < 20 ? 3
       : maxRatio < 28 ? 4
