@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.2
+  SOBA — Audio QA & QC Checker v3.3
   Created by: Danny Beta
   Date: April 2026
 
@@ -555,7 +555,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.2</div>
+            <div class="version-badge">v3.3</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -1300,6 +1300,67 @@ async function decodeFile(file) {
   await ctx.close(); return buf;
 }
 
+// Decode only the first maxSeconds of a WAV file by slicing raw bytes.
+// Avoids loading multi-GB files entirely into memory.
+async function decodeFileSlice(file, maxSeconds) {
+  // Read first 8192 bytes to safely clear any BWF/bext chunk and find fmt+data chunks
+  const headAB = await file.slice(0, 8192).arrayBuffer();
+  const hv = new DataView(headAB);
+
+  // Verify RIFF/WAVE
+  const riff = String.fromCharCode(hv.getUint8(0),hv.getUint8(1),hv.getUint8(2),hv.getUint8(3));
+  const wave = String.fromCharCode(hv.getUint8(8),hv.getUint8(9),hv.getUint8(10),hv.getUint8(11));
+  if (riff !== 'RIFF' || wave !== 'WAVE') return decodeFile(file); // fallback for non-standard
+
+  // Walk chunks to find fmt and data
+  let pos = 12, sampleRate = 48000, numChannels = 2, bitsPerSample = 24, dataStart = -1;
+  while (pos < headAB.byteLength - 8) {
+    const id   = String.fromCharCode(hv.getUint8(pos),hv.getUint8(pos+1),hv.getUint8(pos+2),hv.getUint8(pos+3));
+    const size = hv.getUint32(pos+4, true);
+    if (id === 'fmt ') {
+      numChannels  = hv.getUint16(pos+10, true);
+      sampleRate   = hv.getUint32(pos+12, true);
+      bitsPerSample= hv.getUint16(pos+22, true);
+    }
+    if (id === 'data') { dataStart = pos + 8; break; }
+    pos += 8 + size + (size & 1); // pad to even byte
+  }
+  if (dataStart < 0) return decodeFile(file); // fallback if data chunk not found
+
+  const bytesPerSample  = Math.ceil(bitsPerSample / 8);
+  const bytesPerSecond  = sampleRate * numChannels * bytesPerSample;
+  const maxDataBytes    = Math.ceil(maxSeconds * bytesPerSecond);
+  const availDataBytes  = file.size - dataStart;
+  const sliceDataBytes  = Math.min(maxDataBytes, availDataBytes);
+  const sliceEnd        = dataStart + sliceDataBytes;
+
+  // If file is already small enough, just decode normally
+  if (sliceEnd >= file.size * 0.95) return decodeFile(file);
+
+  // Read header bytes + sliced data
+  const headerBytes = await file.slice(0, dataStart).arrayBuffer();
+  const dataBytes   = await file.slice(dataStart, sliceEnd).arrayBuffer();
+
+  // Rebuild WAV: patch RIFF size and data chunk size
+  const out = new ArrayBuffer(headerBytes.byteLength + dataBytes.byteLength);
+  const ov  = new DataView(out);
+  new Uint8Array(out).set(new Uint8Array(headerBytes), 0);
+  new Uint8Array(out).set(new Uint8Array(dataBytes), headerBytes.byteLength);
+  // Patch RIFF file size (bytes 4-7)
+  ov.setUint32(4, out.byteLength - 8, true);
+  // Patch data chunk size — walk again to find it in output buffer
+  let p2 = 12;
+  while (p2 < headerBytes.byteLength - 8) {
+    const id2 = String.fromCharCode(ov.getUint8(p2),ov.getUint8(p2+1),ov.getUint8(p2+2),ov.getUint8(p2+3));
+    if (id2 === 'data') { ov.setUint32(p2+4, sliceDataBytes, true); break; }
+    p2 += 8 + ov.getUint32(p2+4, true);
+  }
+
+  const ctx = new(window.AudioContext||window.webkitAudioContext)();
+  const buf = await ctx.decodeAudioData(out);
+  await ctx.close(); return buf;
+}
+
 async function analyzeRawStereo(file) {
   const buf = await decodeFile(file);
   const base = analyzeBuffer(buf);
@@ -1495,25 +1556,49 @@ async function runAnalysis() {
     }
     if (eFile) {
       setProgress('Decoding Edit WAV…',  60);
-      const eBuf = await decodeFile(eFile);
+      const eBuf = await decodeFileSlice(eFile, 300); // max 5 min
       eA = analyzeBuffer(eBuf);
-      eA.lufs = computeIntegratedLUFS(eBuf);
+      await new Promise(r => setTimeout(r, 0));
+      setProgress('Analyzing Edit LUFS…', 63);
+      // Slice to 5 min max for LUFS — converges well within that window
+      const eLufsMax = eBuf.sampleRate * 300;
+      const eLufsLen = Math.min(eBuf.length, eLufsMax);
+      const eLufsBuf = eBuf.length > eLufsMax
+        ? (() => { const b = new AudioBuffer({numberOfChannels:eBuf.numberOfChannels, length:eLufsLen, sampleRate:eBuf.sampleRate}); for(let c=0;c<eBuf.numberOfChannels;c++) b.getChannelData(c).set(eBuf.getChannelData(c).subarray(0,eLufsLen)); return b; })()
+        : eBuf;
+      eA.lufs = computeIntegratedLUFS(eLufsBuf);
       if (eBuf.numberOfChannels >= 2) {
-        const chL = new AudioBuffer({ numberOfChannels:1, length:eBuf.length, sampleRate:eBuf.sampleRate });
-        const chR = new AudioBuffer({ numberOfChannels:1, length:eBuf.length, sampleRate:eBuf.sampleRate });
-        chL.getChannelData(0).set(eBuf.getChannelData(0));
-        chR.getChannelData(0).set(eBuf.getChannelData(1));
+        await new Promise(r => setTimeout(r, 0));
+        const chL = new AudioBuffer({ numberOfChannels:1, length:eLufsLen, sampleRate:eBuf.sampleRate });
+        const chR = new AudioBuffer({ numberOfChannels:1, length:eLufsLen, sampleRate:eBuf.sampleRate });
+        chL.getChannelData(0).set(eLufsBuf.getChannelData(0));
+        chR.getChannelData(0).set(eLufsBuf.getChannelData(1));
         eA.lufsL = computeIntegratedLUFS(chL);
+        await new Promise(r => setTimeout(r, 0));
         eA.lufsR = computeIntegratedLUFS(chR);
       }
+      await new Promise(r => setTimeout(r, 0));
       const ss = computeSignalSilence(eBuf);
       eA.signalPct  = ss.signalPct;  eA.silencePct  = ss.silencePct;
       eA.signalDur  = ss.signalDur;  eA.silenceDur  = ss.silenceDur;
       eA.thresholdDb = ss.thresholdDb;
       eA.stereo = computeStereoRawAnalysis(eBuf, true);
-      // QC Edit checks — full file scan
+      // QC Edit checks — bleed/panning on 5-min slice, overlaps on full file
       setProgress('Scanning Edit WAV…', 70);
+      await new Promise(r => setTimeout(r, 0));
       eA.editChecks = await computeEditChecks(eBuf);
+      // Full-file overlap scan (chunked — safe for large files)
+      if (eFile.size > 200 * 1024 * 1024) {
+        const ovResult = await computeOverlapsFromFile(eFile);
+        if (ovResult) {
+          eA.editChecks.overlapCount        = ovResult.overlapCount;
+          eA.editChecks.overlapPct          = ovResult.overlapPct;
+          eA.editChecks.overlapTimestamps   = ovResult.overlapTimestamps;
+          eA.editChecks.overlapWarnCount    = ovResult.overlapWarnCount;
+          eA.editChecks.overlapWarnTimestamps = ovResult.overlapWarnTimestamps;
+          eA.editChecks.sessionDur          = ovResult.sessionDur;
+        }
+      }
       // HPF detection on Edit bounce — slice to 60s to avoid long filter passes
       const editSr   = eBuf.sampleRate;
       const editCh0  = eBuf.getChannelData(0).subarray(0, Math.min(eBuf.getChannelData(0).length, editSr * 60));
@@ -1521,18 +1606,27 @@ async function runAnalysis() {
     }
     if (mFile) {
       setProgress('Decoding Mixed WAV…', 80);
-      const mBuf = await decodeFile(mFile);
+      const mBuf = await decodeFileSlice(mFile, 300); // max 5 min
       mA = analyzeBuffer(mBuf);
-      mA.lufs = computeIntegratedLUFS(mBuf);
-      // Per-channel LUFS for PLR compression metric
+      await new Promise(r => setTimeout(r, 0));
+      setProgress('Analyzing Mixed LUFS…', 83);
+      const mLufsMax = mBuf.sampleRate * 300;
+      const mLufsLen = Math.min(mBuf.length, mLufsMax);
+      const mLufsBuf = mBuf.length > mLufsMax
+        ? (() => { const b = new AudioBuffer({numberOfChannels:mBuf.numberOfChannels, length:mLufsLen, sampleRate:mBuf.sampleRate}); for(let c=0;c<mBuf.numberOfChannels;c++) b.getChannelData(c).set(mBuf.getChannelData(c).subarray(0,mLufsLen)); return b; })()
+        : mBuf;
+      mA.lufs = computeIntegratedLUFS(mLufsBuf);
       if (mBuf.numberOfChannels >= 2) {
-        const chL = new AudioBuffer({ numberOfChannels:1, length:mBuf.length, sampleRate:mBuf.sampleRate });
-        const chR = new AudioBuffer({ numberOfChannels:1, length:mBuf.length, sampleRate:mBuf.sampleRate });
-        chL.getChannelData(0).set(mBuf.getChannelData(0));
-        chR.getChannelData(0).set(mBuf.getChannelData(1));
+        await new Promise(r => setTimeout(r, 0));
+        const chL = new AudioBuffer({ numberOfChannels:1, length:mLufsLen, sampleRate:mBuf.sampleRate });
+        const chR = new AudioBuffer({ numberOfChannels:1, length:mLufsLen, sampleRate:mBuf.sampleRate });
+        chL.getChannelData(0).set(mLufsBuf.getChannelData(0));
+        chR.getChannelData(0).set(mLufsBuf.getChannelData(1));
         mA.lufsL = computeIntegratedLUFS(chL);
+        await new Promise(r => setTimeout(r, 0));
         mA.lufsR = computeIntegratedLUFS(chR);
       }
+      await new Promise(r => setTimeout(r, 0));
       const mss = computeSignalSilence(mBuf);
       mA.signalPct = mss.signalPct; mA.silencePct = mss.silencePct;
       mA.signalDur = mss.signalDur; mA.silenceDur = mss.silenceDur;
@@ -2723,7 +2817,7 @@ async function computeEditChecks(buf) {
 
   // ── Edit bleed: envelope-correlation using the same detectBleed detector ──
   // Slice to 120s max — bleed correlation converges quickly, full file would hang browser
-  const BLEED_SECS = 120;
+  const BLEED_SECS = 60;
   const bleedMaxSamples = sr * BLEED_SECS;
   const ch0b = ch0.length > bleedMaxSamples ? ch0.subarray(0, bleedMaxSamples) : ch0;
   const ch1b = ch1.length > bleedMaxSamples ? ch1.subarray(0, bleedMaxSamples) : ch1;
@@ -3877,7 +3971,135 @@ async function runArtifactScan(leftFiles, rightFiles) {
   };
 }
 
-// 1-5 dot scale display helpers
+// Chunked overlap detection for large files — reads raw PCM bytes directly,
+// no AudioContext decoder needed. Avoids boundary artifacts from chunk decoding.
+async function computeOverlapsFromFile(file) {
+  // Parse WAV header
+  const headAB = await file.slice(0, 8192).arrayBuffer();
+  const hv = new DataView(headAB);
+  const riff = String.fromCharCode(hv.getUint8(0),hv.getUint8(1),hv.getUint8(2),hv.getUint8(3));
+  const wave = String.fromCharCode(hv.getUint8(8),hv.getUint8(9),hv.getUint8(10),hv.getUint8(11));
+  if (riff !== 'RIFF' || wave !== 'WAVE') return null;
+
+  let pos = 12, sr = 48000, nc = 2, bps = 24, dataStart = -1, dataEnd = -1;
+  while (pos < headAB.byteLength - 8) {
+    const id   = String.fromCharCode(hv.getUint8(pos),hv.getUint8(pos+1),hv.getUint8(pos+2),hv.getUint8(pos+3));
+    const size = hv.getUint32(pos+4, true);
+    if (id === 'fmt ') {
+      nc  = hv.getUint16(pos+10, true);
+      sr  = hv.getUint32(pos+12, true);
+      bps = hv.getUint16(pos+22, true);
+    }
+    if (id === 'data') { dataStart = pos + 8; dataEnd = dataStart + size; break; }
+    pos += 8 + size + (size & 1);
+  }
+  if (dataStart < 0 || nc < 2) return null;
+
+  const bpSample   = Math.ceil(bps / 8);   // bytes per sample
+  const bpFrame    = nc * bpSample;         // bytes per interleaved frame
+  const wsz        = Math.floor(sr * 0.05); // samples per 50ms window
+  const chunkFrames= sr * 60;               // 60s of frames per chunk
+  const chunkBytes = chunkFrames * bpFrame;
+  const scale      = bps === 16 ? 32768 : bps === 24 ? 8388608 : 1;
+
+  const OV_THRESH  = Math.pow(10, -35/20);
+  const allSpL = [], allSpR = [];
+
+  let dataPos = dataStart;
+  const dataEnd2 = Math.min(dataEnd, file.size); // guard against malformed size fields
+
+  while (dataPos < dataEnd2) {
+    const end     = Math.min(dataPos + chunkBytes, dataEnd2);
+    const rawAB   = await file.slice(dataPos, end).arrayBuffer();
+    const raw     = new Uint8Array(rawAB);
+    const nFrames = Math.floor(raw.length / bpFrame);
+    const nWin    = Math.floor(nFrames / wsz);
+
+    for (let w = 0; w < nWin; w++) {
+      let s0 = 0, s1 = 0;
+      const fStart = w * wsz;
+      for (let f = fStart; f < fStart + wsz; f++) {
+        const bp = f * bpFrame;
+        let v0, v1;
+        if (bps === 24) {
+          v0 = (raw[bp] | (raw[bp+1]<<8) | (raw[bp+2]<<16));
+          if (v0 & 0x800000) v0 -= 0x1000000;
+          v1 = (raw[bp+3] | (raw[bp+4]<<8) | (raw[bp+5]<<16));
+          if (v1 & 0x800000) v1 -= 0x1000000;
+        } else if (bps === 16) {
+          v0 = raw[bp] | (raw[bp+1]<<8); if (v0 & 0x8000) v0 -= 0x10000;
+          v1 = raw[bp+2] | (raw[bp+3]<<8); if (v1 & 0x8000) v1 -= 0x10000;
+        } else { v0 = 0; v1 = 0; }
+        const f0 = v0/scale, f1 = v1/scale;
+        s0 += f0*f0; s1 += f1*f1;
+      }
+      allSpL.push(Math.sqrt(s0/wsz) >= OV_THRESH);
+      allSpR.push(Math.sqrt(s1/wsz) >= OV_THRESH);
+    }
+
+    dataPos = end;
+    setProgress(`Scanning overlaps… (${Math.round((dataPos-dataStart)/(dataEnd2-dataStart)*100)}%)`, 70);
+    await new Promise(r => setTimeout(r, 0));
+  }
+
+  const n = allSpL.length;
+  const OV_FILL  = Math.floor(0.4/0.05);
+  const OV_TIGHT = 0.40, OV_WARN = 0.425, OV_SIMUL = 2;
+
+  function fillCh(arr, fw) {
+    const out = arr.slice(); let i = 0;
+    while (i < out.length) {
+      if (!out[i]) { let j=i; while(j<out.length&&!out[j])j++; if(j-i<fw)for(let k=i;k<j;k++)out[k]=true; i=j; } else i++;
+    }
+    return out;
+  }
+  const smL = fillCh(allSpL, OV_FILL);
+  const smR = fillCh(allSpR, OV_FILL);
+
+  // Pass 1 — simultaneous speech
+  const ovSimul = [];
+  let inSim=false, simStart=0;
+  for (let i=0;i<n;i++) {
+    const both = allSpL[i]&&allSpR[i];
+    if (both&&!inSim)      { simStart=i; inSim=true; }
+    else if (!both&&inSim) { if(i-simStart>=OV_SIMUL) ovSimul.push(simStart*0.05); inSim=false; }
+  }
+  if (inSim&&n-simStart>=OV_SIMUL) ovSimul.push(simStart*0.05);
+
+  // Pass 2 — tight cross-speaker gaps
+  const ovTight=[], ovWarn=[];
+  let ovTotalTransitions=0, inGap=false, gapStart=0;
+  for (let i=0;i<n;i++) {
+    const bothSilent = !smL[i]&&!smR[i];
+    if (bothSilent&&!inGap)      { gapStart=i; inGap=true; }
+    else if (!bothSilent&&inGap) {
+      const dur=(i-gapStart)*0.05;
+      if (dur>=0.05) {
+        let pre=gapStart-1;
+        while(pre>=0&&!smL[pre]&&!smR[pre])pre--;
+        const preCh  = pre>=0?(smL[pre]?'L':'R'):null;
+        const postCh = smL[i]?'L':'R';
+        if (preCh&&preCh!==postCh) {
+          ovTotalTransitions++;
+          if (dur<OV_TIGHT)                       ovTight.push(gapStart*0.05);
+          else if (dur>=OV_TIGHT&&dur<OV_WARN)    ovWarn.push(gapStart*0.05);
+        }
+      }
+      inGap=false;
+    }
+  }
+
+  const ovCount = ovSimul.length+ovTight.length;
+  const ovTrans = Math.max(1, ovTotalTransitions+ovSimul.length);
+  return {
+    overlapCount: ovCount,
+    overlapPct:   Math.round(ovCount/ovTrans*100),
+    overlapTimestamps: [...ovSimul,...ovTight].sort((a,b)=>a-b),
+    overlapWarnCount: ovWarn.length,
+    overlapWarnTimestamps: ovWarn,
+    sessionDur: n*0.05,
+  };
+}
 const SCORE_COLORS = ['','#00C853','#FFD600','#FF9100','#FF3D00','#D50000'];
 
 function scoreColor(score) {
@@ -4156,6 +4378,20 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   rows.push(aRow('Physical Noises', qaChip(impScore), impDesc, impLevel,
     [...(a.impacts.clipsL||[]), ...(a.impacts.clipsR||[])], true));
 
+  // ── RAW Clipping ──────────────────────────────────────────
+  const clipL = rawLA && rawLA.clipFiles && rawLA.clipFiles.length;
+  const clipR = rawRA && rawRA.clipFiles && rawRA.clipFiles.length;
+  if (clipL || clipR) {
+    const clipClips = [];
+    if (clipL) rawLA.clipFiles.forEach(f => clipClips.push({ label: 'Left', file: f.replace(/\.wav$/i,''), count: null }));
+    if (clipR) rawRA.clipFiles.forEach(f => clipClips.push({ label: 'Right', file: f.replace(/\.wav$/i,''), count: null }));
+    const clipDetail = `Reduce input gain and re-record · `
+      + [clipL ? `Left: ${rawLA.clipFiles.length} file${rawLA.clipFiles.length>1?'s':''}` : null,
+         clipR ? `Right: ${rawRA.clipFiles.length} file${rawRA.clipFiles.length>1?'s':''}` : null]
+        .filter(Boolean).join(' · ');
+    rows.push(aRow('Peak Clipping', `<span class="nf-chip nf-fail">CLIP</span>`, clipDetail, 'fail', clipClips, true));
+  }
+
   const footerNote = `<div style="padding:6px 20px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);border-top:1px solid var(--border)">
     Artifact scan · all ${a.takesAnalyzed} take${a.takesAnalyzed>1?'s':''} · 10s per take · Scores are indicators — review by ear before editing
   </div>`;
@@ -4179,22 +4415,6 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
         <span style="color:var(--text2)">${action}</span>
       </div>
     </div>`);
-  }
-
-  // ── RAW Clipping ─────────────────────────────────────────
-  const clipL = rawLA && rawLA.clipFiles && rawLA.clipFiles.length;
-  const clipR = rawRA && rawRA.clipFiles && rawRA.clipFiles.length;
-  if (clipL || clipR) {
-    const parts = [];
-    if (clipL) {
-      const names = rawLA.clipFiles.map(f => f.replace(/\.wav$/i,'')).join(', ');
-      parts.push(`Left: ${rawLA.clipFiles.length} file${rawLA.clipFiles.length>1?'s':''} — Detected in: ${names}`);
-    }
-    if (clipR) {
-      const names = rawRA.clipFiles.map(f => f.replace(/\.wav$/i,'')).join(', ');
-      parts.push(`Right: ${rawRA.clipFiles.length} file${rawRA.clipFiles.length>1?'s':''} — Detected in: ${names}`);
-    }
-    rec('fail', 'RAW — Clipping Detected', parts.join(' · ') + ' · Reduce input gain and re-record.');
   }
 
   // ── RAW Noise Floor (Left + Right combined) ───────────────
@@ -4356,7 +4576,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   if (hasEdit) {
     document.getElementById('editCardType').innerHTML = '<span class="card-type-qc">QC</span> — Edit WAV';
     document.getElementById('editCardName').textContent = eFile.name;
-    document.getElementById('editCardMeta').innerHTML = fmtSize(eFile.size)+' · '+eA.sampleRate/1000+' kHz · 24-Bit · '+(eA.channels===1?'Mono':'Stereo')+' · '+fmtDur(eA.duration)+' · '+fmtBounceDate(eFile);
+    document.getElementById('editCardMeta').innerHTML = fmtSize(eFile.size)+' · '+eA.sampleRate/1000+' kHz · 24-Bit · '+(eA.channels===1?'Mono':'Stereo')+' · '+fmtDur(eA.duration)+(eFile.size > 500*1024*1024 ? ' <span style="color:var(--amber);font-size:10px">(5 min slice)</span>' : '')+' · '+fmtBounceDate(eFile);
     document.getElementById('editNFBadge').innerHTML = (eA.hpf && eA.hpf.detected)
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
       : nfBadgeHTML(eA.noiseFloorDb);
@@ -4366,7 +4586,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   document.getElementById('mixCard').style.display = hasMix ? '' : 'none';
   if (hasMix) {
     document.getElementById('mixCardName').textContent = mFile.name;
-    document.getElementById('mixCardMeta').innerHTML = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · 24-Bit · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration)+' · '+fmtBounceDate(mFile);
+    document.getElementById('mixCardMeta').innerHTML = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · 24-Bit · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration)+(mFile.size > 500*1024*1024 ? ' <span style="color:var(--amber);font-size:10px">(5 min slice)</span>' : '')+' · '+fmtBounceDate(mFile);
     document.getElementById('mixNFBadge').innerHTML    = nfBadgeHTML(mA.noiseFloorDb);
     document.getElementById('mixMetrics').innerHTML    = buildMetrics(mA, false, false, 'mixed');
   }
@@ -4713,7 +4933,6 @@ function buildQCQuestionnaire() {
       <div style="background:var(--bg3);padding:12px 20px;border-bottom:1px solid var(--border2)">
         <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px">QC — Edit / Mix Evaluation</div>
       </div>
-      ${qRow('—', 'Clip Gain Recommendation',                            q0,          false)}
       ${qRow(1,  'Edit Room Tone',                                        editNF,      false)}
       ${qRow(2,  'Mixed Room Tone',                                       mixNF,       false)}
       ${qRow(3,  'Acoustic Delta + L/R RMS',   q3,  false, q3)}
