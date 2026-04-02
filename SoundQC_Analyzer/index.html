@@ -2880,13 +2880,13 @@ async function computeEditChecks(buf) {
   }
 
   // ── Two-pass overlap detection ────────────────────────────
-  // Threshold: -35 dBFS (speech only, ignores breaths/sibilants)
+  // Threshold: -30 dBFS (raised from -35 to filter breaths)
   // Per-channel fill: 400ms (smooths micro-pauses within turns)
-  const OV_THRESH  = Math.pow(10, -35 / 20);
+  const OV_THRESH  = Math.pow(10, -30 / 20);
   const OV_FILL    = Math.floor(0.4 / 0.05);  // 400ms in 50ms windows
   const OV_TIGHT   = 0.40;                     // 400ms — minimum workable gap (100ms line + 285ms lout + 15ms)
   const OV_WARN    = 0.425;                     // 425ms — tight but workable at minimum offsets
-  const OV_SIMUL   = 2;                         // 100ms minimum simultaneous
+  const OV_SIMUL   = 5;                         // 250ms minimum simultaneous (raised from 100ms to filter breaths)
 
   // Build per-window RMS arrays
   const rwL = [], rwR = [];
@@ -4002,7 +4002,7 @@ async function computeOverlapsFromFile(file) {
   const chunkBytes = chunkFrames * bpFrame;
   const scale      = bps === 16 ? 32768 : bps === 24 ? 8388608 : 1;
 
-  const OV_THRESH  = Math.pow(10, -35/20);
+  const OV_THRESH  = Math.pow(10, -30/20);
   const allSpL = [], allSpR = [];
 
   let dataPos = dataStart;
@@ -4044,7 +4044,7 @@ async function computeOverlapsFromFile(file) {
 
   const n = allSpL.length;
   const OV_FILL  = Math.floor(0.4/0.05);
-  const OV_TIGHT = 0.40, OV_WARN = 0.425, OV_SIMUL = 2;
+  const OV_TIGHT = 0.40, OV_WARN = 0.425, OV_SIMUL = 5;
 
   function fillCh(arr, fw) {
     const out = arr.slice(); let i = 0;
@@ -4360,8 +4360,8 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const clickLevel = clickScore === 1 ? 'pass' : clickScore <= 3 ? 'warn' : 'fail';
   const clickDesc  = clickTotal === 0 ? 'No events detected'
     : clickScore <= 3
-      ? `~${clickTotal} event${clickTotal>1?'s':''} detected · fix during edit with RX`
-      : `~${clickTotal} event${clickTotal>1?'s':''} detected · stop and report if distracting · flag in Labelbox`;
+      ? `~${clickTotal} event${clickTotal>1?'s':''} detected · if distracting, cover with room tone if outside the speech`
+      : `~${clickTotal} event${clickTotal>1?'s':''} detected · if distracting, cover with room tone if outside the speech · flag in Labelbox if excessive`;
   rows.push(aRow('Mouth Clicks', qaChip(clickScore), clickDesc, clickLevel,
     [...(a.clicks.clipsL||[]), ...(a.clicks.clipsR||[])], true));
 
