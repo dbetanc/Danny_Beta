@@ -4795,7 +4795,7 @@ function buildQCQuestionnaire() {
   const fmt1 = v => v != null ? v.toFixed(1) : na;
 
   // ── Helper: question row ──────────────────────────────────
-  function qRow(num, label, value, isScore, copyOverride) {
+  function qRow(num, label, value, isScore, copyOverride, refScore) {
     const valStr = value != null && value !== '' ? String(value) : '';
     const scoreRaw  = isScore && valStr ? parseInt(valStr) : null;
     const scoreDisp = isScore && scoreRaw ? `${6 - scoreRaw} / 5` : valStr;
@@ -4806,10 +4806,19 @@ function buildQCQuestionnaire() {
     ) : 'var(--text)';
     const hasVal = valStr !== '' && valStr !== na;
 
-    return `<div style="display:grid;grid-template-columns:28px 1fr auto auto;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
+    // Visual-only reference score badge (not copied)
+    let refBadge = '';
+    if (refScore != null && refScore !== na) {
+      const disp = 6 - parseInt(refScore);
+      const col  = disp >= 4 ? 'var(--green)' : disp >= 3 ? 'var(--amber)' : 'var(--red)';
+      refBadge = `<span style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;color:${col};opacity:.7;white-space:nowrap">${disp}/5</span>`;
+    }
+
+    return `<div style="display:grid;grid-template-columns:28px 1fr auto auto auto;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
       <div style="font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--text3);font-weight:700">${num}.</div>
       <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">${label}</div>
       <div style="font-family:'Share Tech Mono',monospace;font-size:${isScore?'18px':'14px'};font-weight:700;color:${scoreColor};min-width:60px;text-align:right">${scoreDisp || '<span style="color:var(--text3);font-size:12px">—</span>'}</div>
+      ${refBadge}
       <button onclick="copyQField(this);return false;" data-val="${hasVal ? copyVal.replace(/"/g,'&quot;') : ''}" style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s" ${!hasVal?'disabled':''}>${hasVal ? 'Copy' : '—'}</button>
     </div>`;
   }
@@ -5088,12 +5097,12 @@ function buildQCQuestionnaire() {
       ${qRow(2,  'Mixed RT + LUFS',                                       q2,          false)}
       ${qRow(3,  'Acoustic Delta + L/R RMS',   q3,  false, q3)}
       ${qRow(4,  'Peak Level',                 q4,  false, `Peak Level: ${q4}`)}
-      ${qRow(5,  'Headphone Bleed',              q5,  false, q5)}
-      ${qRow(6,  'HVAC / Hum / Interference',    q6,  false, q6)}
-      ${qRow(7,  'Physical Noises',               q7,  false, q7)}
-      ${qRow(8,  'Mic Pops',                      q8,  false, q8)}
-      ${qRow(9,  'Mouth Clicks',                  q9,  false, q9)}
-      ${qRow(10, 'Overlaps',                      q10, false, q10)}
+      ${qRow(5,  'Headphone Bleed',              q5,  false, q5,  bleedScore)}
+      ${qRow(6,  'HVAC / Hum / Interference',    q6,  false, q6,  humScore)}
+      ${qRow(7,  'Physical Noises',               q7,  false, q7,  noisesScore)}
+      ${qRow(8,  'Mic Pops',                      q8,  false, q8,  popsScore)}
+      ${qRow(9,  'Mouth Clicks',                  q9,  false, q9,  clicksScore)}
+      ${qRow(10, 'Overlaps',                      q10, false, q10, overlapScore)}
       ${qRow(11, 'Consistency',                   q11, false, q11)}
       ${qRow(12, 'Channel Matching',              q12, false, q12)}
       ${qRow(13, 'Performance',                   q13, false, q13)}
