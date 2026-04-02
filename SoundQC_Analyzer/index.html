@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.3
+  SOBA — Audio QA & QC Checker v3.4
   Created by: Danny Beta
   Date: April 2026
 
@@ -555,7 +555,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.3</div>
+            <div class="version-badge">v3.4</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -4866,28 +4866,23 @@ function buildQCQuestionnaire() {
   let humScore = na;
   if (a) {
     const humStr  = a.hum && a.hum.detected ? a.hum.strength || 0 : 0;
-    const interfDet = a.interference && a.interference.detected;
-    const allSpikes = interfDet ? (Array.isArray(a.interference.spikes) ? a.interference.spikes : [...(a.interference.spikes?.left||[]), ...(a.interference.spikes?.right||[])]) : [];
-    const maxRatio  = allSpikes.length ? Math.max(...allSpikes.map(s => s.ratio)) : 0;
+    const interfDet6 = a.interference && a.interference.detected;
+    const allSpikes6 = interfDet6 ? (Array.isArray(a.interference.spikes) ? a.interference.spikes : [...(a.interference.spikes?.left||[]), ...(a.interference.spikes?.right||[])]) : [];
+    const maxRatio6  = allSpikes6.length ? Math.max(...allSpikes6.map(s => s.ratio)) : 0;
     const hS = !a.hum.detected ? 1 : humStr < 50 ? 2 : humStr < 150 ? 3 : humStr < 300 ? 4 : 5;
-    const allAudibleQ = allSpikes.some(s => s.freq < 18000);
-    const iS = !interfDet ? 1
-      : !allAudibleQ ? 2
-      : maxRatio < 16 ? 2
-      : maxRatio < 20 ? 3
-      : maxRatio < 28 ? 4
-      : 5;
+    const allAudibleQ = allSpikes6.some(s => s.freq < 18000);
+    const iS = !interfDet6 ? 1 : !allAudibleQ ? 2 : maxRatio6 < 16 ? 2 : maxRatio6 < 20 ? 3 : maxRatio6 < 28 ? 4 : 5;
     humScore = Math.max(hS, iS);
   }
 
-  // 7. # of Overlaps from QA stereo bounce (if available) or Edit checks
+  // 7. # of Overlaps
   let overlapCount = na;
   if (_rawStereoA && _rawStereoA.stereo && _rawStereoA.stereo.overlapCount != null)
     overlapCount = _rawStereoA.stereo.overlapCount;
   else if (ec && ec.overlapCount != null)
     overlapCount = ec.overlapCount;
 
-  // 8. Noises score (Physical Noises)
+  // 8. Physical Noises score
   let noisesScore = na;
   if (a) {
     const impTotal = a.impacts.left + a.impacts.right;
@@ -4911,11 +4906,163 @@ function buildQCQuestionnaire() {
     clicksScore = clickAvg === 0 ? 1 : clickAvg < 1 ? 2 : clickAvg < 3 ? 3 : clickAvg < 6 ? 4 : 5;
   }
 
-  // 11. Overlaps score (1=good, 5=bad)
+  // 11. Overlaps score
   let overlapScore = na;
   if (overlapCount !== na) {
     const ov = parseInt(overlapCount);
     overlapScore = ov <= 1 ? 1 : ov <= 5 ? 2 : ov <= 10 ? 3 : ov <= 15 ? 4 : 5;
+  }
+
+  // 5. Headphone Bleed
+  let q5 = na;
+  if (bleedScore !== na) {
+    const bt = (ec && ec.bleedType) || (a && a.bleedType) || 'clean';
+    const typeNote = bt === 'headphone' ? 'headphone bleed' : bt === 'wall' ? 'low frequency wall transfer' : bt === 'combined' ? 'headphone and wall bleed' : 'bleed';
+    q5 = bleedScore <= 1 ? 'No headphone bleed.'
+       : bleedScore === 2 ? `Trace ${typeNote} present. Negligible impact on audio quality.`
+       : bleedScore === 3 ? `Mild ${typeNote} present.`
+       : bleedScore === 4 ? `Moderate ${typeNote} present across several takes.`
+       : `Significant ${typeNote} present throughout the session.`;
+  }
+
+  // 6. HVAC / Hum / Interference
+  let q6 = na;
+  if (a) {
+    const humDet    = a.hum && a.hum.detected;
+    const interfDet = a.interference && a.interference.detected;
+    const allSpikes = interfDet ? (Array.isArray(a.interference.spikes) ? a.interference.spikes : [...(a.interference.spikes?.left||[]), ...(a.interference.spikes?.right||[])]) : [];
+    const interfSpikeL = interfDet ? (Array.isArray(a.interference.spikes) ? [] : (a.interference.spikes?.left||[])) : [];
+    const interfSpikeR = interfDet ? (Array.isArray(a.interference.spikes) ? [] : (a.interference.spikes?.right||[])) : [];
+    const allUltrasonic = allSpikes.length > 0 && allSpikes.every(s => s.freq >= 18000);
+    const maxFreq = allSpikes.length ? Math.max(...allSpikes.map(s => s.freq)) : 0;
+    const freqKhz = (maxFreq/1000).toFixed(1);
+    const trackNote = interfSpikeL.length && interfSpikeR.length ? 'both tracks'
+                    : interfSpikeL.length ? 'Left track' : interfSpikeR.length ? 'Right track' : 'the recording';
+    if (!humDet && !interfDet) {
+      q6 = 'No hum, buzz or tonal interference detected.';
+    } else if (humDet && !interfDet) {
+      q6 = `Low level ${a.hum.freq || 60}Hz hum present in the session.`;
+    } else if (!humDet && interfDet && allUltrasonic) {
+      q6 = `Faint ultrasonic tone present on ${trackNote} at approximately ${freqKhz} kHz. Inaudible, likely electronic interference from the recording interface or USB power supply.`;
+    } else if (!humDet && interfDet) {
+      q6 = `Tonal interference present on ${trackNote} at approximately ${freqKhz} kHz.`;
+    } else {
+      q6 = `Hum and tonal interference present in the session.`;
+    }
+  }
+
+  // 7. Physical Noises
+  let q7 = na;
+  if (noisesScore !== na) {
+    q7 = noisesScore <= 1 ? 'No noticeable page turns, water, clothing or other physical noises detected.'
+       : noisesScore === 2 ? 'Minor physical noise present in isolated takes.'
+       : noisesScore === 3 ? 'A few physical noise events present. Possible page turns, clothing movement or light impacts.'
+       : noisesScore === 4 ? 'Physical noise events present across several takes.'
+       : 'Frequent physical noise events present throughout the session.';
+  }
+
+  // 8. Mic Pops
+  let q8 = na;
+  if (popsScore !== na) {
+    q8 = popsScore <= 1 ? 'No mic pops detected.'
+       : popsScore === 2 ? 'Minor mic pops present in isolated takes.'
+       : popsScore === 3 ? 'A few mic pops present across multiple takes.'
+       : popsScore === 4 ? 'Mic pops present throughout the session.'
+       : 'Significant mic pop activity throughout the session.';
+  }
+
+  // 9. Mouth Clicks
+  let q9 = na;
+  if (clicksScore !== na) {
+    q9 = clicksScore <= 1 ? 'No mouth clicks detected.'
+       : clicksScore === 2 ? 'Minor mouth clicks present in isolated takes.'
+       : clicksScore === 3 ? 'A few mouth clicks present across multiple takes.'
+       : clicksScore === 4 ? 'Mouth clicks present throughout the session.'
+       : 'Significant mouth click activity throughout the session.';
+  }
+
+  // 10. Overlaps
+  let q10 = na;
+  if (overlapCount !== na) {
+    const ov = parseInt(overlapCount);
+    q10 = ov === 0 ? 'No overlapping speech detected. No room tone insertions needed.'
+        : ov <= 3  ? 'Minor overlapping speech present. A few room tone insertions may be needed.'
+        : ov <= 10 ? 'Several overlapping transitions present. Room tone insertions required at multiple points.'
+        : 'Significant overlapping speech present. Extensive room tone insertion work expected.';
+  }
+
+  // Q11 - Consistency: waveform, mic distance, noise floor
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  let q11 = na;
+  if (e || _rawLA) {
+    const nfL = _rawLA ? _rawLA.noiseFloorDb : null;
+    const nfR = _rawRA ? _rawRA.noiseFloorDb : null;
+    const nfDiff = nfL != null && nfR != null ? Math.abs(nfL - nfR) : null;
+    const delta = e && e.lrDelta != null ? e.lrDelta : null;
+    const nfStable = nfDiff == null || nfDiff < 5;
+    const micStable = delta == null || delta < 2;
+    if (nfStable && micStable) {
+      q11 = pick([
+        'Waveform levels are consistent, mic distance is stable, and the noise floor remains constant throughout.',
+        'The recording maintains uniform waveform levels, steady mic positioning, and a consistent noise floor.',
+        'Waveform activity is uniform across takes, mic distance is steady, and the noise floor is stable.'
+      ]);
+    } else if (!micStable) {
+      q11 = pick([
+        'Waveform levels are generally consistent. Some variation in mic distance is present across takes.',
+        'The noise floor is stable but some inconsistency in mic distance is noticeable across the session.'
+      ]);
+    } else {
+      q11 = pick([
+        'Waveform levels are consistent. Some variation in noise floor is present between the two tracks.',
+        'Mic distance appears stable. Slight noise floor differences are present between the two channels.'
+      ]);
+    }
+  }
+
+  // Q12 - Channel matching: acoustic delta, spectral content, noise
+  let q12 = na;
+  if (e && e.lrDelta != null) {
+    const d = e.lrDelta;
+    const lrLufsMatch = e.lufsL != null && e.lufsR != null ? Math.abs(e.lufsL - e.lufsR) : null;
+    if (d < 1) {
+      q12 = pick([
+        'Acoustic delta is minimal. Both channels are well matched in waveform alignment, spectral content, and noise characteristics.',
+        'Both channels align closely with minimal acoustic delta. Spectral content and noise floor are uniform across the session.',
+        'The two channels are tightly matched. Acoustic balance, spectral uniformity, and noise floor are consistent throughout.'
+      ]);
+    } else if (d < 2.5) {
+      q12 = pick([
+        'Both channels are generally well matched. A slight acoustic delta is present but does not impact overall quality.',
+        'Channel matching is good. Minor acoustic differences are present but spectral content and noise characteristics remain consistent.'
+      ]);
+    } else {
+      q12 = pick([
+        'Some acoustic difference between channels is present. Waveform alignment and spectral content show minor variation.',
+        'The two channels show a noticeable acoustic delta. Overall noise characteristics remain acceptable but some level imbalance is present.'
+      ]);
+    }
+  }
+
+  // Q13 - Performance quality
+  let q13 = na;
+  const ovCount13 = overlapCount !== na ? parseInt(overlapCount) : 0;
+  if (ovCount13 === 0) {
+    q13 = pick([
+      'Both talents deliver clean performances with natural pacing. The emotional tone is appropriate and turn-taking is well-spaced with no overlaps.',
+      'Performances are natural and well-paced. No mispronunciations or rushed turns were detected and no overlaps require editing.',
+      'Both talents carry their performances consistently throughout the session. Turn-taking is clean and no overlapping speech requires correction.'
+    ]);
+  } else if (ovCount13 <= 5) {
+    q13 = pick([
+      'Both talents deliver natural performances with good pacing. A small number of overlapping turns are present but do not significantly impact the flow.',
+      'Performances are consistent and well-delivered. Minor turn overlap is present in a few instances across the session.'
+    ]);
+  } else {
+    q13 = pick([
+      'Both talents perform consistently throughout. Several overlapping turns are present and will require room tone work during editing.',
+      'Performances are natural overall. Turn-taking shows some overlap across the session which will need attention during the edit.'
+    ]);
   }
 
   // Session name for header
@@ -4941,13 +5088,15 @@ function buildQCQuestionnaire() {
       ${qRow(2,  'Mixed RT + LUFS',                                       q2,          false)}
       ${qRow(3,  'Acoustic Delta + L/R RMS',   q3,  false, q3)}
       ${qRow(4,  'Peak Level',                 q4,  false, `Peak Level: ${q4}`)}
-      ${qRow(5,  'Headphone Bleed',                                       bleedScore,   true)}
-      ${qRow(6,  'HVAC / Hum / Interference',                            humScore,    true)}
-      ${qRow(7,  '# of Overlaps',                                        overlapCount,false)}
-      ${qRow(8,  'Physical Noises',                                       noisesScore, true)}
-      ${qRow(9,  'Mic Pops',                                             popsScore,   true)}
-      ${qRow(10, 'Mouth Clicks',                                         clicksScore, true)}
-      ${qRow(11, 'Overlaps Score',                                       overlapScore,true)}
+      ${qRow(5,  'Headphone Bleed',              q5,  false, q5)}
+      ${qRow(6,  'HVAC / Hum / Interference',    q6,  false, q6)}
+      ${qRow(7,  'Physical Noises',               q7,  false, q7)}
+      ${qRow(8,  'Mic Pops',                      q8,  false, q8)}
+      ${qRow(9,  'Mouth Clicks',                  q9,  false, q9)}
+      ${qRow(10, 'Overlaps',                      q10, false, q10)}
+      ${qRow(11, 'Consistency',                   q11, false, q11)}
+      ${qRow(12, 'Channel Matching',              q12, false, q12)}
+      ${qRow(13, 'Performance',                   q13, false, q13)}
     </div>
   </div>`;
 }
