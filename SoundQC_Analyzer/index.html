@@ -4816,11 +4816,15 @@ function buildQCQuestionnaire() {
 
   // ── Derive values ─────────────────────────────────────────
 
-  // 1. Edit Room Tone (NF)
-  const editNF = e ? fmt1(e.noiseFloorDb) + ' dBFS' : na;
+  // 1. Edit Room Tone (NF) + LUFS
+  const editNF   = e ? fmt1(e.noiseFloorDb) + ' dBFS' : na;
+  const editLUFS = e && e.lufs != null ? fmt1(e.lufs) + ' LUFS' : na;
+  const q1 = editNF !== na || editLUFS !== na ? `RT: ${editNF} | LUFS: ${editLUFS}` : na;
 
-  // 2. Mixed Room Tone (NF)
-  const mixNF  = m ? fmt1(m.noiseFloorDb) + ' dBFS' : na;
+  // 2. Mixed Room Tone (NF) + LUFS
+  const mixNF   = m ? fmt1(m.noiseFloorDb) + ' dBFS' : na;
+  const mixLUFS = m && m.lufs != null ? fmt1(m.lufs) + ' LUFS' : na;
+  const q2 = mixNF !== na || mixLUFS !== na ? `RT: ${mixNF} | LUFS: ${mixLUFS}` : na;
 
   // 3. L/R Acoustic Delta + RMS diff Edit and Mixed
   const eDelta = e && e.lrDelta != null ? fmt1(e.lrDelta) + ' dB' : na;
@@ -4933,8 +4937,8 @@ function buildQCQuestionnaire() {
       <div style="background:var(--bg3);padding:12px 20px;border-bottom:1px solid var(--border2)">
         <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px">QC — Edit / Mix Evaluation</div>
       </div>
-      ${qRow(1,  'Edit Room Tone',                                        editNF,      false)}
-      ${qRow(2,  'Mixed Room Tone',                                       mixNF,       false)}
+      ${qRow(1,  'Edit RT + LUFS',                                        q1,          false)}
+      ${qRow(2,  'Mixed RT + LUFS',                                       q2,          false)}
       ${qRow(3,  'Acoustic Delta + L/R RMS',   q3,  false, q3)}
       ${qRow(4,  'Peak Level',                 q4,  false, `Peak Level: ${q4}`)}
       ${qRow(5,  'Headphone Bleed',                                       bleedScore,   true)}
