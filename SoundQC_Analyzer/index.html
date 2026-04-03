@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.5
+  SOBA — Audio QA & QC Checker v3.6
   Created by: Danny Beta
   Date: April 2026
 
@@ -555,7 +555,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.5</div>
+            <div class="version-badge">v3.6</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -3276,7 +3276,7 @@ function detectHum(data, sr, nfDb) {
   // Count windows where each fundamental was detected (score > 0)
   const hits50 = winScores50.filter(s => s > 0).length;
   const hits60 = winScores60.filter(s => s > 0).length;
-  const minPersist = Math.max(2, Math.floor(silWins.length / 2)); // ≥2 or half, whichever larger
+  const minPersist = silWins.length >= 2 ? Math.max(2, Math.floor(silWins.length / 2)) : 1;
 
   if (hits50 < minPersist && hits60 < minPersist) return { detected: false, freq: null, strength: 0 };
 
@@ -3385,7 +3385,8 @@ function detectInterference(data, sr, nfDb, winSecs = 2) {
   if (!spikesByWindow.length) return { detected: false, spikes: [] };
 
   // ── Within-take persistence: keep only spikes present in ≥2 windows ──
-  const minWindows = Math.min(2, silWins.length);
+  // If only 1 silence window available (short takes with winSecs=0.5), require just 1
+  const minWindows = silWins.length >= 2 ? 2 : 1;
   const allCandidates = spikesByWindow.flat();
   allCandidates.sort((a, b) => a.freq - b.freq);
 
