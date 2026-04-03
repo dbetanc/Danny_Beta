@@ -4129,11 +4129,11 @@ function qaChip(score) {
   }
   if (score <= 3) {
     return dark
-      ? `<span style="${base} #FFD600;background:rgba(255,214,0,0.13);color:#FFD600">Minor</span>`
-      : `<span style="${base} #B8970A;background:#FFD600;color:#2C2C2A">Minor</span>`;
+      ? `<span style="${base} #FFD600;background:rgba(255,214,0,0.12);color:#FFD600">Minor</span>`
+      : `<span style="${base} #B8970A;background:#FFF3CC;color:#7A5F00">Minor</span>`;
   }
   return dark
-    ? `<span style="${base} #ff3d57;background:rgba(255,61,87,0.13);color:#ff3d57">Serious</span>`
+    ? `<span style="${base} #ff3d57;background:rgba(255,61,87,0.12);color:#ff3d57">Serious</span>`
     : `<span style="${base} #C0392B;background:#FAD7D3;color:#C0392B">Serious</span>`;
 }
 
@@ -4642,8 +4642,19 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     return i === 0 ? (hpfDet && hpfDet.left  && hpfDet.left.detected)
                    : (hpfDet && hpfDet.right && hpfDet.right.detected);
   });
-  const anyFail = hpfAny || allA.some(a => a.noiseFloorDb >= -50);
-  const allPass = !hpfAny && allA.every(a => a.noiseFloorDb > -90 && a.noiseFloorDb <= -57);
+  // Serious interference: score >= 4 (audible spike with ratio >= 20 dB)
+  const seriousInterf = (() => {
+    if (!artifactData || !artifactData.interference || !artifactData.interference.detected) return false;
+    const spikes = Array.isArray(artifactData.interference.spikes)
+      ? artifactData.interference.spikes
+      : [...(artifactData.interference.spikes?.left||[]), ...(artifactData.interference.spikes?.right||[])];
+    const hasAudible = spikes.some(s => s.freq < 18000);
+    if (!hasAudible) return false;
+    const maxRatio = Math.max(...spikes.map(s => s.ratio));
+    return maxRatio >= 20;
+  })();
+  const anyFail = hpfAny || seriousInterf || allA.some(a => a.noiseFloorDb >= -50);
+  const allPass = !hpfAny && !seriousInterf && allA.every(a => a.noiseFloorDb > -90 && a.noiseFloorDb <= -57);
   const overall = anyFail ? 'FAIL' : allPass ? 'PASS' : 'WARN';
   const cls = overall==='PASS'?'pass':overall==='FAIL'?'fail':'warn';
   document.getElementById('resultsBar').style.display = 'flex';
