@@ -3312,7 +3312,7 @@ function detectInterference(data, sr, nfDb, winSecs = 2) {
 
   const N = 16384;
   const binHz = sr / N;
-  const TONAL_DB   = 8.0;
+  const TONAL_DB   = 12.0;
   const LOCAL_BINS = Math.round(200 / binHz);
   const excl       = Math.round(30  / binHz);
   const maxBin     = N / 2;
@@ -3418,7 +3418,7 @@ function detectInterference(data, sr, nfDb, winSecs = 2) {
 // Keep only interference spikes whose frequency recurs consistently across multiple takes
 // Prevents random quantization noise (which shifts per-take) from being flagged as interference
 function filterConsistentSpikes(spikesByTake, threshold) {
-  const MERGE_HZ = 500;
+  const MERGE_HZ = 1000;
   const buckets = {};
   for (let t = 0; t < spikesByTake.length; t++) {
     for (const s of spikesByTake[t]) {
@@ -3827,7 +3827,7 @@ async function runSingleArtifactScan(files) {
     const hv = detectHum(dataFull, sr, nfDb);
     if (hv.detected) { humHits++; humFreqVotesSingle.push(hv.freq); }
   }
-  const interfThreshSingle = Math.ceil(interfSample.length / 2);
+  const interfThreshSingle = Math.ceil(interfSample.length * 0.75);
   if (interfHits >= interfThreshSingle) {
     interfSpikes = filterConsistentSpikes(interfSpikesByTakeSingle, interfThreshSingle);
     if (interfSpikes.length) { interfDetected = true; interfLeft = true; interfSpikes = { left: interfSpikes, right: [] }; }
@@ -3940,8 +3940,8 @@ async function runArtifactScan(leftFiles, rightFiles) {
     if (hL.detected) { humLHits++; humFreqVotes.push(hL.freq); }
     if (hR.detected) { humRHits++; if (!humFreqVotes.length) humFreqVotes.push(hR.freq); }
   }
-  const interfThreshold = Math.ceil(interfSample.length / 2);
-  const humThreshold    = Math.ceil(interfSample.length / 2);
+  const interfThreshold = Math.ceil(interfSample.length * 0.75); // 75% of takes must show spike
+  const humThreshold    = Math.ceil(interfSample.length * 0.75);
   interfLeft  = interfLHits >= interfThreshold;
   interfRight = interfRHits >= interfThreshold;
 
@@ -4459,8 +4459,10 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       } else if (interfSpikeR.length) {
         parts.push(`Tonal interference — Right track: ${spikeListStr(interfSpikeR)}`);
       } else {
-        // Flat array fallback (legacy format or single-track)
-        const flat = Array.isArray(a.interference.spikes) ? a.interference.spikes : [];
+        // Flat array or single-channel { left, right } object fallback
+        const flat = Array.isArray(a.interference.spikes)
+          ? a.interference.spikes
+          : [...(a.interference.spikes?.left||[]), ...(a.interference.spikes?.right||[])];
         const who  = a.interference.left && a.interference.right ? 'Both tracks'
                    : a.interference.left ? 'Left track' : 'Right track';
         if (flat.length) parts.push(`Tonal interference — ${who}: ${spikeListStr(flat)}`);
