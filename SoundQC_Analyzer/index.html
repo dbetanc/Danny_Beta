@@ -1558,6 +1558,27 @@ async function runAnalysis() {
       setProgress('Decoding Edit WAV…',  60);
       const eBuf = await decodeFileSlice(eFile, 300); // max 5 min
       eA = analyzeBuffer(eBuf);
+      // Override noise floor with first 10s silence window.
+      // Both channels are guaranteed silent at the start of every Edit bounce.
+      // Guard: verify neither channel contains speech (>−40 dBFS RMS) in that
+      // window — if either does, fall back to the minimum of the two full-file
+      // 8th-percentile readings, which is less accurate but always safe.
+      if (eBuf.numberOfChannels >= 2) {
+        const eNfSamples = Math.min(eBuf.length, eBuf.sampleRate * 10);
+        const eSlice0 = eBuf.getChannelData(0).subarray(0, eNfSamples);
+        const eSlice1 = eBuf.getChannelData(1).subarray(0, eNfSamples);
+        const eWinRms = s => { let sq = 0; for (let i = 0; i < s.length; i++) sq += s[i]*s[i]; return Math.sqrt(sq/s.length); };
+        const SPEECH_THRESH_LIN = Math.pow(10, -40 / 20);
+        if (eWinRms(eSlice0) < SPEECH_THRESH_LIN && eWinRms(eSlice1) < SPEECH_THRESH_LIN) {
+          // Clean silence window — use it directly
+          const eNf0 = analyzeChannel(eSlice0, eBuf.sampleRate).noiseFloorDb;
+          const eNf1 = analyzeChannel(eSlice1, eBuf.sampleRate).noiseFloorDb;
+          eA.noiseFloorDb = (eNf0 + eNf1) / 2;
+        } else {
+          // Speech detected early — fall back to minimum of full-file per-channel readings
+          eA.noiseFloorDb = Math.min(eA.ch0.noiseFloorDb, eA.ch1.noiseFloorDb);
+        }
+      }
       await new Promise(r => setTimeout(r, 0));
       setProgress('Analyzing Edit LUFS…', 63);
       // Slice to 5 min max for LUFS — converges well within that window
@@ -1608,6 +1629,21 @@ async function runAnalysis() {
       setProgress('Decoding Mixed WAV…', 80);
       const mBuf = await decodeFileSlice(mFile, 300); // max 5 min
       mA = analyzeBuffer(mBuf);
+      // Override noise floor with first 10s silence window — same logic as Edit.
+      if (mBuf.numberOfChannels >= 2) {
+        const mNfSamples = Math.min(mBuf.length, mBuf.sampleRate * 10);
+        const mSlice0 = mBuf.getChannelData(0).subarray(0, mNfSamples);
+        const mSlice1 = mBuf.getChannelData(1).subarray(0, mNfSamples);
+        const mWinRms = s => { let sq = 0; for (let i = 0; i < s.length; i++) sq += s[i]*s[i]; return Math.sqrt(sq/s.length); };
+        const SPEECH_THRESH_LIN = Math.pow(10, -40 / 20);
+        if (mWinRms(mSlice0) < SPEECH_THRESH_LIN && mWinRms(mSlice1) < SPEECH_THRESH_LIN) {
+          const mNf0 = analyzeChannel(mSlice0, mBuf.sampleRate).noiseFloorDb;
+          const mNf1 = analyzeChannel(mSlice1, mBuf.sampleRate).noiseFloorDb;
+          mA.noiseFloorDb = (mNf0 + mNf1) / 2;
+        } else {
+          mA.noiseFloorDb = Math.min(mA.ch0.noiseFloorDb, mA.ch1.noiseFloorDb);
+        }
+      }
       await new Promise(r => setTimeout(r, 0));
       setProgress('Analyzing Mixed LUFS…', 83);
       const mLufsMax = mBuf.sampleRate * 300;
