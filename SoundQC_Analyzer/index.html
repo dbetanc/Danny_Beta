@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.6
+  SOBA — Audio QA & QC Checker v3.6.1
   Created by: Danny Beta
   Date: April 2026
 
@@ -555,7 +555,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.6</div>
+            <div class="version-badge">v3.6.1</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -1555,14 +1555,12 @@ async function runAnalysis() {
       artifactData = await runSingleArtifactScan(rawLeftFiles);
     }
     if (eFile) {
-      const FULL_THRESHOLD = 1.5 * 1024 * 1024 * 1024; // 1.5 GB
-      const eSliceSecs = eFile.size > FULL_THRESHOLD ? 600 : null; // 10 min if huge, else full
       setProgress('Decoding Edit WAV…',  60);
-      const eBuf = eSliceSecs ? await decodeFileSlice(eFile, eSliceSecs) : await decodeFile(eFile);
+      const eBuf = await decodeFileSlice(eFile, 300); // max 5 min
       eA = analyzeBuffer(eBuf);
       await new Promise(r => setTimeout(r, 0));
       setProgress('Analyzing Edit LUFS…', 63);
-      // Slice LUFS to 5 min max — converges well within that window
+      // Slice to 5 min max for LUFS — converges well within that window
       const eLufsMax = eBuf.sampleRate * 300;
       const eLufsLen = Math.min(eBuf.length, eLufsMax);
       const eLufsBuf = eBuf.length > eLufsMax
@@ -1585,15 +1583,7 @@ async function runAnalysis() {
       eA.signalDur  = ss.signalDur;  eA.silenceDur  = ss.silenceDur;
       eA.thresholdDb = ss.thresholdDb;
       eA.stereo = computeStereoRawAnalysis(eBuf, true);
-      // Full-session L/R RMS for accurate acoustic delta — chunked raw PCM, no memory risk
-      setProgress('Computing acoustic delta…', 66);
-      const fullLRRms = await computeFullSessionLRRms(eFile);
-      if (fullLRRms && eA.ch0 && eA.ch1) {
-        eA.ch0.rmsDb = fullLRRms.rmsL;
-        eA.ch1.rmsDb = fullLRRms.rmsR;
-        eA.lrDelta   = fullLRRms.lrDelta;
-      }
-      // QC Edit checks — bleed/panning on decoded slice, overlaps on full file
+      // QC Edit checks — bleed/panning on 5-min slice, overlaps on full file
       setProgress('Scanning Edit WAV…', 70);
       await new Promise(r => setTimeout(r, 0));
       eA.editChecks = await computeEditChecks(eBuf);
@@ -1601,24 +1591,22 @@ async function runAnalysis() {
       if (eFile.size > 200 * 1024 * 1024) {
         const ovResult = await computeOverlapsFromFile(eFile);
         if (ovResult) {
-          eA.editChecks.overlapCount          = ovResult.overlapCount;
-          eA.editChecks.overlapPct            = ovResult.overlapPct;
-          eA.editChecks.overlapTimestamps     = ovResult.overlapTimestamps;
-          eA.editChecks.overlapWarnCount      = ovResult.overlapWarnCount;
+          eA.editChecks.overlapCount        = ovResult.overlapCount;
+          eA.editChecks.overlapPct          = ovResult.overlapPct;
+          eA.editChecks.overlapTimestamps   = ovResult.overlapTimestamps;
+          eA.editChecks.overlapWarnCount    = ovResult.overlapWarnCount;
           eA.editChecks.overlapWarnTimestamps = ovResult.overlapWarnTimestamps;
-          eA.editChecks.sessionDur            = ovResult.sessionDur;
+          eA.editChecks.sessionDur          = ovResult.sessionDur;
         }
       }
-      // HPF detection — slice to 60s
-      const editSr  = eBuf.sampleRate;
-      const editCh0 = eBuf.getChannelData(0).subarray(0, Math.min(eBuf.getChannelData(0).length, editSr * 60));
+      // HPF detection on Edit bounce — slice to 60s to avoid long filter passes
+      const editSr   = eBuf.sampleRate;
+      const editCh0  = eBuf.getChannelData(0).subarray(0, Math.min(eBuf.getChannelData(0).length, editSr * 60));
       eA.hpf = detectHPF(editCh0, editSr, eA.noiseFloorDb);
     }
     if (mFile) {
-      const FULL_THRESHOLD = 1.5 * 1024 * 1024 * 1024;
-      const mSliceSecs = mFile.size > FULL_THRESHOLD ? 600 : null;
       setProgress('Decoding Mixed WAV…', 80);
-      const mBuf = mSliceSecs ? await decodeFileSlice(mFile, mSliceSecs) : await decodeFile(mFile);
+      const mBuf = await decodeFileSlice(mFile, 300); // max 5 min
       mA = analyzeBuffer(mBuf);
       await new Promise(r => setTimeout(r, 0));
       setProgress('Analyzing Mixed LUFS…', 83);
@@ -1639,14 +1627,6 @@ async function runAnalysis() {
         mA.lufsR = computeIntegratedLUFS(chR);
       }
       await new Promise(r => setTimeout(r, 0));
-      // Full-session L/R RMS for accurate acoustic delta
-      setProgress('Computing acoustic delta…', 86);
-      const mFullLRRms = await computeFullSessionLRRms(mFile);
-      if (mFullLRRms && mA.ch0 && mA.ch1) {
-        mA.ch0.rmsDb = mFullLRRms.rmsL;
-        mA.ch1.rmsDb = mFullLRRms.rmsR;
-        mA.lrDelta   = mFullLRRms.lrDelta;
-      }
       const mss = computeSignalSilence(mBuf);
       mA.signalPct = mss.signalPct; mA.silencePct = mss.silencePct;
       mA.signalDur = mss.signalDur; mA.silenceDur = mss.silenceDur;
@@ -2837,7 +2817,7 @@ async function computeEditChecks(buf) {
 
   // ── Edit bleed: envelope-correlation using the same detectBleed detector ──
   // Slice to 120s max — bleed correlation converges quickly, full file would hang browser
-  const BLEED_SECS = 300;
+  const BLEED_SECS = 60;
   const bleedMaxSamples = sr * BLEED_SECS;
   const ch0b = ch0.length > bleedMaxSamples ? ch0.subarray(0, bleedMaxSamples) : ch0;
   const ch1b = ch1.length > bleedMaxSamples ? ch1.subarray(0, bleedMaxSamples) : ch1;
@@ -2900,13 +2880,13 @@ async function computeEditChecks(buf) {
   }
 
   // ── Two-pass overlap detection ────────────────────────────
-  // Threshold: -30 dBFS (raised from -35 to filter breaths)
+  // Threshold: -35 dBFS (speech only, ignores breaths/sibilants)
   // Per-channel fill: 400ms (smooths micro-pauses within turns)
-  const OV_THRESH  = Math.pow(10, -30 / 20);
+  const OV_THRESH  = Math.pow(10, -35 / 20);
   const OV_FILL    = Math.floor(0.4 / 0.05);  // 400ms in 50ms windows
   const OV_TIGHT   = 0.40;                     // 400ms — minimum workable gap (100ms line + 285ms lout + 15ms)
   const OV_WARN    = 0.425;                     // 425ms — tight but workable at minimum offsets
-  const OV_SIMUL   = 5;                         // 250ms minimum simultaneous (raised from 100ms to filter breaths)
+  const OV_SIMUL   = 2;                         // 100ms minimum simultaneous
 
   // Build per-window RMS arrays
   const rwL = [], rwR = [];
@@ -3104,21 +3084,35 @@ function detectBleed(leftData, rightData, sr, nfDb) {
   }
 
   // ── Run both bands, both directions ──────────────────
-  function measure(srcData, tgtData) {
+  function measure(srcData, tgtData, nfLin) {
     const mask = speechMask(srcData);
     if (!mask) return { hf: 0, lf: 0 };
     const envSrcHF = envelope(hfBand(srcData));
     const envTgtHF = envelope(hfBand(tgtData));
     const envSrcLF = envelope(lfBand(srcData));
     const envTgtLF = envelope(lfBand(tgtData));
+
+    // Minimum target energy gate: the silent channel must have actual HF
+    // energy above NF+12dB during speech windows. If it's at noise floor,
+    // any correlation is from random fluctuations — not real bleed.
+    const minTgtHF = nfLin * Math.pow(10, 12 / 20);
+    const maskedTgtHF = [];
+    for (let i = 0; i < Math.min(envTgtHF.length, mask.length); i++) {
+      if (mask[i]) maskedTgtHF.push(envTgtHF[i]);
+    }
+    if (!maskedTgtHF.length) return { hf: 0, lf: 0 };
+    maskedTgtHF.sort((a, b) => a - b);
+    const medTgtHF = maskedTgtHF[Math.floor(maskedTgtHF.length / 2)];
+    if (medTgtHF < minTgtHF) return { hf: 0, lf: 0 };
+
     return {
       hf: Math.max(0, pearson(envSrcHF, envTgtHF, mask)),
       lf: Math.max(0, pearson(envSrcLF, envTgtLF, mask)),
     };
   }
 
-  const LR = measure(leftData,  rightData); // L speaking → R bleed
-  const RL = measure(rightData, leftData);  // R speaking → L bleed
+  const LR = measure(leftData,  rightData, Math.pow(10, nfDb / 20)); // L speaking → R bleed
+  const RL = measure(rightData, leftData,  Math.pow(10, nfDb / 20)); // R speaking → L bleed
 
   // Worst direction per band
   const hf = Math.max(LR.hf, RL.hf);
@@ -3211,12 +3205,15 @@ function detectDigitalZero(data, sr) {
 }
 
 // Detect hum: check energy at 50/60Hz and harmonics in silence windows
+// Detect mains hum (50/60 Hz and harmonics) in silence windows.
+// v3.5: per-window scoring with per-harmonic local floor + persistence gate.
+// v3.6: amplitude gate lowered 20× → 10× (26 dB → 20 dB) to catch
+//        UK mains hum harmonics at 16–20 dB that were previously missed.
 function detectHum(data, sr, nfDb) {
-  const FFT_N  = 8192; // explicit — matches computeFFT's N
-  const winSz  = FFT_N; // use exactly FFT_N samples per window for determinism
+  const winSz  = Math.floor(sr * 0.2); // 200ms — good resolution for 50/60 Hz
   const thresh = Math.pow(10, (nfDb + 8) / 20);
 
-  // Collect all candidate silence windows, then pick the quietest ones
+  // Collect all quiet windows, pick the four quietest
   const candidates = [];
   for (let i = 0; i + winSz <= data.length; i += winSz) {
     let sq = 0;
@@ -3225,35 +3222,36 @@ function detectHum(data, sr, nfDb) {
     if (rms < thresh) candidates.push({ start: i, rms });
   }
   if (!candidates.length) return { detected: false, freq: null, strength: 0 };
-  // Sort by RMS ascending — use the quietest windows
   candidates.sort((a, b) => a.rms - b.rms);
-  const silWins = candidates.slice(0, 5).map(c => c.start);
+  const silWins = candidates.slice(0, 4).map(c => c.start);
 
-  // ── Per-window hum detection ──────────────────────────────
-  // Require the same dominant fundamental in ≥2 windows (persistence gate)
   const winScores50 = [], winScores60 = [];
-  const winPossible50 = [], winPossible60 = [];
 
+  // Per-harmonic local floor: ±25 bins excluding ±2 around peak bin
+  // Sharpness: peak must be >3× shoulder average at ±3..6 bins
+  // v3.6: amplitude gate is 10× local floor (was 20×)
   function checkHumInWindow(mag, binHz, fundamental) {
     let score = 0, hits = 0;
     for (let h = 1; h <= 5; h++) {
-      const targetHz = fundamental * h;
-      // Search ±2 bins around target to handle slight frequency drift
+      const targetHz  = fundamental * h;
       const centerBin = Math.round(targetHz / binHz);
+      if (centerBin >= mag.length) break;
+      // Find peak within ±2 bins for slight frequency drift
       let peak = 0, peakBin = centerBin;
       for (let b = Math.max(0, centerBin - 2); b <= Math.min(mag.length - 1, centerBin + 2); b++) {
         if (mag[b] > peak) { peak = mag[b]; peakBin = b; }
       }
-      // Local floor: use ±10 to ±25 bins, excluding ±2 around peak
+      // Local floor: median of ±25 bins, excluding ±2 around peak
       const localCtx = [];
       for (let b = peakBin - 25; b <= peakBin + 25; b++) {
         if (b < 0 || b >= mag.length) continue;
         if (Math.abs(b - peakBin) < 3) continue;
         localCtx.push(mag[b]);
       }
+      if (!localCtx.length) continue;
       localCtx.sort((a, b) => a - b);
       const localFloor = localCtx[Math.floor(localCtx.length * 0.5)] || 1e-12;
-      // Sharpness: average of ±3..±6 bins vs peak
+      // Sharpness: ±3..6 bins vs peak
       const shoulders = [];
       for (let b = peakBin - 6; b <= peakBin + 6; b++) {
         if (b < 0 || b >= mag.length) continue;
@@ -3261,65 +3259,52 @@ function detectHum(data, sr, nfDb) {
       }
       const shoulderAvg = shoulders.reduce((s, v) => s + v, 0) / (shoulders.length || 1);
       const isSharp = peak > shoulderAvg * 3;
-      if (isSharp && peak > localFloor * 20) { score += peak / localFloor; hits++; }
+      if (isSharp && peak > localFloor * 10) { score += peak / localFloor; hits++; } // v3.6: 10× gate
     }
-    // Return full score (≥3 harmonics) and partial score (exactly 2 harmonics — possible hum)
-    return { score: hits >= 3 ? score : 0, possible: hits === 2 ? score : 0 };
+    return hits >= 3 ? score : 0;
   }
 
   for (const start of silWins) {
     const { mag, binHz } = computeFFT(data.subarray(start, start + winSz), sr);
-    const s50 = checkHumInWindow(mag, binHz, 50);
-    const s60 = checkHumInWindow(mag, binHz, 60);
-    winScores50.push(s50.score);
-    winScores60.push(s60.score);
-    winPossible50.push(s50.possible);
-    winPossible60.push(s60.possible);
+    winScores50.push(checkHumInWindow(mag, binHz, 50));
+    winScores60.push(checkHumInWindow(mag, binHz, 60));
   }
 
-  // Count windows where each fundamental was detected (score > 0)
   const hits50 = winScores50.filter(s => s > 0).length;
   const hits60 = winScores60.filter(s => s > 0).length;
-  const minPersist = silWins.length >= 2 ? Math.max(2, Math.floor(silWins.length / 2)) : 1;
+  // Persistence: require signal in at least 2 windows (or 1 if only 1 available)
+  const minPersist = Math.max(1, Math.min(2, Math.floor(silWins.length / 2) || 1));
 
-  if (hits50 < minPersist && hits60 < minPersist) {
-    const possible = checkPossibleHum(winScores50, winScores60, winPossible50, winPossible60, minPersist);
-    return { detected: false, freq: null, strength: 0, possible };
-  }
+  if (hits50 < minPersist && hits60 < minPersist) return { detected: false, freq: null, strength: 0 };
 
-  // Require one to clearly dominate
   const total50 = winScores50.reduce((s, v) => s + v, 0);
   const total60 = winScores60.reduce((s, v) => s + v, 0);
-  if (total50 > 0 && total60 > 0 && Math.max(total50, total60) < Math.min(total50, total60) * 2) {
-    const possible = checkPossibleHum(winScores50, winScores60, winPossible50, winPossible60, minPersist);
-    return { detected: false, freq: null, strength: 0, possible };
-  }
+  // One mains frequency must clearly dominate — prevents broadband room tone false positive
+  if (total50 > 0 && total60 > 0 && Math.max(total50, total60) < Math.min(total50, total60) * 2)
+    return { detected: false, freq: null, strength: 0 };
 
-  const freq     = total50 > total60 ? 50 : 60;
+  const freq     = total50 >= total60 ? 50 : 60;
   const strength = Math.max(total50, total60) / silWins.length;
   return { detected: true, freq, strength };
 }
 
-// Check for possible hum separately — 2 harmonics, persistent, observation only (not a fail)
-function checkPossibleHum(winScores50, winScores60, winPossible50, winPossible60, minPersist) {
-  // Only triggers if confirmed hum was NOT detected
-  const pHits50 = winPossible50.filter(s => s > 0).length;
-  const pHits60 = winPossible60.filter(s => s > 0).length;
-  if (pHits50 < minPersist && pHits60 < minPersist) return null;
-  const pTotal50 = winPossible50.reduce((s, v) => s + v, 0);
-  const pTotal60 = winPossible60.reduce((s, v) => s + v, 0);
-  const pFreq = pTotal50 > pTotal60 ? 50 : 60;
-  return { freq: pFreq };
-}
-
-// Detect high-frequency tonal interference (8kHz–Nyquist)
-// Uses silence windows + high-res FFT, looks for narrow spikes >8dB above local noise floor
-// Requires spikes to recur in ≥2 silence windows within the same take (within-take persistence)
+// Detect tonal interference — 80 Hz to Nyquist
+// v3.5: per-window persistence gate — spike must recur in ≥2 silence windows
+//        within the same take to be counted (prevents transient false positives).
+//        Quietest-window selection (sort by RMS, pick 4 quietest) instead of
+//        first-4-quiet-windows-found.
+// v3.6: scan floor lowered 8 kHz → 80 Hz to catch mains harmonics (100–200 Hz)
+//        and midrange tones (390 Hz, 2.1 kHz).
+//        Loop now starts at loScan directly (was loScan + LOCAL_BINS — a ~278 Hz
+//        offset bug that blindsided the low end even after lowering loScan).
+//        Context window is clipped to [0, maxBin] near the scan floor so the
+//        local floor estimate is never built from out-of-range bins.
+//        Tiered threshold: 10 dB for <8 kHz, 12 dB for ≥8 kHz.
 function detectInterference(data, sr, nfDb, winSecs = 2) {
   const winSz    = Math.floor(sr * winSecs);
   const silThresh = Math.pow(10, (nfDb + 8) / 20);
 
-  // Collect all candidate silence windows, pick the quietest
+  // Pick the four quietest candidate silence windows
   const candidates = [];
   for (let i = 0; i + winSz <= data.length; i += winSz) {
     let sq = 0;
@@ -3327,24 +3312,28 @@ function detectInterference(data, sr, nfDb, winSecs = 2) {
     const rms = Math.sqrt(sq / winSz);
     if (rms < silThresh) candidates.push({ start: i, rms });
   }
-  if (!candidates.length) return { detected: false, freq: null, ratio: 0 };
+  if (!candidates.length) return { detected: false, spikes: [] };
   candidates.sort((a, b) => a.rms - b.rms);
   const silWins = candidates.slice(0, 4).map(c => c.start);
 
-  const N = 16384;
-  const binHz = sr / N;
-  const TONAL_DB   = 12.0;
+  const N         = 16384;
+  const binHz     = sr / N;
   const LOCAL_BINS = Math.round(200 / binHz);
   const excl       = Math.round(30  / binHz);
   const maxBin     = N / 2;
   const MERGE_HZ   = 500;
-  const loScan = Math.round(8000  / binHz);
+  // Scan from 200 Hz — below this the broadband room tone slope causes
+  // false positives (room resonances look like sharp spikes against the
+  // rolling LF floor). Sub-200 Hz tones are detectHum's domain, which
+  // uses harmonic structure to discriminate electrical hum from room tone.
+  const loScan = Math.round(200 / binHz);
   const hiScan = Math.round((sr / 2 - 200) / binHz);
 
-  // ── Per-window spike detection ────────────────────────────
-  const spikesByWindow = [];
+  // Per-window spike lists — index matches silWins index
+  const winSpikeLists = [];
 
-  for (const start of silWins) {
+  for (let wi = 0; wi < silWins.length; wi++) {
+    const start = silWins[wi];
     const re = new Float32Array(N);
     const im = new Float32Array(N);
     const len = Math.min(N, data.length - start);
@@ -3374,63 +3363,58 @@ function detectInterference(data, sr, nfDb, winSecs = 2) {
     const mag = new Float32Array(N / 2 + 1);
     for (let i = 0; i <= N / 2; i++) mag[i] = Math.sqrt(re[i]*re[i] + im[i]*im[i]) / N;
 
-    // Detect spikes in this window
-    const winSpikes = [];
-    for (let b = loScan + LOCAL_BINS; b < hiScan - LOCAL_BINS; b++) {
+    // v3.6: loop starts at loScan (not loScan + LOCAL_BINS)
+    const thisWinSpikes = [];
+    for (let b = loScan; b < hiScan; b++) {
       const peak = mag[b];
+      // Clipped context window — safe near scan floor
       const ctx = [];
-      for (let k = b - LOCAL_BINS; k <= b + LOCAL_BINS; k++) {
+      for (let k = Math.max(0, b - LOCAL_BINS); k <= Math.min(maxBin, b + LOCAL_BINS); k++) {
         if (Math.abs(k - b) > excl) ctx.push(mag[k]);
       }
-      ctx.sort((a, b) => a - b);
+      if (!ctx.length) continue;
+      ctx.sort((a, c) => a - c);
       const localFloor = ctx[Math.floor(ctx.length / 2)] || 1e-12;
+      const freqHz = b * binHz;
+      // Tiered threshold: more conservative for HF (quantization noise is spikier at HF)
+      const TONAL_DB = freqHz < 8000 ? 10.0 : 12.0;
       const ratioDb = 20 * Math.log10((peak + 1e-12) / (localFloor + 1e-12));
       if (ratioDb > TONAL_DB) {
-        const leftShoulder  = (mag[Math.max(0, b-6)] + mag[Math.max(0, b-7)] + mag[Math.max(0, b-8)]) / 3;
-        const rightShoulder = (mag[Math.min(maxBin, b+6)] + mag[Math.min(maxBin, b+7)] + mag[Math.min(maxBin, b+8)]) / 3;
-        if (peak > leftShoulder * 1.5 && peak > rightShoulder * 1.5) {
-          winSpikes.push({ freq: b * binHz, ratio: ratioDb });
+        const ls = (mag[Math.max(0, b-6)] + mag[Math.max(0, b-7)] + mag[Math.max(0, b-8)]) / 3;
+        const rs = (mag[Math.min(maxBin, b+6)] + mag[Math.min(maxBin, b+7)] + mag[Math.min(maxBin, b+8)]) / 3;
+        if (peak > ls * 1.5 && peak > rs * 1.5) {
+          thisWinSpikes.push({ freq: b * binHz, ratio: ratioDb });
         }
       }
     }
-    // Merge within window
-    winSpikes.sort((a, b) => b.ratio - a.ratio);
-    const winMerged = [];
-    for (const s of winSpikes) {
-      if (!winMerged.some(m => Math.abs(m.freq - s.freq) < MERGE_HZ))
-        winMerged.push({ freq: Math.round(s.freq), ratio: s.ratio });
-    }
-    spikesByWindow.push(winMerged);
+    winSpikeLists.push(thisWinSpikes);
   }
 
-  if (!spikesByWindow.length) return { detected: false, spikes: [] };
-
-  // ── Within-take persistence: keep only spikes present in ≥2 windows ──
-  // If only 1 silence window available (short takes with winSecs=0.5), require just 1
-  const minWindows = silWins.length >= 2 ? 2 : 1;
-  const allCandidates = spikesByWindow.flat();
-  allCandidates.sort((a, b) => a.freq - b.freq);
-
-  const persistent = [];
-  for (const c of allCandidates) {
-    if (persistent.some(p => Math.abs(p.freq - c.freq) < MERGE_HZ)) continue;
-    const windowCount = spikesByWindow.filter(wSpikes =>
-      wSpikes.some(s => Math.abs(s.freq - c.freq) < MERGE_HZ)
-    ).length;
-    if (windowCount >= minWindows) {
-      // Use median ratio across windows where it appears
-      const ratios = spikesByWindow
-        .map(wSpikes => { const s = wSpikes.find(s => Math.abs(s.freq - c.freq) < MERGE_HZ); return s ? s.ratio : null; })
-        .filter(r => r !== null)
-        .sort((a, b) => a - b);
-      const medRatio = ratios[Math.floor(ratios.length / 2)];
-      persistent.push({ freq: Math.round(c.freq), ratio: medRatio });
+  // Persistence gate: keep only spikes recurring in ≥minWin silence windows
+  // (1 if only 1 window available, otherwise ≥2)
+  const minWin = silWins.length === 1 ? 1 : 2;
+  const freqBuckets = {};
+  for (let wi = 0; wi < winSpikeLists.length; wi++) {
+    for (const s of winSpikeLists[wi]) {
+      const key = Math.round(s.freq / MERGE_HZ) * MERGE_HZ;
+      if (!freqBuckets[key]) freqBuckets[key] = { freqs: [], ratios: [], wins: new Set() };
+      freqBuckets[key].freqs.push(s.freq);
+      freqBuckets[key].ratios.push(s.ratio);
+      freqBuckets[key].wins.add(wi);
     }
   }
+
+  const persistent = Object.values(freqBuckets)
+    .filter(g => g.wins.size >= minWin)
+    .map(g => ({
+      freq:  Math.round(g.freqs.reduce((a, v) => a + v, 0) / g.freqs.length),
+      ratio: [...g.ratios].sort((a, b) => a - b)[Math.floor(g.ratios.length / 2)]
+    }))
+    .sort((a, b) => a.freq - b.freq)
+    .slice(0, 5);
 
   if (!persistent.length) return { detected: false, spikes: [] };
-  persistent.sort((a, b) => a.freq - b.freq);
-  return { detected: true, spikes: persistent.slice(0, 5) };
+  return { detected: true, spikes: persistent };
 }
 
 
@@ -3456,9 +3440,8 @@ function filterConsistentSpikes(spikesByTake, threshold) {
       const sorted = [...g.ratios].sort((a, b) => a - b);
       const medRatio = sorted[Math.floor(sorted.length / 2)];
       return {
-        freq:      Math.round(g.freqs.reduce((a,v) => a+v, 0) / g.freqs.length),
-        ratio:     medRatio,
-        takeCount: g.takes.size
+        freq:  Math.round(g.freqs.reduce((a,v) => a+v, 0) / g.freqs.length),
+        ratio: medRatio
       };
     })
     .sort((a, b) => b.ratio - a.ratio)
@@ -3487,7 +3470,7 @@ function detectPops(data, sr, nfDb) {
 
   const wsz    = Math.floor(sr * 0.005); // 5ms windows
   const PRE_WIN     = 6;    // 30ms pre-silence look-back
-  const ASYM_THRESH = 2.0;  // one-sided push ratio
+  const ASYM_THRESH = 2.5;  // one-sided push ratio — raised from 2.0; real pops hit 3.0+, P consonants peak ~2.0–2.4
   const LP20_RATIO  = 0.70; // infrasonic dominance threshold
   const SUSTAIN_WIN = 4;    // minimum consecutive infrasonic windows
   const dt = 1 / sr;
@@ -3529,9 +3512,12 @@ function detectPops(data, sr, nfDb) {
     }
     fullEnv[i] = Math.sqrt(sq / wsz);
     lp20Env[i] = Math.sqrt(sq20 / wsz);
-    const posM = posN > 0 ? posSum / posN : 1e-12;
-    const negM = negN > 0 ? negSum / negN : 1e-12;
-    asymArr[i] = posM > negM ? posM / negM : negM / posM; // always >= 1.0
+    const posM = posN > 0 ? posSum / posN : 0;
+    const negM = negN > 0 ? negSum / negN : 0;
+    // If either side has no samples, the window is near-silence — not asymmetric
+    if (posM === 0 || negM === 0) { asymArr[i] = 1.0; continue; }
+    const rawAsym = posM > negM ? posM / negM : negM / posM;
+    asymArr[i] = Math.min(rawAsym, 20.0); // cap at 20× — real pops are 3–10×, infinity means noise artifact
   }
 
   const candidates = [];
@@ -3549,7 +3535,19 @@ function detectPops(data, sr, nfDb) {
     // Gate 3: waveform asymmetry > 2.0
     if (asymArr[i] < ASYM_THRESH) continue;
 
-    // Gate 4: infrasonic sustain — LP20/full ≥ 0.70 for ≥4 consecutive windows
+    // Gate 4: infrasonic dominance must be continuous through onset AND burst.
+    // A real pop has LP20 displacement from the burst onset through the recovery.
+    // A quiet dip before a consonant burst has high LP20/full at the dip (LP20
+    // carries over from prior speech) but low LP20/full at the actual burst.
+    // Check: minimum lp20/full across [i, i+2] must be ≥ 0.25.
+    let minBurstDom = Infinity;
+    for (let k = i; k < Math.min(i + 3, n); k++) {
+      const d = lp20Env[k] / (fullEnv[k] + 1e-12);
+      if (d < minBurstDom) minBurstDom = d;
+    }
+    if (minBurstDom < 0.25) continue;
+
+    // Gate 5: infrasonic sustain — LP20/full ≥ 0.70 for ≥4 consecutive windows
     let sustainCount = 0;
     for (let k = i; k < Math.min(i + SUSTAIN_WIN + 4, n); k++) {
       if (lp20Env[k] / (fullEnv[k] + 1e-12) >= LP20_RATIO) sustainCount++;
@@ -3833,7 +3831,7 @@ async function runSingleArtifactScan(files) {
       })();
 
   let interfHits = 0, interfSpikesByTakeSingle = [];
-  let humHits = 0, humFreqVotesSingle = [], humPossibleVotesSingle = [];
+  let humHits = 0, humFreqVotesSingle = [];
   const bufCacheSingle = new Map();
   for (const f of interfSample) {
     const buf = await decodeFile(f);
@@ -3847,21 +3845,16 @@ async function runSingleArtifactScan(files) {
     if (iv.detected) { interfHits++; interfSpikesByTakeSingle.push(iv.spikes); }
     const hv = detectHum(dataFull, sr, nfDb);
     if (hv.detected) { humHits++; humFreqVotesSingle.push(hv.freq); }
-    else if (hv.possible) { humPossibleVotesSingle.push(hv.possible.freq); }
   }
-  const interfThreshSingle = Math.ceil(interfSample.length * 0.75);
+  const interfThreshSingle = Math.ceil(interfSample.length / 2);
   if (interfHits >= interfThreshSingle) {
     interfSpikes = filterConsistentSpikes(interfSpikesByTakeSingle, interfThreshSingle);
     if (interfSpikes.length) { interfDetected = true; interfLeft = true; interfSpikes = { left: interfSpikes, right: [] }; }
   }
-  let humPossible = null;
   if (humHits >= Math.ceil(interfSample.length / 2)) {
     humDetected = true;
     humFreqVotesSingle.sort((a,b) => a-b);
     humFreq = humFreqVotesSingle[Math.floor(humFreqVotesSingle.length / 2)];
-  } else if (humPossibleVotesSingle.length >= Math.ceil(interfSample.length / 2)) {
-    humPossibleVotesSingle.sort((a,b) => a-b);
-    humPossible = { freq: humPossibleVotesSingle[Math.floor(humPossibleVotesSingle.length / 2)] };
   }
 
   for (const f of scanFiles) {
@@ -3893,7 +3886,7 @@ async function runSingleArtifactScan(files) {
 
   return {
     takesAnalyzed: n,
-    hum:         { detected: humDetected, freq: humFreq, clips: humClips, possible: humPossible },
+    hum:         { detected: humDetected, freq: humFreq, clips: humClips },
     interference: { detected: interfDetected, spikes: interfSpikes, left: interfDetected, right: false },
     hpf:         { left: hpfL, right: null, clipsL: hpfLClips, clipsR: [] },
     pops:        { left: pops, right: 0, clipsL: popClips,    clipsR: [] },
@@ -3929,53 +3922,67 @@ async function runArtifactScan(leftFiles, rightFiles) {
   const hpfClipsL = [], hpfClipsR = [];
   let n = 0;
 
-  // ── Interference: 5 random takes, both tracks, majority vote ──
+  // ── Interference & Hum: sampled independently per channel ──
+  // Runs on individual files — no pairing required. Each channel's silence
+  // sections are analyzed on their own, which is correct because interference
+  // is a property of the recording chain, not of the other channel.
   const INTERF_TAKES = 5;
-  const interfSample = scanTakes.length <= INTERF_TAKES
-    ? scanTakes
-    : (function() {
-        const idx = [];
-        while (idx.length < INTERF_TAKES) {
-          const r = Math.floor(Math.random() * scanTakes.length);
-          if (!idx.includes(r)) idx.push(r);
-        }
-        return idx.map(i => scanTakes[i]);
-      })();
+
+  function sampleFiles(files) {
+    if (files.length <= INTERF_TAKES) return [...files];
+    const idx = [];
+    while (idx.length < INTERF_TAKES) {
+      const r = Math.floor(Math.random() * files.length);
+      if (!idx.includes(r)) idx.push(r);
+    }
+    return idx.map(i => files[i]);
+  }
+
+  const leftSample  = sampleFiles(leftFiles);
+  const rightSample = sampleFiles(rightFiles);
 
   let interfLHits = 0, interfRHits = 0;
   let interfLSpikesByTake = [], interfRSpikesByTake = [];
-  let humLHits = 0, humRHits = 0, humFreqVotes = [], humPossibleVotesDual = [];
-  const bufCache = new Map(); // cache decoded buffers keyed by filename
-  for (const pair of interfSample) {
-    const [lBuf, rBuf] = await Promise.all([decodeFile(pair.left), decodeFile(pair.right)]);
-    bufCache.set(pair.left.name,  lBuf);
-    bufCache.set(pair.right.name, rBuf);
-    const sr       = lBuf.sampleRate;
-    const lFull    = lBuf.getChannelData(0);
-    const rFull    = rBuf.getChannelData(0);
-    const lData10s = sliceSamples(lBuf, 0, SECS);
-    const rData10s = sliceSamples(rBuf, 0, SECS);
-    const lNF      = analyzeChannel(lData10s, sr).noiseFloorDb;
-    const rNF      = analyzeChannel(rData10s, sr).noiseFloorDb;
-    const iL = detectInterference(lFull, sr, lNF);
-    const iR = detectInterference(rFull, sr, rNF);
+  let humLHits = 0, humRHits = 0, humLFreqVotes = [], humRFreqVotes = [];
+  const bufCache = new Map();
+
+  for (const f of leftSample) {
+    const buf   = await decodeFile(f);
+    bufCache.set(f.name, buf);
+    const sr    = buf.sampleRate;
+    const full  = buf.getChannelData(0);
+    const data10s = sliceSamples(buf, 0, SECS);
+    const nfDb  = analyzeChannel(data10s, sr).noiseFloorDb;
+    const iL = detectInterference(full, sr, nfDb);
     if (iL.detected) { interfLHits++; interfLSpikesByTake.push(iL.spikes); }
-    if (iR.detected) { interfRHits++; interfRSpikesByTake.push(iR.spikes); }
-    const hL = detectHum(lFull, sr, lNF);
-    const hR = detectHum(rFull, sr, rNF);
-    if (hL.detected) { humLHits++; humFreqVotes.push(hL.freq); }
-    else if (hL.possible) humPossibleVotesDual.push(hL.possible.freq);
-    if (hR.detected) { humRHits++; if (!humFreqVotes.length) humFreqVotes.push(hR.freq); }
-    else if (hR.possible) humPossibleVotesDual.push(hR.possible.freq);
+    const hL = detectHum(full, sr, nfDb);
+    if (hL.detected) { humLHits++; humLFreqVotes.push(hL.freq); }
   }
-  const interfThreshold = Math.ceil(interfSample.length * 0.75); // 75% of takes must show spike
-  const humThreshold    = Math.ceil(interfSample.length * 0.75);
-  interfLeft  = interfLHits >= interfThreshold;
-  interfRight = interfRHits >= interfThreshold;
+
+  for (const f of rightSample) {
+    const buf   = await decodeFile(f);
+    bufCache.set(f.name, buf);
+    const sr    = buf.sampleRate;
+    const full  = buf.getChannelData(0);
+    const data10s = sliceSamples(buf, 0, SECS);
+    const nfDb  = analyzeChannel(data10s, sr).noiseFloorDb;
+    const iR = detectInterference(full, sr, nfDb);
+    if (iR.detected) { interfRHits++; interfRSpikesByTake.push(iR.spikes); }
+    const hR = detectHum(full, sr, nfDb);
+    if (hR.detected) { humRHits++; humRFreqVotes.push(hR.freq); }
+  }
+
+  const interfThreshL = Math.max(1, Math.ceil(leftSample.length  * 0.75));
+  const interfThreshR = Math.max(1, Math.ceil(rightSample.length * 0.75));
+  const humThreshL    = Math.max(1, Math.ceil(leftSample.length  * 0.75));
+  const humThreshR    = Math.max(1, Math.ceil(rightSample.length * 0.75));
+
+  interfLeft  = leftSample.length  > 0 && interfLHits >= interfThreshL;
+  interfRight = rightSample.length > 0 && interfRHits >= interfThreshR;
 
   if (interfLeft || interfRight) {
-    const spikesL = interfLeft  ? filterConsistentSpikes(interfLSpikesByTake, interfThreshold) : [];
-    const spikesR = interfRight ? filterConsistentSpikes(interfRSpikesByTake, interfThreshold) : [];
+    const spikesL = interfLeft  ? filterConsistentSpikes(interfLSpikesByTake, interfThreshL) : [];
+    const spikesR = interfRight ? filterConsistentSpikes(interfRSpikesByTake, interfThreshR) : [];
     if (spikesL.length || spikesR.length) {
       interfDetected = true;
       interfSpikes = { left: spikesL, right: spikesR };
@@ -3983,14 +3990,16 @@ async function runArtifactScan(leftFiles, rightFiles) {
       interfLeft = false; interfRight = false;
     }
   }
-  let humPossible = null;
-  if (humLHits >= humThreshold || humRHits >= humThreshold) {
+
+  // Hum: use whichever channel has the most votes; require majority
+  const humAllVotes = [...humLFreqVotes, ...humRFreqVotes];
+  const humTotalHits = humLHits + humRHits;
+  const humTotalSamples = leftSample.length + rightSample.length;
+  const humThreshold = Math.max(1, Math.ceil(humTotalSamples / 2));
+  if (humTotalSamples > 0 && humTotalHits >= humThreshold) {
     humDetected = true;
-    humFreqVotes.sort((a,b) => a-b);
-    humFreq = humFreqVotes[Math.floor(humFreqVotes.length / 2)];
-  } else if (humPossibleVotesDual.length >= Math.ceil(interfSample.length / 2)) {
-    humPossibleVotesDual.sort((a,b) => a-b);
-    humPossible = { freq: humPossibleVotesDual[Math.floor(humPossibleVotesDual.length / 2)] };
+    humAllVotes.sort((a, b) => a - b);
+    humFreq = humAllVotes[Math.floor(humAllVotes.length / 2)];
   }
 
   for (const pair of scanTakes) {
@@ -4071,7 +4080,8 @@ async function runArtifactScan(leftFiles, rightFiles) {
     bleedHfCorr: medHf,
     bleedLfCorr: medLf,
     bleedClips,
-    hum:         { detected: humDetected, freq: humFreq, clips: humClips, possible: humPossible },
+    hum:         { detected: humDetected, freq: humFreq, clips: humClips },
+    interference: { detected: interfDetected, spikes: interfSpikes, left: interfLeft, right: interfRight },
     hpf:         { left: hpfL, right: hpfR, clipsL: hpfClipsL, clipsR: hpfClipsR },
     pops:        { left: popsL, right: popsR, clipsL: popClipsL,    clipsR: popClipsR },
     clicks:      { left: clicksL, right: clicksR, clipsL: clickClipsL, clipsR: clickClipsR },
@@ -4079,61 +4089,7 @@ async function runArtifactScan(leftFiles, rightFiles) {
   };
 }
 
-// Compute full-session L/R RMS from raw PCM bytes — no full decode needed.
-// Accumulates sum-of-squares per channel across 60s chunks, exact result.
-async function computeFullSessionLRRms(file) {
-  const headAB = await file.slice(0, 8192).arrayBuffer();
-  const hv = new DataView(headAB);
-  const riff = String.fromCharCode(hv.getUint8(0),hv.getUint8(1),hv.getUint8(2),hv.getUint8(3));
-  const wave = String.fromCharCode(hv.getUint8(8),hv.getUint8(9),hv.getUint8(10),hv.getUint8(11));
-  if (riff !== 'RIFF' || wave !== 'WAVE') return null;
-
-  let pos = 12, sr = 48000, nc = 2, bps = 24, dataStart = -1, dataEnd = -1;
-  while (pos < headAB.byteLength - 8) {
-    const id   = String.fromCharCode(hv.getUint8(pos),hv.getUint8(pos+1),hv.getUint8(pos+2),hv.getUint8(pos+3));
-    const size = hv.getUint32(pos+4, true);
-    if (id === 'fmt ') { nc = hv.getUint16(pos+10,true); sr = hv.getUint32(pos+12,true); bps = hv.getUint16(pos+22,true); }
-    if (id === 'data') { dataStart = pos + 8; dataEnd = dataStart + size; break; }
-    pos += 8 + size + (size & 1);
-  }
-  if (dataStart < 0 || nc < 2) return null;
-
-  const bpSample   = Math.ceil(bps / 8);
-  const bpFrame    = nc * bpSample;
-  const scale      = bps === 24 ? 8388608 : bps === 16 ? 32768 : 1;
-  const chunkBytes = sr * 60 * bpFrame; // 60s per chunk
-  const dataEnd2   = Math.min(dataEnd, file.size);
-
-  let sumSqL = 0, sumSqR = 0, totalFrames = 0;
-  let dataPos = dataStart;
-
-  while (dataPos < dataEnd2) {
-    const end   = Math.min(dataPos + chunkBytes, dataEnd2);
-    const raw   = new Uint8Array(await file.slice(dataPos, end).arrayBuffer());
-    const nFrames = Math.floor(raw.length / bpFrame);
-    for (let f = 0; f < nFrames; f++) {
-      const bp = f * bpFrame;
-      let v0, v1;
-      if (bps === 24) {
-        v0 = (raw[bp] | (raw[bp+1]<<8) | (raw[bp+2]<<16)); if (v0 & 0x800000) v0 -= 0x1000000;
-        v1 = (raw[bp+3] | (raw[bp+4]<<8) | (raw[bp+5]<<16)); if (v1 & 0x800000) v1 -= 0x1000000;
-      } else {
-        v0 = raw[bp] | (raw[bp+1]<<8); if (v0 & 0x8000) v0 -= 0x10000;
-        v1 = raw[bp+2] | (raw[bp+3]<<8); if (v1 & 0x8000) v1 -= 0x10000;
-      }
-      const f0 = v0/scale, f1 = v1/scale;
-      sumSqL += f0*f0; sumSqR += f1*f1;
-    }
-    totalFrames += nFrames;
-    dataPos = end;
-    await new Promise(r => setTimeout(r, 0));
-  }
-
-  if (totalFrames === 0) return null;
-  const rmsL = 20 * Math.log10(Math.sqrt(sumSqL / totalFrames) + 1e-12);
-  const rmsR = 20 * Math.log10(Math.sqrt(sumSqR / totalFrames) + 1e-12);
-  return { rmsL, rmsR, lrDelta: Math.abs(rmsL - rmsR) };
-}
+// Chunked overlap detection for large files — reads raw PCM bytes directly,
 // no AudioContext decoder needed. Avoids boundary artifacts from chunk decoding.
 async function computeOverlapsFromFile(file) {
   // Parse WAV header
@@ -4164,7 +4120,7 @@ async function computeOverlapsFromFile(file) {
   const chunkBytes = chunkFrames * bpFrame;
   const scale      = bps === 16 ? 32768 : bps === 24 ? 8388608 : 1;
 
-  const OV_THRESH  = Math.pow(10, -30/20);
+  const OV_THRESH  = Math.pow(10, -35/20);
   const allSpL = [], allSpR = [];
 
   let dataPos = dataStart;
@@ -4206,7 +4162,7 @@ async function computeOverlapsFromFile(file) {
 
   const n = allSpL.length;
   const OV_FILL  = Math.floor(0.4/0.05);
-  const OV_TIGHT = 0.40, OV_WARN = 0.425, OV_SIMUL = 5;
+  const OV_TIGHT = 0.40, OV_WARN = 0.425, OV_SIMUL = 2;
 
   function fillCh(arr, fw) {
     const out = arr.slice(); let i = 0;
@@ -4291,11 +4247,11 @@ function qaChip(score) {
   }
   if (score <= 3) {
     return dark
-      ? `<span style="${base} #FFD600;background:rgba(255,214,0,0.12);color:#FFD600">Minor</span>`
-      : `<span style="${base} #B8970A;background:#FFF3CC;color:#7A5F00">Minor</span>`;
+      ? `<span style="${base} #FFD600;background:rgba(255,214,0,0.13);color:#FFD600">Minor</span>`
+      : `<span style="${base} #B8970A;background:#FFD600;color:#2C2C2A">Minor</span>`;
   }
   return dark
-    ? `<span style="${base} #ff3d57;background:rgba(255,61,87,0.12);color:#ff3d57">Serious</span>`
+    ? `<span style="${base} #ff3d57;background:rgba(255,61,87,0.13);color:#ff3d57">Serious</span>`
     : `<span style="${base} #C0392B;background:#FAD7D3;color:#C0392B">Serious</span>`;
 }
 
@@ -4467,24 +4423,20 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
 
   function spikeListStr(spikes) {
     return spikes.map(s => {
-      const khz   = (s.freq / 1000).toFixed(1) + 'kHz';
+      const fmtFreq = s.freq < 1000
+        ? `${Math.round(s.freq)}Hz`
+        : `${(s.freq / 1000).toFixed(1)}kHz`;
       const label = s.freq >= 18000 ? 'ultrasonic'
                   : s.ratio >= 20   ? 'strong'
                   : s.ratio >= 16   ? 'moderate'
                   : 'faint';
-      return `${khz} (${label})`;
+      return `${fmtFreq} (${label})`;
     }).join(', ');
   }
 
   let humDesc = '';
   if (!a.hum.detected && !interfDet) {
-    // Check for possible hum observation (2 harmonics — informational only)
-    const possibleHum = a.hum.possible;
-    if (possibleHum) {
-      humDesc = `Possible ${possibleHum.freq}Hz mains hum observed (2 harmonics detected) — low-frequency, inaudible impact on training data. Observation only.`;
-    } else {
-      humDesc = 'No interference detected';
-    }
+    humDesc = 'No interference detected';
   } else {
     const parts = [];
     if (a.hum.detected && a.hum.freq) parts.push(`${a.hum.freq}Hz hum · stop and report · flag in Labelbox`);
@@ -4496,15 +4448,16 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       } else if (interfSpikeR.length) {
         parts.push(`Tonal interference — Right track: ${spikeListStr(interfSpikeR)}`);
       } else {
-        // Flat array or single-channel { left, right } object fallback
-        const flat = Array.isArray(a.interference.spikes)
-          ? a.interference.spikes
-          : [...(a.interference.spikes?.left||[]), ...(a.interference.spikes?.right||[])];
+        // Flat array fallback (legacy format or single-track)
+        const flat = Array.isArray(a.interference.spikes) ? a.interference.spikes : [];
         const who  = a.interference.left && a.interference.right ? 'Both tracks'
                    : a.interference.left ? 'Left track' : 'Right track';
         if (flat.length) parts.push(`Tonal interference — ${who}: ${spikeListStr(flat)}`);
         else parts.push('Tonal interference detected');
       }
+    }
+    if (combinedScore >= 3) {
+      parts.push('⚠ Check by ear in silence regions — if hum or tone is audible, fail QA and report');
     }
     humDesc = parts.join(' · ');
   }
@@ -4530,8 +4483,8 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const clickLevel = clickScore === 1 ? 'pass' : clickScore <= 3 ? 'warn' : 'fail';
   const clickDesc  = clickTotal === 0 ? 'No events detected'
     : clickScore <= 3
-      ? `~${clickTotal} event${clickTotal>1?'s':''} detected · if distracting, cover with room tone if outside the speech`
-      : `~${clickTotal} event${clickTotal>1?'s':''} detected · if distracting, cover with room tone if outside the speech · flag in Labelbox if excessive`;
+      ? `~${clickTotal} event${clickTotal>1?'s':''} detected · fix during edit with RX`
+      : `~${clickTotal} event${clickTotal>1?'s':''} detected · stop and report if distracting · flag in Labelbox`;
   rows.push(aRow('Mouth Clicks', qaChip(clickScore), clickDesc, clickLevel,
     [...(a.clicks.clipsL||[]), ...(a.clicks.clipsR||[])], true));
 
@@ -4746,7 +4699,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   if (hasEdit) {
     document.getElementById('editCardType').innerHTML = '<span class="card-type-qc">QC</span> — Edit WAV';
     document.getElementById('editCardName').textContent = eFile.name;
-    document.getElementById('editCardMeta').innerHTML = fmtSize(eFile.size)+' · '+eA.sampleRate/1000+' kHz · 24-Bit · '+(eA.channels===1?'Mono':'Stereo')+' · '+fmtDur(eA.duration)+(eFile.size > 1.5*1024*1024*1024 ? ' <span style="color:var(--amber);font-size:10px">(10 min slice)</span>' : '')+' · '+fmtBounceDate(eFile);
+    document.getElementById('editCardMeta').innerHTML = fmtSize(eFile.size)+' · '+eA.sampleRate/1000+' kHz · 24-Bit · '+(eA.channels===1?'Mono':'Stereo')+' · '+fmtDur(eA.duration)+(eFile.size > 500*1024*1024 ? ' <span style="color:var(--amber);font-size:10px">(5 min slice)</span>' : '')+' · '+fmtBounceDate(eFile);
     document.getElementById('editNFBadge').innerHTML = (eA.hpf && eA.hpf.detected)
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
       : nfBadgeHTML(eA.noiseFloorDb);
@@ -4756,7 +4709,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   document.getElementById('mixCard').style.display = hasMix ? '' : 'none';
   if (hasMix) {
     document.getElementById('mixCardName').textContent = mFile.name;
-    document.getElementById('mixCardMeta').innerHTML = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · 24-Bit · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration)+(mFile.size > 1.5*1024*1024*1024 ? ' <span style="color:var(--amber);font-size:10px">(10 min slice)</span>' : '')+' · '+fmtBounceDate(mFile);
+    document.getElementById('mixCardMeta').innerHTML = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · 24-Bit · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration)+(mFile.size > 500*1024*1024 ? ' <span style="color:var(--amber);font-size:10px">(5 min slice)</span>' : '')+' · '+fmtBounceDate(mFile);
     document.getElementById('mixNFBadge').innerHTML    = nfBadgeHTML(mA.noiseFloorDb);
     document.getElementById('mixMetrics').innerHTML    = buildMetrics(mA, false, false, 'mixed');
   }
@@ -4812,17 +4765,8 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     return i === 0 ? (hpfDet && hpfDet.left  && hpfDet.left.detected)
                    : (hpfDet && hpfDet.right && hpfDet.right.detected);
   });
-  // Serious interference: audible spike ≥20 dB AND recurring in ≥2 takes
-  // Single-take spikes don't fail the session — could be isolated RF burst, not systemic
-  const seriousInterf = (() => {
-    if (!artifactData || !artifactData.interference || !artifactData.interference.detected) return false;
-    const spikes = Array.isArray(artifactData.interference.spikes)
-      ? artifactData.interference.spikes
-      : [...(artifactData.interference.spikes?.left||[]), ...(artifactData.interference.spikes?.right||[])];
-    return spikes.some(s => s.freq < 18000 && s.ratio >= 20 && (s.takeCount == null || s.takeCount >= 2));
-  })();
-  const anyFail = hpfAny || seriousInterf || allA.some(a => a.noiseFloorDb >= -50);
-  const allPass = !hpfAny && !seriousInterf && allA.every(a => a.noiseFloorDb > -90 && a.noiseFloorDb <= -57);
+  const anyFail = hpfAny || allA.some(a => a.noiseFloorDb >= -50);
+  const allPass = !hpfAny && allA.every(a => a.noiseFloorDb > -90 && a.noiseFloorDb <= -57);
   const overall = anyFail ? 'FAIL' : allPass ? 'PASS' : 'WARN';
   const cls = overall==='PASS'?'pass':overall==='FAIL'?'fail':'warn';
   document.getElementById('resultsBar').style.display = 'flex';
@@ -5123,20 +5067,17 @@ function buildQCQuestionnaire() {
     const interfSpikeR = interfDet ? (Array.isArray(a.interference.spikes) ? [] : (a.interference.spikes?.right||[])) : [];
     const allUltrasonic = allSpikes.length > 0 && allSpikes.every(s => s.freq >= 18000);
     const maxFreq = allSpikes.length ? Math.max(...allSpikes.map(s => s.freq)) : 0;
-    const freqKhz = (maxFreq/1000).toFixed(1);
+    const freqFmt = maxFreq < 1000 ? `${Math.round(maxFreq)}Hz` : `${(maxFreq/1000).toFixed(1)}kHz`;
     const trackNote = interfSpikeL.length && interfSpikeR.length ? 'both tracks'
                     : interfSpikeL.length ? 'Left track' : interfSpikeR.length ? 'Right track' : 'the recording';
     if (!humDet && !interfDet) {
-      const possHum = a && a.hum && a.hum.possible;
-      q6 = possHum
-        ? `Possible ${possHum.freq}Hz mains hum present. Low frequency, inaudible impact on training data.`
-        : 'No hum, buzz or tonal interference detected.';
+      q6 = 'No hum, buzz or tonal interference detected.';
     } else if (humDet && !interfDet) {
       q6 = `Low level ${a.hum.freq || 60}Hz hum present in the session.`;
     } else if (!humDet && interfDet && allUltrasonic) {
-      q6 = `Faint ultrasonic tone present on ${trackNote} at approximately ${freqKhz} kHz. Inaudible, likely electronic interference from the recording interface or USB power supply.`;
+      q6 = `Faint ultrasonic tone present on ${trackNote} at approximately ${freqFmt}. Inaudible, likely electronic interference from the recording interface or USB power supply.`;
     } else if (!humDet && interfDet) {
-      q6 = `Tonal interference present on ${trackNote} at approximately ${freqKhz} kHz.`;
+      q6 = `Tonal interference present on ${trackNote} at approximately ${freqFmt}.`;
     } else {
       q6 = `Hum and tonal interference present in the session.`;
     }
