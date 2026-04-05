@@ -2837,7 +2837,7 @@ async function computeEditChecks(buf) {
 
   // ── Edit bleed: envelope-correlation using the same detectBleed detector ──
   // Slice to 120s max — bleed correlation converges quickly, full file would hang browser
-  const BLEED_SECS = 60;
+  const BLEED_SECS = 300;
   const bleedMaxSamples = sr * BLEED_SECS;
   const ch0b = ch0.length > bleedMaxSamples ? ch0.subarray(0, bleedMaxSamples) : ch0;
   const ch1b = ch1.length > bleedMaxSamples ? ch1.subarray(0, bleedMaxSamples) : ch1;
@@ -3232,6 +3232,7 @@ function detectHum(data, sr, nfDb) {
   // ── Per-window hum detection ──────────────────────────────
   // Require the same dominant fundamental in ≥2 windows (persistence gate)
   const winScores50 = [], winScores60 = [];
+  const winPossible50 = [], winPossible60 = [];
 
   function checkHumInWindow(mag, binHz, fundamental) {
     let score = 0, hits = 0;
@@ -3247,7 +3248,7 @@ function detectHum(data, sr, nfDb) {
       const localCtx = [];
       for (let b = peakBin - 25; b <= peakBin + 25; b++) {
         if (b < 0 || b >= mag.length) continue;
-        if (Math.abs(b - peakBin) < 3) continue; // exclude peak vicinity
+        if (Math.abs(b - peakBin) < 3) continue;
         localCtx.push(mag[b]);
       }
       localCtx.sort((a, b) => a - b);
@@ -3262,15 +3263,18 @@ function detectHum(data, sr, nfDb) {
       const isSharp = peak > shoulderAvg * 3;
       if (isSharp && peak > localFloor * 20) { score += peak / localFloor; hits++; }
     }
-    return hits >= 3 ? score : 0;
+    // Return full score (≥3 harmonics) and partial score (exactly 2 harmonics — possible hum)
+    return { score: hits >= 3 ? score : 0, possible: hits === 2 ? score : 0 };
   }
 
   for (const start of silWins) {
     const { mag, binHz } = computeFFT(data.subarray(start, start + winSz), sr);
     const s50 = checkHumInWindow(mag, binHz, 50);
     const s60 = checkHumInWindow(mag, binHz, 60);
-    winScores50.push(s50);
-    winScores60.push(s60);
+    winScores50.push(s50.score);
+    winScores60.push(s60.score);
+    winPossible50.push(s50.possible);
+    winPossible60.push(s60.possible);
   }
 
   // Count windows where each fundamental was detected (score > 0)
@@ -3278,17 +3282,34 @@ function detectHum(data, sr, nfDb) {
   const hits60 = winScores60.filter(s => s > 0).length;
   const minPersist = silWins.length >= 2 ? Math.max(2, Math.floor(silWins.length / 2)) : 1;
 
-  if (hits50 < minPersist && hits60 < minPersist) return { detected: false, freq: null, strength: 0 };
+  if (hits50 < minPersist && hits60 < minPersist) {
+    const possible = checkPossibleHum(winScores50, winScores60, winPossible50, winPossible60, minPersist);
+    return { detected: false, freq: null, strength: 0, possible };
+  }
 
   // Require one to clearly dominate
   const total50 = winScores50.reduce((s, v) => s + v, 0);
   const total60 = winScores60.reduce((s, v) => s + v, 0);
-  if (total50 > 0 && total60 > 0 && Math.max(total50, total60) < Math.min(total50, total60) * 2)
-    return { detected: false, freq: null, strength: 0 };
+  if (total50 > 0 && total60 > 0 && Math.max(total50, total60) < Math.min(total50, total60) * 2) {
+    const possible = checkPossibleHum(winScores50, winScores60, winPossible50, winPossible60, minPersist);
+    return { detected: false, freq: null, strength: 0, possible };
+  }
 
   const freq     = total50 > total60 ? 50 : 60;
   const strength = Math.max(total50, total60) / silWins.length;
   return { detected: true, freq, strength };
+}
+
+// Check for possible hum separately — 2 harmonics, persistent, observation only (not a fail)
+function checkPossibleHum(winScores50, winScores60, winPossible50, winPossible60, minPersist) {
+  // Only triggers if confirmed hum was NOT detected
+  const pHits50 = winPossible50.filter(s => s > 0).length;
+  const pHits60 = winPossible60.filter(s => s > 0).length;
+  if (pHits50 < minPersist && pHits60 < minPersist) return null;
+  const pTotal50 = winPossible50.reduce((s, v) => s + v, 0);
+  const pTotal60 = winPossible60.reduce((s, v) => s + v, 0);
+  const pFreq = pTotal50 > pTotal60 ? 50 : 60;
+  return { freq: pFreq };
 }
 
 // Detect high-frequency tonal interference (8kHz–Nyquist)
@@ -3812,7 +3833,7 @@ async function runSingleArtifactScan(files) {
       })();
 
   let interfHits = 0, interfSpikesByTakeSingle = [];
-  let humHits = 0, humFreqVotesSingle = [];
+  let humHits = 0, humFreqVotesSingle = [], humPossibleVotesSingle = [];
   const bufCacheSingle = new Map();
   for (const f of interfSample) {
     const buf = await decodeFile(f);
@@ -3826,16 +3847,21 @@ async function runSingleArtifactScan(files) {
     if (iv.detected) { interfHits++; interfSpikesByTakeSingle.push(iv.spikes); }
     const hv = detectHum(dataFull, sr, nfDb);
     if (hv.detected) { humHits++; humFreqVotesSingle.push(hv.freq); }
+    else if (hv.possible) { humPossibleVotesSingle.push(hv.possible.freq); }
   }
   const interfThreshSingle = Math.ceil(interfSample.length * 0.75);
   if (interfHits >= interfThreshSingle) {
     interfSpikes = filterConsistentSpikes(interfSpikesByTakeSingle, interfThreshSingle);
     if (interfSpikes.length) { interfDetected = true; interfLeft = true; interfSpikes = { left: interfSpikes, right: [] }; }
   }
+  let humPossible = null;
   if (humHits >= Math.ceil(interfSample.length / 2)) {
     humDetected = true;
     humFreqVotesSingle.sort((a,b) => a-b);
     humFreq = humFreqVotesSingle[Math.floor(humFreqVotesSingle.length / 2)];
+  } else if (humPossibleVotesSingle.length >= Math.ceil(interfSample.length / 2)) {
+    humPossibleVotesSingle.sort((a,b) => a-b);
+    humPossible = { freq: humPossibleVotesSingle[Math.floor(humPossibleVotesSingle.length / 2)] };
   }
 
   for (const f of scanFiles) {
@@ -3867,7 +3893,7 @@ async function runSingleArtifactScan(files) {
 
   return {
     takesAnalyzed: n,
-    hum:         { detected: humDetected, freq: humFreq, clips: humClips },
+    hum:         { detected: humDetected, freq: humFreq, clips: humClips, possible: humPossible },
     interference: { detected: interfDetected, spikes: interfSpikes, left: interfDetected, right: false },
     hpf:         { left: hpfL, right: null, clipsL: hpfLClips, clipsR: [] },
     pops:        { left: pops, right: 0, clipsL: popClips,    clipsR: [] },
@@ -3918,7 +3944,7 @@ async function runArtifactScan(leftFiles, rightFiles) {
 
   let interfLHits = 0, interfRHits = 0;
   let interfLSpikesByTake = [], interfRSpikesByTake = [];
-  let humLHits = 0, humRHits = 0, humFreqVotes = [];
+  let humLHits = 0, humRHits = 0, humFreqVotes = [], humPossibleVotesDual = [];
   const bufCache = new Map(); // cache decoded buffers keyed by filename
   for (const pair of interfSample) {
     const [lBuf, rBuf] = await Promise.all([decodeFile(pair.left), decodeFile(pair.right)]);
@@ -3938,7 +3964,9 @@ async function runArtifactScan(leftFiles, rightFiles) {
     const hL = detectHum(lFull, sr, lNF);
     const hR = detectHum(rFull, sr, rNF);
     if (hL.detected) { humLHits++; humFreqVotes.push(hL.freq); }
+    else if (hL.possible) humPossibleVotesDual.push(hL.possible.freq);
     if (hR.detected) { humRHits++; if (!humFreqVotes.length) humFreqVotes.push(hR.freq); }
+    else if (hR.possible) humPossibleVotesDual.push(hR.possible.freq);
   }
   const interfThreshold = Math.ceil(interfSample.length * 0.75); // 75% of takes must show spike
   const humThreshold    = Math.ceil(interfSample.length * 0.75);
@@ -3955,10 +3983,14 @@ async function runArtifactScan(leftFiles, rightFiles) {
       interfLeft = false; interfRight = false;
     }
   }
+  let humPossible = null;
   if (humLHits >= humThreshold || humRHits >= humThreshold) {
     humDetected = true;
     humFreqVotes.sort((a,b) => a-b);
     humFreq = humFreqVotes[Math.floor(humFreqVotes.length / 2)];
+  } else if (humPossibleVotesDual.length >= Math.ceil(interfSample.length / 2)) {
+    humPossibleVotesDual.sort((a,b) => a-b);
+    humPossible = { freq: humPossibleVotesDual[Math.floor(humPossibleVotesDual.length / 2)] };
   }
 
   for (const pair of scanTakes) {
@@ -4039,8 +4071,7 @@ async function runArtifactScan(leftFiles, rightFiles) {
     bleedHfCorr: medHf,
     bleedLfCorr: medLf,
     bleedClips,
-    hum:         { detected: humDetected, freq: humFreq, clips: humClips },
-    interference: { detected: interfDetected, spikes: interfSpikes, left: interfLeft, right: interfRight },
+    hum:         { detected: humDetected, freq: humFreq, clips: humClips, possible: humPossible },
     hpf:         { left: hpfL, right: hpfR, clipsL: hpfClipsL, clipsR: hpfClipsR },
     pops:        { left: popsL, right: popsR, clipsL: popClipsL,    clipsR: popClipsR },
     clicks:      { left: clicksL, right: clicksR, clipsL: clickClipsL, clipsR: clickClipsR },
@@ -4447,7 +4478,13 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
 
   let humDesc = '';
   if (!a.hum.detected && !interfDet) {
-    humDesc = 'No interference detected';
+    // Check for possible hum observation (2 harmonics — informational only)
+    const possibleHum = a.hum.possible;
+    if (possibleHum) {
+      humDesc = `Possible ${possibleHum.freq}Hz mains hum observed (2 harmonics detected) — low-frequency, inaudible impact on training data. Observation only.`;
+    } else {
+      humDesc = 'No interference detected';
+    }
   } else {
     const parts = [];
     if (a.hum.detected && a.hum.freq) parts.push(`${a.hum.freq}Hz hum · stop and report · flag in Labelbox`);
@@ -5090,7 +5127,10 @@ function buildQCQuestionnaire() {
     const trackNote = interfSpikeL.length && interfSpikeR.length ? 'both tracks'
                     : interfSpikeL.length ? 'Left track' : interfSpikeR.length ? 'Right track' : 'the recording';
     if (!humDet && !interfDet) {
-      q6 = 'No hum, buzz or tonal interference detected.';
+      const possHum = a && a.hum && a.hum.possible;
+      q6 = possHum
+        ? `Possible ${possHum.freq}Hz mains hum present. Low frequency, inaudible impact on training data.`
+        : 'No hum, buzz or tonal interference detected.';
     } else if (humDet && !interfDet) {
       q6 = `Low level ${a.hum.freq || 60}Hz hum present in the session.`;
     } else if (!humDet && interfDet && allUltrasonic) {
