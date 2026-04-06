@@ -4515,7 +4515,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const clickLevel = clickScore === 1 ? 'pass' : clickScore <= 3 ? 'warn' : 'fail';
   const clickDesc  = clickTotal === 0 ? 'No events detected'
     : clickScore <= 3
-      ? `~${clickTotal} event${clickTotal>1?'s':''} detected · fix during edit with RX`
+      ? `~${clickTotal} event${clickTotal>1?'s':''} detected · review by ear · cover with room tone if outside speech`
       : `~${clickTotal} event${clickTotal>1?'s':''} detected · stop and report if distracting · flag in Labelbox`;
   rows.push(aRow('Mouth Clicks', qaChip(clickScore), clickDesc, clickLevel,
     [...(a.clicks.clipsL||[]), ...(a.clicks.clipsR||[])], true));
