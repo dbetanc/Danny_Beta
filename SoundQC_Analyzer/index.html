@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.6.1
+  SOBA — Audio QA & QC Checker v3.6.2
   Created by: Danny Beta
   Date: April 2026
 
@@ -54,6 +54,9 @@
   --blue-dim:  rgba(77,166,255,0.12);
   --bar-track: rgba(255,255,255,0.18);
   --bar-border: rgba(255,255,255,0.5);
+  --qa-clean-border: #1dff8a; --qa-clean-bg: rgba(29,255,138,0.12); --qa-clean-text: #1dff8a;
+  --qa-minor-border: #FFD600; --qa-minor-bg: rgba(255,214,0,0.13);  --qa-minor-text: #FFD600;
+  --qa-serious-border: #ff3d57; --qa-serious-bg: rgba(255,61,87,0.13); --qa-serious-text: #ff3d57;
 }
 
 /* ── LIGHT THEME ──────────────────────────────────── */
@@ -79,6 +82,9 @@
   --blue-dim:  rgba(14,95,208,0.1);
   --bar-track: rgba(0,0,0,0.12);
   --bar-border: rgba(0,0,0,0.28);
+  --qa-clean-border: #1A7A4A; --qa-clean-bg: #D6F0E2;              --qa-clean-text: #1A7A4A;
+  --qa-minor-border: #B8970A; --qa-minor-bg: #FFD600;              --qa-minor-text: #2C2C2A;
+  --qa-serious-border: #C0392B; --qa-serious-bg: #FAD7D3;          --qa-serious-text: #C0392B;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -555,7 +561,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.6.1</div>
+            <div class="version-badge">v3.6.2</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -3358,11 +3364,10 @@ function detectInterference(data, sr, nfDb, winSecs = 2) {
   const excl       = Math.round(30  / binHz);
   const maxBin     = N / 2;
   const MERGE_HZ   = 500;
-  // Scan from 200 Hz — below this the broadband room tone slope causes
+  // Scan from 300 Hz — below this the broadband room tone slope causes
   // false positives (room resonances look like sharp spikes against the
-  // rolling LF floor). Sub-200 Hz tones are detectHum's domain, which
-  // uses harmonic structure to discriminate electrical hum from room tone.
-  const loScan = Math.round(200 / binHz);
+  // rolling LF floor). Sub-300 Hz tones are detectHum's domain.
+  const loScan = Math.round(300 / binHz);
   const hiScan = Math.round((sr / 2 - 200) / binHz);
 
   // Per-window spike lists — index matches silWins index
@@ -4008,10 +4013,10 @@ async function runArtifactScan(leftFiles, rightFiles) {
     if (hR.detected) { humRHits++; humRFreqVotes.push(hR.freq); }
   }
 
-  const interfThreshL = Math.max(1, Math.ceil(leftSample.length  * 0.75));
-  const interfThreshR = Math.max(1, Math.ceil(rightSample.length * 0.75));
-  const humThreshL    = Math.max(1, Math.ceil(leftSample.length  * 0.75));
-  const humThreshR    = Math.max(1, Math.ceil(rightSample.length * 0.75));
+  const interfThreshL = Math.max(1, Math.ceil(leftSample.length  / 2));
+  const interfThreshR = Math.max(1, Math.ceil(rightSample.length / 2));
+  const humThreshL    = Math.max(1, Math.ceil(leftSample.length  / 2));
+  const humThreshR    = Math.max(1, Math.ceil(rightSample.length / 2));
 
   interfLeft  = leftSample.length  > 0 && interfLHits >= interfThreshL;
   interfRight = rightSample.length > 0 && interfRHits >= interfThreshR;
@@ -4272,23 +4277,14 @@ function scoreSpan(score) {
   return `<span style="font-family:'Share Tech Mono',monospace;font-size:12px;margin-left:4px;vertical-align:middle;color:${textCol};font-weight:700">${score}/5</span>`;
 }
 
-// QA 3-state pill: Clean / Minor / Serious — theme-aware
+// QA 3-state pill: Clean / Minor / Serious — uses CSS variables so theme toggle works without re-render
 function qaChip(score) {
   const base = `display:inline-block;padding:3px 10px;border-radius:4px;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.4px;border:1.5px solid`;
-  const dark = document.documentElement.getAttribute('data-theme') !== 'light';
-  if (score <= 1) {
-    return dark
-      ? `<span style="${base} #1dff8a;background:rgba(29,255,138,0.12);color:#1dff8a">Clean</span>`
-      : `<span style="${base} #1A7A4A;background:#D6F0E2;color:#1A7A4A">Clean</span>`;
-  }
-  if (score <= 3) {
-    return dark
-      ? `<span style="${base} #FFD600;background:rgba(255,214,0,0.13);color:#FFD600">Minor</span>`
-      : `<span style="${base} #B8970A;background:#FFD600;color:#2C2C2A">Minor</span>`;
-  }
-  return dark
-    ? `<span style="${base} #ff3d57;background:rgba(255,61,87,0.13);color:#ff3d57">Serious</span>`
-    : `<span style="${base} #C0392B;background:#FAD7D3;color:#C0392B">Serious</span>`;
+  if (score <= 1)
+    return `<span style="${base} var(--qa-clean-border);background:var(--qa-clean-bg);color:var(--qa-clean-text)">Clean</span>`;
+  if (score <= 3)
+    return `<span style="${base} var(--qa-minor-border);background:var(--qa-minor-bg);color:var(--qa-minor-text)">Minor</span>`;
+  return `<span style="${base} var(--qa-serious-border);background:var(--qa-serious-bg);color:var(--qa-serious-text)">Serious</span>`;
 }
 
 function renderQualityCard(rawLA, rawRA, artifactData) {
@@ -4945,6 +4941,33 @@ function copyQField(btn) {
   setTimeout(() => { btn.textContent = orig; btn.style.background=''; btn.style.color=''; }, 900);
 }
 
+function copyAllQFields(btn) {
+  const page = document.getElementById('qcQuestionnairePage');
+  const copyBtns = page.querySelectorAll('button[data-val]');
+  const lines = [];
+  copyBtns.forEach(b => {
+    const v   = b.getAttribute('data-val');
+    const n   = b.getAttribute('data-num');
+    const s   = b.getAttribute('data-score'); // 1–5 display score, present on Q5+
+    if (v && v.trim()) {
+      const prefix = n ? `${n}. ` : '';
+      const score  = s ? `Score: ${s}/5 | ` : '';
+      lines.push(`${prefix}${score}${v.trim()}`);
+    }
+  });
+  const text = lines.join('\n');
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+  const orig = btn.textContent;
+  btn.textContent = 'All Copied!';
+  btn.style.background = 'var(--green)'; btn.style.color = '#000';
+  btn.style.borderColor = 'var(--green)';
+  setTimeout(() => { btn.textContent = orig; btn.style.background=''; btn.style.color=''; btn.style.borderColor=''; }, 1200);
+}
+
 function buildQCQuestionnaire() {
   const e  = _eA,  m  = _mA,  a  = _artifactData;
   const ec = e && e.editChecks;
@@ -4978,7 +5001,7 @@ function buildQCQuestionnaire() {
       <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">${label}</div>
       <div style="font-family:'Share Tech Mono',monospace;font-size:${isScore?'18px':'14px'};font-weight:700;color:${scoreColor};min-width:60px;text-align:right">${scoreDisp || '<span style="color:var(--text3);font-size:12px">—</span>'}</div>
       ${refBadge}
-      <button onclick="copyQField(this);return false;" data-val="${hasVal ? copyVal.replace(/"/g,'&quot;') : ''}" style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s" ${!hasVal?'disabled':''}>${hasVal ? 'Copy' : '—'}</button>
+      <button onclick="copyQField(this);return false;" data-num="${num}" data-val="${hasVal ? copyVal.replace(/"/g,'&quot;') : ''}" ${refScore != null && refScore !== na ? `data-score="${6 - parseInt(refScore)}"` : ''} style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s" ${!hasVal?'disabled':''}>${hasVal ? 'Copy' : '—'}</button>
     </div>`;
   }
 
@@ -5082,15 +5105,19 @@ function buildQCQuestionnaire() {
   }
 
   // 5. Headphone Bleed
-  let q5 = na;
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   if (bleedScore !== na) {
     const bt = (ec && ec.bleedType) || (a && a.bleedType) || 'clean';
     const typeNote = bt === 'headphone' ? 'headphone bleed' : bt === 'wall' ? 'low frequency wall transfer' : bt === 'combined' ? 'headphone and wall bleed' : 'bleed';
-    q5 = bleedScore <= 1 ? 'No headphone bleed.'
-       : bleedScore === 2 ? `Trace ${typeNote} present. Negligible impact on audio quality.`
-       : bleedScore === 3 ? `Mild ${typeNote} present.`
-       : bleedScore === 4 ? `Moderate ${typeNote} present across several takes.`
-       : `Significant ${typeNote} present throughout the session.`;
+    q5 = bleedScore <= 1
+      ? pick(['No headphone bleed detected.', 'Both channels are free of headphone bleed.', 'No bleed between channels observed.', 'Headphones are well isolated throughout the session.'])
+      : bleedScore === 2
+      ? pick([`Trace ${typeNote} present in the recording.`, `A faint trace of ${typeNote} is present.`, `Very slight ${typeNote} detectable in places.`])
+      : bleedScore === 3
+      ? pick([`Mild ${typeNote} present.`, `Some ${typeNote} is present in the session.`, `${typeNote.charAt(0).toUpperCase()+typeNote.slice(1)} is present at a mild level.`])
+      : bleedScore === 4
+      ? pick([`Moderate ${typeNote} across several takes.`, `${typeNote.charAt(0).toUpperCase()+typeNote.slice(1)} is noticeable in multiple takes.`, `Clear ${typeNote} present across the session.`])
+      : pick([`Significant ${typeNote} throughout the session.`, `Heavy ${typeNote} present throughout.`, `${typeNote.charAt(0).toUpperCase()+typeNote.slice(1)} is present at a high level across the recording.`]);
   }
 
   // 6. HVAC / Hum / Interference
@@ -5101,66 +5128,190 @@ function buildQCQuestionnaire() {
     const allSpikes = interfDet ? (Array.isArray(a.interference.spikes) ? a.interference.spikes : [...(a.interference.spikes?.left||[]), ...(a.interference.spikes?.right||[])]) : [];
     const interfSpikeL = interfDet ? (Array.isArray(a.interference.spikes) ? [] : (a.interference.spikes?.left||[])) : [];
     const interfSpikeR = interfDet ? (Array.isArray(a.interference.spikes) ? [] : (a.interference.spikes?.right||[])) : [];
+    // Compute severity scores locally for sentence phrasing
+    const humStr6   = a.hum && a.hum.detected ? (a.hum.strength || 0) : 0;
+    const maxRatio6 = allSpikes.length ? Math.max(...allSpikes.map(s => s.ratio)) : 0;
+    const hS6 = !humDet ? 1 : humStr6 < 50 ? 2 : humStr6 < 150 ? 3 : humStr6 < 300 ? 4 : 5;
+    const audibleSpikes = allSpikes.some(s => s.freq < 18000);
+    const iS6 = !interfDet ? 1 : !audibleSpikes ? 2 : maxRatio6 < 16 ? 2 : maxRatio6 < 20 ? 3 : maxRatio6 < 28 ? 4 : 5;
     const allUltrasonic = allSpikes.length > 0 && allSpikes.every(s => s.freq >= 18000);
     const maxFreq = allSpikes.length ? Math.max(...allSpikes.map(s => s.freq)) : 0;
     const freqFmt = maxFreq < 1000 ? `${Math.round(maxFreq)}Hz` : `${(maxFreq/1000).toFixed(1)}kHz`;
     const trackNote = interfSpikeL.length && interfSpikeR.length ? 'both tracks'
-                    : interfSpikeL.length ? 'Left track' : interfSpikeR.length ? 'Right track' : 'the recording';
+                    : interfSpikeL.length ? 'the Left track' : interfSpikeR.length ? 'the Right track' : 'the recording';
     if (!humDet && !interfDet) {
-      q6 = 'No hum, buzz or tonal interference detected.';
+      q6 = pick([
+        'No hum, buzz or tonal interference detected.',
+        'The recording is free of electrical hum or tonal interference.',
+        'No tonal interference or background hum detected in this session.',
+        'Both channels are clean with no detectable hum or buzz.'
+      ]);
     } else if (humDet && !interfDet) {
-      q6 = `Low level ${a.hum.freq || 60}Hz hum present in the session.`;
+      const humSev = hS6 <= 2 ? 'faint' : hS6 === 3 ? 'moderate' : 'strong';
+      q6 = pick([
+        `A ${humSev} ${a.hum.freq || 60}Hz hum is present in the session.`,
+        `${a.hum.freq || 60}Hz hum is present at a ${humSev} level throughout the recording.`,
+        `The session contains a ${humSev} ${a.hum.freq || 60}Hz electrical hum.`
+      ]);
     } else if (!humDet && interfDet && allUltrasonic) {
-      q6 = `Faint ultrasonic tone present on ${trackNote} at approximately ${freqFmt}. Inaudible, likely electronic interference from the recording interface or USB power supply.`;
+      q6 = pick([
+        `A faint ultrasonic tone is present on ${trackNote} at around ${freqFmt}. This frequency is above the range of human hearing and is consistent with electronic interference from the recording chain.`,
+        `An ultrasonic tone at approximately ${freqFmt} is present on ${trackNote}. It is inaudible and likely originates from the recording interface or USB power supply.`,
+        `${trackNote.charAt(0).toUpperCase()+trackNote.slice(1)} shows a faint tone near ${freqFmt}. At this frequency the signal is outside the audible range and typical of digital hardware interference.`
+      ]);
     } else if (!humDet && interfDet) {
-      q6 = `Tonal interference present on ${trackNote} at approximately ${freqFmt}.`;
+      const severity = iS6 <= 2 ? 'faint' : iS6 === 3 ? 'moderate' : 'strong';
+      q6 = pick([
+        `A ${severity} tonal interference is present on ${trackNote} at approximately ${freqFmt}.`,
+        `${trackNote.charAt(0).toUpperCase()+trackNote.slice(1)} contains a ${severity} narrowband tone at approximately ${freqFmt}.`,
+        `A ${severity} persistent tone at around ${freqFmt} is present on ${trackNote}.`
+      ]);
     } else {
-      q6 = `Hum and tonal interference present in the session.`;
+      const severity = iS6 <= 2 ? 'faint' : iS6 === 3 ? 'moderate' : 'strong';
+      q6 = pick([
+        `${severity.charAt(0).toUpperCase()+severity.slice(1)} hum and tonal interference present in the session.`,
+        `Both hum and ${severity} tonal interference are present in the recording.`,
+        `The session contains background hum alongside ${severity} tonal interference.`
+      ]);
     }
   }
 
   // 7. Physical Noises
   let q7 = na;
   if (noisesScore !== na) {
-    q7 = noisesScore <= 1 ? 'No noticeable page turns, water, clothing or other physical noises detected.'
-       : noisesScore === 2 ? 'Minor physical noise present in isolated takes.'
-       : noisesScore === 3 ? 'A few physical noise events present. Possible page turns, clothing movement or light impacts.'
-       : noisesScore === 4 ? 'Physical noise events present across several takes.'
-       : 'Frequent physical noise events present throughout the session.';
+    q7 = noisesScore <= 1
+      ? pick([
+          'No noticeable page turns, water, clothing or other physical noises detected.',
+          'The recording environment is clean with no physical noise events.',
+          'No external physical noises such as clothing, impacts or page turns were detected.',
+          'Both talents recorded in a quiet environment with no physical noise interference.'
+        ])
+      : noisesScore === 2
+      ? pick([
+          'Minor physical noise present in isolated takes.',
+          'Occasional light physical noise present in a few takes.',
+          'A small number of takes contain faint physical noise events.'
+        ])
+      : noisesScore === 3
+      ? pick([
+          'Several takes contain physical noise events such as possible page turns or clothing movement.',
+          'Physical noise events are present across a number of takes.',
+          'Some physical noises are present in the session, possibly from clothing or light impacts.'
+        ])
+      : noisesScore === 4
+      ? pick([
+          'Physical noise events are present across several takes.',
+          'Noticeable physical noise activity across multiple takes.',
+          'A recurring pattern of physical noise events is present in the session.'
+        ])
+      : pick([
+          'Frequent physical noise events present throughout the session.',
+          'Physical noise is consistently present across the recording.',
+          'The session contains a high number of physical noise events throughout.'
+        ]);
   }
 
   // 8. Mic Pops
   let q8 = na;
   if (popsScore !== na) {
-    q8 = popsScore <= 1 ? 'No mic pops detected.'
-       : popsScore === 2 ? 'Minor mic pops present in isolated takes.'
-       : popsScore === 3 ? 'A few mic pops present across multiple takes.'
-       : popsScore === 4 ? 'Mic pops present throughout the session.'
-       : 'Significant mic pop activity throughout the session.';
+    q8 = popsScore <= 1
+      ? pick([
+          'No mic pops detected.',
+          'Both talents are free of mic pops throughout the session.',
+          'No diaphragm displacement events detected in any take.',
+          'The recording is clean with no mic pop activity.'
+        ])
+      : popsScore === 2
+      ? pick([
+          'Minor mic pop activity present in isolated takes.',
+          'A small number of possible mic pops present in the session.',
+          'Occasional mic pop candidates detected in a few takes.'
+        ])
+      : popsScore === 3
+      ? pick([
+          'Mic pop activity present across multiple takes.',
+          'Several takes contain mic pop events.',
+          'A recurring pattern of mic pops is present across the session.'
+        ])
+      : popsScore === 4
+      ? pick([
+          'Mic pops present throughout the session.',
+          'Frequent mic pop activity across the recording.',
+          'Mic pop events are consistently present across takes.'
+        ])
+      : pick([
+          'High mic pop activity throughout the session.',
+          'Significant mic pop events present across all takes.',
+          'The session contains a large number of mic pop events throughout.'
+        ]);
   }
 
   // 9. Mouth Clicks
   let q9 = na;
   if (clicksScore !== na) {
-    q9 = clicksScore <= 1 ? 'No mouth clicks detected.'
-       : clicksScore === 2 ? 'Minor mouth clicks present in isolated takes.'
-       : clicksScore === 3 ? 'A few mouth clicks present across multiple takes.'
-       : clicksScore === 4 ? 'Mouth clicks present throughout the session.'
-       : 'Significant mouth click activity throughout the session.';
+    q9 = clicksScore <= 1
+      ? pick([
+          'No mouth clicks detected.',
+          'Both talents are free of mouth click activity.',
+          'The recording is clean with no mouth click events.',
+          'No oral noise candidates detected in the session.'
+        ])
+      : clicksScore === 2
+      ? pick([
+          'Minor mouth click activity present in a few takes.',
+          'Occasional mouth clicks present in isolated takes.',
+          'A small number of mouth click events detected across the session.'
+        ])
+      : clicksScore === 3
+      ? pick([
+          'Mouth clicks present in multiple takes.',
+          'Several takes contain mouth click events.',
+          'A pattern of mouth click activity is present across the session.'
+        ])
+      : clicksScore === 4
+      ? pick([
+          'Mouth click activity present throughout the session.',
+          'Frequent mouth clicks across multiple takes.',
+          'Mouth click events are consistently present in the recording.'
+        ])
+      : pick([
+          'High mouth click activity throughout the session.',
+          'Significant mouth click events present across all takes.',
+          'The session contains a high volume of mouth click activity.'
+        ]);
   }
 
   // 10. Overlaps
   let q10 = na;
   if (overlapCount !== na) {
     const ov = parseInt(overlapCount);
-    q10 = ov === 0 ? 'No overlapping speech detected. No room tone insertions needed.'
-        : ov <= 3  ? 'Minor overlapping speech present. A few room tone insertions may be needed.'
-        : ov <= 10 ? 'Several overlapping transitions present. Room tone insertions required at multiple points.'
-        : 'Significant overlapping speech present. Extensive room tone insertion work expected.';
+    q10 = ov === 0
+      ? pick([
+          'No overlapping speech detected. No room tone insertions needed.',
+          'All speaker transitions are clean with no simultaneous speech.',
+          'There are no overlaps in the session. The edit requires no room tone insertions.',
+          'Speaker turns are well spaced throughout with no overlapping passages.'
+        ])
+      : ov <= 3
+      ? pick([
+          'A small number of overlapping transitions are present. Minimal room tone insertion expected.',
+          'A few overlapping speech moments detected. A small number of room tone inserts may be needed.',
+          'Minor overlapping speech in a few transitions. Room tone insertion needed in isolated spots.'
+        ])
+      : ov <= 10
+      ? pick([
+          'Several overlapping transitions present. Room tone insertions needed at multiple points.',
+          'Multiple overlap points detected throughout the session. A moderate amount of room tone work expected.',
+          'Overlapping speech found at several points. Room tone insertions will be needed across the edit.'
+        ])
+      : pick([
+          'A high number of overlapping transitions present. Extensive room tone insertion work expected.',
+          'Overlapping speech is frequent throughout the session. A significant amount of room tone insertion is anticipated.',
+          'The session contains many overlap points. Room tone insertion work will be substantial.'
+        ]);
   }
 
   // Q11 - Consistency: waveform, mic distance, noise floor
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   let q11 = na;
   if (e || _rawLA) {
     const nfL = _rawLA ? _rawLA.noiseFloorDb : null;
@@ -5241,10 +5392,13 @@ function buildQCQuestionnaire() {
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;padding:10px 16px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px">
       <div style="display:flex;align-items:center;gap:12px">
-        <button onclick="hideQCQuestionnaire()" style="font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;padding:5px 12px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;letter-spacing:.5px;transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">← Go Back</button>
+        <button onclick="hideQCQuestionnaire()" style="font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;padding:5px 12px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;letter-spacing:.5px;transition:border-color .15s,color .15s" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">← Go Back</button>
         <div style="font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:var(--amber);text-transform:uppercase;letter-spacing:1px">QC Report</div>
       </div>
-      <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">${sessionName}</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button onclick="copyAllQFields(this)" style="font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;padding:5px 14px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;letter-spacing:.5px;transition:background .15s,color .15s,border-color .15s" onmouseover="this.style.background='var(--amber)';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='var(--amber)'">Copy All</button>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">${sessionName}</div>
+      </div>
     </div>
 
     <!-- Questions card -->
