@@ -4946,16 +4946,18 @@ function copyAllQFields(btn) {
   const copyBtns = page.querySelectorAll('button[data-val]');
   const lines = [];
   copyBtns.forEach(b => {
-    const v   = b.getAttribute('data-val');
-    const n   = b.getAttribute('data-num');
-    const s   = b.getAttribute('data-score'); // 1–5 display score, present on Q5+
+    const v = b.getAttribute('data-val');
+    const n = b.getAttribute('data-num');
+    const l = b.getAttribute('data-label') || '';
+    const s = b.getAttribute('data-score');
     if (v && v.trim()) {
       const prefix = n ? `${n}. ` : '';
-      const score  = s ? `Score: ${s}/5 | ` : '';
-      lines.push(`${prefix}${score}${v.trim()}`);
+      const header = l ? `${prefix}${l.toUpperCase()}: ` : prefix;
+      const scoreLine = s ? `${s}/5` : '';
+      lines.push(`${header}${v.trim()}${scoreLine ? '\n' + scoreLine : ''}`);
     }
   });
-  const text = lines.join('\n');
+  const text = lines.join('\n\n');
   const ta = document.createElement('textarea');
   ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
   document.body.appendChild(ta); ta.select();
@@ -4981,7 +4983,8 @@ function buildQCQuestionnaire() {
     const valStr = value != null && value !== '' ? String(value) : '';
     const scoreRaw  = isScore && valStr ? parseInt(valStr) : null;
     const scoreDisp = isScore && scoreRaw ? `${6 - scoreRaw} / 5` : valStr;
-    const copyVal   = copyOverride || (isScore && scoreRaw ? `${label}: ${6 - scoreRaw}/5` : `${label}: ${valStr}`);
+    // copyVal = just the answer (no label prefix) — label added by copyAllQFields
+    const copyVal   = copyOverride || (isScore && scoreRaw ? `${6 - scoreRaw}/5` : valStr);
     const scoreColor = isScore && scoreRaw ? (
       (6 - scoreRaw) >= 4 ? 'var(--green)' :
       (6 - scoreRaw) >= 3 ? 'var(--amber)' : 'var(--red)'
@@ -5001,7 +5004,7 @@ function buildQCQuestionnaire() {
       <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">${label}</div>
       <div style="font-family:'Share Tech Mono',monospace;font-size:${isScore?'18px':'14px'};font-weight:700;color:${scoreColor};min-width:60px;text-align:right">${scoreDisp || '<span style="color:var(--text3);font-size:12px">—</span>'}</div>
       ${refBadge}
-      <button onclick="copyQField(this);return false;" data-num="${num}" data-val="${hasVal ? copyVal.replace(/"/g,'&quot;') : ''}" ${refScore != null && refScore !== na ? `data-score="${6 - parseInt(refScore)}"` : ''} style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s" ${!hasVal?'disabled':''}>${hasVal ? 'Copy' : '—'}</button>
+      <button onclick="copyQField(this);return false;" data-num="${num}" data-label="${label.replace(/"/g,'&quot;')}" data-val="${hasVal ? copyVal.replace(/"/g,'&quot;') : ''}" ${refScore != null && refScore !== na ? `data-score="${6 - parseInt(refScore)}"` : ''} style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s" ${!hasVal?'disabled':''}>${hasVal ? 'Copy' : '—'}</button>
     </div>`;
   }
 
