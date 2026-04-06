@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.6.2
+  SOBA — Audio QA & QC Checker v3.6.3
   Created by: Danny Beta
   Date: April 2026
 
@@ -561,7 +561,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.6.2</div>
+            <div class="version-badge">v3.6.3</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -1576,12 +1576,10 @@ async function runAnalysis() {
         const eWinRms = s => { let sq = 0; for (let i = 0; i < s.length; i++) sq += s[i]*s[i]; return Math.sqrt(sq/s.length); };
         const SPEECH_THRESH_LIN = Math.pow(10, -40 / 20);
         if (eWinRms(eSlice0) < SPEECH_THRESH_LIN && eWinRms(eSlice1) < SPEECH_THRESH_LIN) {
-          // Clean silence window — use it directly
           const eNf0 = analyzeChannel(eSlice0, eBuf.sampleRate).noiseFloorDb;
           const eNf1 = analyzeChannel(eSlice1, eBuf.sampleRate).noiseFloorDb;
           eA.noiseFloorDb = (eNf0 + eNf1) / 2;
         } else {
-          // Speech detected early — fall back to minimum of full-file per-channel readings
           eA.noiseFloorDb = Math.min(eA.ch0.noiseFloorDb, eA.ch1.noiseFloorDb);
         }
       }
@@ -1603,6 +1601,13 @@ async function runAnalysis() {
         eA.lufsL = computeIntegratedLUFS(chL);
         await new Promise(r => setTimeout(r, 0));
         eA.lufsR = computeIntegratedLUFS(chR);
+        // Acoustic delta: per-channel LUFS difference — gating makes this
+        // immune to unequal speech distribution between channels.
+        if (eA.lufsL != null && eA.lufsR != null && isFinite(eA.lufsL) && isFinite(eA.lufsR)) {
+          eA.ch0.rmsDb = eA.lufsL;
+          eA.ch1.rmsDb = eA.lufsR;
+          eA.lrDelta   = Math.abs(eA.lufsL - eA.lufsR);
+        }
       }
       await new Promise(r => setTimeout(r, 0));
       const ss = computeSignalSilence(eBuf);
@@ -1667,6 +1672,12 @@ async function runAnalysis() {
         mA.lufsL = computeIntegratedLUFS(chL);
         await new Promise(r => setTimeout(r, 0));
         mA.lufsR = computeIntegratedLUFS(chR);
+        // Acoustic delta: per-channel LUFS difference — same rationale as Edit.
+        if (mA.lufsL != null && mA.lufsR != null && isFinite(mA.lufsL) && isFinite(mA.lufsR)) {
+          mA.ch0.rmsDb = mA.lufsL;
+          mA.ch1.rmsDb = mA.lufsR;
+          mA.lrDelta   = Math.abs(mA.lufsL - mA.lufsR);
+        }
       }
       await new Promise(r => setTimeout(r, 0));
       const mss = computeSignalSilence(mBuf);
