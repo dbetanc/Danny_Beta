@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.6.4
+  SOBA — Audio QA & QC Checker v3.6.5
   Created by: Danny Beta
   Date: April 2026
 
@@ -561,7 +561,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.6.4</div>
+            <div class="version-badge">v3.6.5</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -1692,6 +1692,29 @@ async function runAnalysis() {
       const editSr   = eBuf.sampleRate;
       const editCh0  = eBuf.getChannelData(0).subarray(0, Math.min(eBuf.getChannelData(0).length, editSr * 60));
       eA.hpf = detectHPF(editCh0, editSr, eA.noiseFloorDb);
+      // ── Edit interference scan — 5-min slice, both channels ──
+      // Detects hardware interference that survived the edit (e.g. editor covered
+      // silence gaps with room tone, removing RAW interference from those sections).
+      if (eBuf.numberOfChannels >= 2) {
+        await new Promise(r => setTimeout(r, 0));
+        const eInterfL  = eBuf.getChannelData(0);
+        const eInterfR  = eBuf.getChannelData(1);
+        const eInterfNfL = eA.ch0.noiseFloorDb != null ? eA.ch0.noiseFloorDb : eA.noiseFloorDb;
+        const eInterfNfR = eA.ch1.noiseFloorDb != null ? eA.ch1.noiseFloorDb : eA.noiseFloorDb;
+        const eiL = detectInterference(eInterfL, editSr, eInterfNfL);
+        const eiR = detectInterference(eInterfR, editSr, eInterfNfR);
+        const ehL = detectHum(eInterfL, editSr, eInterfNfL);
+        const ehR = detectHum(eInterfR, editSr, eInterfNfR);
+        const editSpikesL = eiL.detected ? eiL.spikes : [];
+        const editSpikesR = eiR.detected ? eiR.spikes : [];
+        eA.editInterference = {
+          detected: eiL.detected || eiR.detected,
+          spikes: { left: editSpikesL, right: editSpikesR }
+        };
+        eA.editHum = (ehL.detected || ehR.detected)
+          ? { detected: true, freq: ehL.detected ? ehL.freq : ehR.freq, strength: Math.max(ehL.strength||0, ehR.strength||0) }
+          : { detected: false };
+      }
     }
     if (mFile) {
       setProgress('Decoding Mixed WAV…', 80);
@@ -2485,7 +2508,7 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${crestCol}">${crestLabel}</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:14px;font-weight:700;color:${crestCol};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${crestLabel}</div>
         </div>
       </div>
       <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:4px">
@@ -2626,6 +2649,30 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     </div>`;
   }
 
+  // Edit interference alert — only shown when Serious (audible spike ≥16dB)
+  let editInterfRow = '';
+  if (editA && editA.editInterference && editA.editInterference.detected) {
+    const allESpikes = [...(editA.editInterference.spikes?.left||[]), ...(editA.editInterference.spikes?.right||[])];
+    const audibleESpikes = allESpikes.filter(s => s.freq < 18000);
+    const ultraESpikes   = allESpikes.filter(s => s.freq >= 18000);
+    const maxERatio = audibleESpikes.length ? Math.max(...audibleESpikes.map(s => s.ratio)) : 0;
+    const isSeriousE = audibleESpikes.length > 0 && maxERatio >= 16;
+    // Show alert if serious audible spikes — also list any ultrasonic present
+    if (isSeriousE) {
+      const fmtHz = f => f < 1000 ? `${Math.round(f)}Hz` : `${(f/1000).toFixed(1)}kHz`;
+      const audibleDesc   = audibleESpikes.slice(0,3).map(s => fmtHz(s.freq)).join(', ');
+      const ultraDesc     = ultraESpikes.length ? `, ${ultraESpikes.slice(0,2).map(s => fmtHz(s.freq)).join(', ')}` : '';
+      editInterfRow = `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--red)">
+        ⚠ Signal interference in Edit — ${audibleDesc}${ultraDesc} · Check by ear in silence regions
+      </div>`;
+    }
+  }
+  if (editA && editA.editHum && editA.editHum.detected && (editA.editHum.strength||0) >= 150) {
+    editInterfRow += `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--red)">
+      ⚠ ${editA.editHum.freq||50}Hz hum in Edit · Check by ear
+    </div>`;
+  }
+
   return `<div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:0;align-items:flex-start">
     <!-- Speech vs Silence column -->
     <div style="flex:1;min-width:0;padding-right:14px">
@@ -2651,7 +2698,8 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     ${bleedCol}
     ${compressionCol}
   </div>
-  ${editChecks ? buildEditChecksSection(editChecks) : ''}`;
+  ${editChecks ? buildEditChecksSection(editChecks) : ''}
+  ${editInterfRow}`;
 }
 
 function buildStereoRawSection(a, skipSpeech) {
@@ -4629,7 +4677,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   return rows.join('') + footerNote;
 }
 
-function buildRecommendations(rawLA, rawRA, eA, mA) {
+function buildRecommendations(rawLA, rawRA, eA, mA, artifactData) {
   const recs = [];
 
   function rec(level, title, action) {
@@ -4647,31 +4695,59 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
     </div>`);
   }
 
-  // ── RAW Noise Floor (Left + Right combined) ───────────────
+  // ── RAW Noise Floor ───────────────────────────────────────
   const rawArr   = [rawLA, rawRA].filter(Boolean);
   const rawOnly  = rawArr.length > 0 && !eA && !mA;
   const rawNoisy     = rawArr.filter(a => a.noiseFloorDb >= -50);
   const rawWarnNoisy = rawArr.filter(a => a.noiseFloorDb > -57 && a.noiseFloorDb < -50);
 
-  // Hard fails — too noisy
   if (rawNoisy.length === 2)
-    rec('fail', 'RAW — Too Noisy', 'Both tracks exceed −50 dBFS. Request re-recording.');
+    rec('fail', 'RAW — Noise Floor Too High', 'Both tracks exceed −50 dBFS. Do not proceed.');
   else if (rawNoisy.length === 1)
-    rec('fail', (rawNoisy[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — Too Noisy',
-      rawNoisy[0].noiseFloorDb.toFixed(1) + ' dBFS. Request re-recording.');
+    rec('fail', (rawNoisy[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — Noise Floor Too High',
+      rawNoisy[0].noiseFloorDb.toFixed(1) + ' dBFS. Do not proceed.');
 
-  // Warn zones — trending noisy
   if (rawOnly) {
     if (rawWarnNoisy.length === 2)
-      rec('warn', 'RAW — Trending Noisy', 'Both tracks in −50 to −57 dBFS range. Monitor before editing.');
+      rec('warn', 'RAW — Noise Floor Trending Noisy', 'Both tracks in −50 to −57 dBFS range. Monitor during edit.');
     else if (rawWarnNoisy.length === 1)
-      rec('warn', (rawWarnNoisy[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — Trending Noisy',
-        rawWarnNoisy[0].noiseFloorDb.toFixed(1) + ' dBFS. Monitor before editing.');
+      rec('warn', (rawWarnNoisy[0] === rawLA ? 'RAW Left' : 'RAW Right') + ' — Noise Floor Trending Noisy',
+        rawWarnNoisy[0].noiseFloorDb.toFixed(1) + ' dBFS. Monitor during edit.');
+  }
+
+  // ── Hum / Interference — prefer Edit scan, fall back to RAW ─
+  const _recHumSrc    = (eA && eA.editHum)          ? eA.editHum          : (artifactData ? artifactData.hum          : null);
+  const _recInterfSrc = (eA && eA.editInterference) ? eA.editInterference : (artifactData ? artifactData.interference : null);
+  const _recLabel     = (eA && (eA.editHum || eA.editInterference)) ? 'Edit' : 'RAW';
+
+  if (_recHumSrc || _recInterfSrc) {
+    const humDet    = _recHumSrc && _recHumSrc.detected;
+    const interfDet = _recInterfSrc && _recInterfSrc.detected;
+    const allSpikes = interfDet ? (Array.isArray(_recInterfSrc.spikes)
+      ? _recInterfSrc.spikes
+      : [...(_recInterfSrc.spikes?.left||[]), ...(_recInterfSrc.spikes?.right||[])]) : [];
+    const audibleSpikes = allSpikes.filter(s => s.freq < 18000);
+    const maxRatio = audibleSpikes.length ? Math.max(...audibleSpikes.map(s => s.ratio)) : 0;
+    const humStr   = humDet ? (_recHumSrc.strength || 0) : 0;
+    const hS = !humDet ? 1 : humStr < 50 ? 2 : humStr < 150 ? 3 : humStr < 300 ? 4 : 5;
+    const iS = !interfDet ? 1 : !audibleSpikes.length ? 2 : maxRatio < 16 ? 2 : maxRatio < 20 ? 3 : maxRatio < 28 ? 4 : 5;
+
+    if (humDet && hS >= 4)
+      rec('fail', `${_recLabel} — Hum Detected`, `${(_recHumSrc.freq || 60)}Hz hum present. Do not proceed.`);
+    else if (humDet && hS === 3)
+      rec('warn', `${_recLabel} — Hum Detected`, `${(_recHumSrc.freq || 60)}Hz hum present. Check by ear or request reviewer approval before editing.`);
+
+    if (interfDet && audibleSpikes.length) {
+      if (iS >= 4)
+        rec('fail', `${_recLabel} — Signal Interference`, 'Strong interference detected. Do not proceed.');
+      else if (iS === 3)
+        rec('warn', `${_recLabel} — Signal Interference`, 'Interference detected. Check by ear or request reviewer approval before editing.');
+    }
   }
 
   // ── Edit: HPF detection ───────────────────────────────────
   if (eA && eA.hpf && eA.hpf.detected)
-    rec('fail', 'Edit — HPF Detected', 'High-pass filter found on Edit bounce');
+    rec('fail', 'Edit — HPF Detected', 'High-pass filter found on Edit bounce. Do not proceed.');
 
   // ── Edit LUFS: −21 to −24 ─────────────────────────────────
   if (eA && eA.lufs != null) {
@@ -4679,12 +4755,15 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
       rec('warn', 'Edit LUFS Too High',
         eA.lufs.toFixed(1) + ' LUFS · ↓ Reduce clip gain by ' + (eA.lufs - (-21)).toFixed(1) + ' dB.');
     else if (eA.lufs < -24) {
-      const gain = (-24) - eA.lufs;
-      const p95  = rawLA ? rawLA.p95PeakDb : (rawRA ? rawRA.p95PeakDb : null);
-      const peakAfter = p95 != null ? p95 + gain : null;
-      const peakNote  = peakAfter != null && peakAfter > -3 ? ' · ⚠ Check peaks after applying.' : '';
+      const lufsGain  = (-24) - eA.lufs;
+      const rawPeak   = rawLA ? rawLA.peakDb : (rawRA ? rawRA.peakDb : null);
+      const peakRoom  = rawPeak != null ? (-3) - rawPeak : Infinity;
+      const safeGain  = Math.min(lufsGain, peakRoom);
+      const limited   = rawPeak != null && peakRoom < lufsGain;
+      const gainStr   = safeGain.toFixed(1);
+      const limitNote = limited ? ` (peak limited — RAW peak ${rawPeak.toFixed(1)} dBFS)` : '';
       rec('warn', 'Edit LUFS Too Low',
-        eA.lufs.toFixed(1) + ' LUFS · ↑ Raise clip gain by ' + gain.toFixed(1) + ' dB.' + peakNote);
+        eA.lufs.toFixed(1) + ' LUFS · ↑ Raise clip gain by ' + gainStr + ' dB.' + limitNote);
     }
   }
 
@@ -4717,7 +4796,7 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
   // ── Edit checks ──────────────────────────────────────────
   if (eA && eA.editChecks) {
     if (eA.editChecks.panningError)
-      rec('fail', 'Panning Error', 'Both channels contain the same signal — talents not panned L/R. Re-export with Talent 1 hard left, Talent 2 hard right.');
+      rec('fail', 'Panning Error', 'Both channels contain the same signal — talents not panned L/R. Do not proceed.');
     if (eA.editChecks.digitalZeroGaps)
       rec('fail', 'Digital Zero Gaps', `${(eA.editChecks.digitalZeroRatio*100).toFixed(0)}% of silence gaps erased to digital zero. Replace with room tone clips.`);
   }
@@ -4892,7 +4971,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   document.getElementById('alertsWrap').innerHTML = '';
 
   // Recommendations card
-  const recs = buildRecommendations(rawLA, rawRA, eA, mA);
+  const recs = buildRecommendations(rawLA, rawRA, eA, mA, artifactData);
   const recsCard = document.getElementById('recsCard');
   if (recs.length > 0) {
     recsCard.style.display = '';
@@ -5140,14 +5219,18 @@ function buildQCQuestionnaire() {
   if (ec && ec.bleedScore) bleedScore = ec.bleedScore;
   else if (a && a.bleedScore) bleedScore = a.bleedScore;
 
-  // 6. HVAC / Hum / Interference score
+  // 6. HVAC / Hum / Interference score — prefer Edit bounce scan over RAW
   let humScore = na;
-  if (a) {
-    const humStr  = a.hum && a.hum.detected ? a.hum.strength || 0 : 0;
-    const interfDet6 = a.interference && a.interference.detected;
-    const allSpikes6 = interfDet6 ? (Array.isArray(a.interference.spikes) ? a.interference.spikes : [...(a.interference.spikes?.left||[]), ...(a.interference.spikes?.right||[])]) : [];
+  const _humSrc     = (e && e.editInterference) ? e.editInterference : (a && a.interference ? a : null);
+  const _humHumSrc  = (e && e.editHum) ? e.editHum : (a && a.hum ? a.hum : null);
+  if (_humSrc || _humHumSrc) {
+    const _hum     = _humHumSrc || { detected: false };
+    const _interf  = _humSrc   || { detected: false };
+    const humStr  = _hum.detected ? (_hum.strength || 0) : 0;
+    const interfDet6 = _interf.detected;
+    const allSpikes6 = interfDet6 ? (Array.isArray(_interf.spikes) ? _interf.spikes : [...(_interf.spikes?.left||[]), ...(_interf.spikes?.right||[])]) : [];
     const maxRatio6  = allSpikes6.length ? Math.max(...allSpikes6.map(s => s.ratio)) : 0;
-    const hS = !a.hum.detected ? 1 : humStr < 50 ? 2 : humStr < 150 ? 3 : humStr < 300 ? 4 : 5;
+    const hS = !_hum.detected ? 1 : humStr < 50 ? 2 : humStr < 150 ? 3 : humStr < 300 ? 4 : 5;
     const allAudibleQ = allSpikes6.some(s => s.freq < 18000);
     const iS = !interfDet6 ? 1 : !allAudibleQ ? 2 : maxRatio6 < 16 ? 2 : maxRatio6 < 20 ? 3 : maxRatio6 < 28 ? 4 : 5;
     humScore = Math.max(hS, iS);
@@ -5207,32 +5290,33 @@ function buildQCQuestionnaire() {
       : pick([`Significant ${typeNote} throughout the session.`, `Heavy ${typeNote} present throughout.`, `${typeNote.charAt(0).toUpperCase()+typeNote.slice(1)} is present at a high level across the recording.`]);
   }
 
-  // 6. HVAC / Hum / Interference
+  // 6. HVAC / Hum / Interference — prefer Edit bounce scan, fall back to RAW
   let q6 = na;
-  if (a) {
-    const humDet    = a.hum && a.hum.detected;
-    const interfDet = a.interference && a.interference.detected;
-    const allSpikes = interfDet ? (Array.isArray(a.interference.spikes) ? a.interference.spikes : [...(a.interference.spikes?.left||[]), ...(a.interference.spikes?.right||[])]) : [];
-    const interfSpikeL = interfDet ? (Array.isArray(a.interference.spikes) ? [] : (a.interference.spikes?.left||[])) : [];
-    const interfSpikeR = interfDet ? (Array.isArray(a.interference.spikes) ? [] : (a.interference.spikes?.right||[])) : [];
+  if (a || (e && (e.editInterference || e.editHum))) {
+    const _qi   = (e && e.editInterference) ? e.editInterference : (a && a.interference ? a.interference : { detected: false });
+    const _qh   = (e && e.editHum) ? e.editHum : (a && a.hum ? a.hum : { detected: false });
+    const humDet    = _qh.detected;
+    const interfDet = _qi.detected;
+    const allSpikes = interfDet ? (Array.isArray(_qi.spikes) ? _qi.spikes : [...(_qi.spikes?.left||[]), ...(_qi.spikes?.right||[])]) : [];
+    const interfSpikeL = interfDet ? (_qi.spikes?.left||[]) : [];
+    const interfSpikeR = interfDet ? (_qi.spikes?.right||[]) : [];
     // Compute severity scores locally for sentence phrasing
-    const humStr6   = a.hum && a.hum.detected ? (a.hum.strength || 0) : 0;
+    const humStr6   = humDet ? (_qh.strength || 0) : 0;
     const maxRatio6 = allSpikes.length ? Math.max(...allSpikes.map(s => s.ratio)) : 0;
     const hS6 = !humDet ? 1 : humStr6 < 50 ? 2 : humStr6 < 150 ? 3 : humStr6 < 300 ? 4 : 5;
     const audibleSpikes = allSpikes.some(s => s.freq < 18000);
     const iS6 = !interfDet ? 1 : !audibleSpikes ? 2 : maxRatio6 < 16 ? 2 : maxRatio6 < 20 ? 3 : maxRatio6 < 28 ? 4 : 5;
-    const allUltrasonic = allSpikes.length > 0 && allSpikes.every(s => s.freq >= 18000);
-    // Use the strongest audible spike for sentence — not maxFreq which could be ultrasonic
     const audibleSpikesSorted = allSpikes.filter(s => s.freq < 18000).sort((a,b) => b.ratio - a.ratio);
     const ultrasonicSpikes    = allSpikes.filter(s => s.freq >= 18000);
-    const primarySpike = audibleSpikesSorted.length ? audibleSpikesSorted[0] : allSpikes.sort((a,b) => b.ratio-a.ratio)[0];
-    const primaryFreq  = primarySpike ? primarySpike.freq : 0;
-    const freqFmt = primaryFreq < 1000 ? `${Math.round(primaryFreq)}Hz` : `${(primaryFreq/1000).toFixed(1)}kHz`;
-    // Also build an ultrasonic note if audible + ultrasonic coexist
-    const ultraNote = audibleSpikesSorted.length && ultrasonicSpikes.length
-      ? ` An additional ultrasonic tone is present above 18kHz.` : '';
-    const trackNote = interfSpikeL.length && interfSpikeR.length ? 'both tracks'
-                    : interfSpikeL.length ? 'the Left track' : interfSpikeR.length ? 'the Right track' : 'the recording';
+    const allUltrasonic = allSpikes.length > 0 && allSpikes.every(s => s.freq >= 18000);
+    // Build frequency lists for sentence
+    const fmtF = f => f < 1000 ? `${Math.round(f)}Hz` : `${(f/1000).toFixed(1)}kHz`;
+    const audibleFreqs    = audibleSpikesSorted.map(s => fmtF(s.freq));
+    const ultrasonicFreqs = ultrasonicSpikes.map(s => fmtF(s.freq));
+    const audibleStr   = audibleFreqs.length ? audibleFreqs.join(', ') : '';
+    const ultraStr     = ultrasonicFreqs.length ? `Spectral spike at ${ultrasonicFreqs.join(', ')}.` : '';
+    const humFreqStr   = _qh.freq || 60;
+
     if (!humDet && !interfDet) {
       q6 = pick([
         'No hum or interference.',
@@ -5240,32 +5324,24 @@ function buildQCQuestionnaire() {
         'No hum or tonal interference.'
       ]);
     } else if (humDet && !interfDet) {
-      const humSev = hS6 <= 2 ? 'faint' : hS6 === 3 ? 'moderate' : 'strong';
       q6 = pick([
-        `A ${humSev} ${a.hum.freq || 60}Hz hum is present in the session.`,
-        `${a.hum.freq || 60}Hz hum is present at a ${humSev} level throughout the recording.`,
-        `The session contains a ${humSev} ${a.hum.freq || 60}Hz electrical hum.`
+        `${humFreqStr}Hz hum present.`,
+        `Hum at ${humFreqStr}Hz detected.`,
+        `${humFreqStr}Hz hum present in the session.`
       ]);
     } else if (!humDet && interfDet && allUltrasonic) {
       q6 = pick([
-        `A faint ultrasonic tone is present on ${trackNote} at around ${freqFmt}. This frequency is above the range of human hearing and is consistent with electronic interference from the recording chain.`,
-        `An ultrasonic tone at approximately ${freqFmt} is present on ${trackNote}. It is inaudible and likely originates from the recording interface or USB power supply.`,
-        `${trackNote.charAt(0).toUpperCase()+trackNote.slice(1)} shows a faint tone near ${freqFmt}. At this frequency the signal is outside the audible range and typical of digital hardware interference.`
+        `Spectral spike at ${ultrasonicFreqs.join(', ')}.`,
+        `Spectral spike present at ${ultrasonicFreqs.join(', ')}.`,
+        `Spectral spike detected at ${ultrasonicFreqs.join(', ')}.`
       ]);
     } else if (!humDet && interfDet) {
-      const severity = iS6 <= 2 ? 'faint' : iS6 === 3 ? 'moderate' : 'strong';
-      q6 = pick([
-        `A ${severity} tonal interference is present on ${trackNote} at approximately ${freqFmt}.${ultraNote}`,
-        `${trackNote.charAt(0).toUpperCase()+trackNote.slice(1)} contains a ${severity} narrowband tone at approximately ${freqFmt}.${ultraNote}`,
-        `A ${severity} persistent tone at around ${freqFmt} is present on ${trackNote}.${ultraNote}`
-      ]);
+      const audiblePart = audibleStr ? `Signal interference at ${audibleStr}.` : '';
+      q6 = `${audiblePart}${audiblePart && ultraStr ? ' ' : ''}${ultraStr}`.trim();
+      if (!q6) q6 = 'Interference detected in the session.';
     } else {
-      const severity = iS6 <= 2 ? 'faint' : iS6 === 3 ? 'moderate' : 'strong';
-      q6 = pick([
-        `${severity.charAt(0).toUpperCase()+severity.slice(1)} hum and tonal interference present in the session.`,
-        `Both hum and ${severity} tonal interference are present in the recording.`,
-        `The session contains background hum alongside ${severity} tonal interference.`
-      ]);
+      const audiblePart = audibleStr ? `Signal interference at ${audibleStr}.` : '';
+      q6 = `${humFreqStr}Hz hum present. ${audiblePart}${audiblePart && ultraStr ? ' ' : ''}${ultraStr}`.trim();
     }
   }
 
