@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.6.3
+  SOBA — Audio QA & QC Checker v3.6.4
   Created by: Danny Beta
   Date: April 2026
 
@@ -561,7 +561,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.6.3</div>
+            <div class="version-badge">v3.6.4</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -650,6 +650,58 @@ h1 span { color: var(--green); }
     <div style="display:flex;gap:8px">
       <button id="exportQABtn" onclick="exportQAReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QA Report</button>
       <button id="exportQCBtn" onclick="showQCQuestionnaire()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">QC Report</button>
+    </div>
+  </div>
+
+  <!-- MEASUREMENT DISCLAIMER -->
+  <div style="margin-bottom:14px">
+    <button onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden;this.querySelector('.disc-arrow').textContent=this.nextElementSibling.hidden?'▶':'▼'" style="width:100%;display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.6px;text-align:left;transition:border-color .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border2)'">
+      <span style="color:var(--blue)">ℹ</span>
+      <span>ABOUT THESE MEASUREMENTS</span>
+      <span class="disc-arrow" style="margin-left:auto">▶</span>
+    </button>
+    <div hidden style="margin-top:4px;padding:16px 20px;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2);line-height:1.7">
+
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:6px 16px;align-items:baseline">
+
+        <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">Noise Floor</span>
+        <div>
+          <div><span style="color:var(--blue)">RAW</span> · 8th percentile of 50ms RMS windows across the full file. Skips digital silence gaps.</div>
+          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · 8th percentile of the first 10s opening silence. Both channels simultaneously quiet.</div>
+        </div>
+
+        <span style="color:var(--border2);grid-column:1/-1;border-top:1px solid var(--border);margin:6px 0"></span>
+
+        <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">Integrated LUFS</span>
+        <div>
+          <div><span style="color:var(--blue)">RAW</span> · ITU-R BS.1770-4, K-weighted, gated. Measured per take, averaged across all takes. Used for clip gain recommendation.</div>
+          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · Same method. Decode capped at 5 min — readings on longer files reflect the first 5 min only.</div>
+        </div>
+
+        <span style="color:var(--border2);grid-column:1/-1;border-top:1px solid var(--border);margin:6px 0"></span>
+
+        <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">Sample Peak</span>
+        <div>
+          <div><span style="color:var(--blue)">RAW</span> · Highest absolute sample value in dBFS, full file.</div>
+          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · Same method, 5 min slice. Not true peak (dBTP) — inter-sample peaks measured by RX or Youlean will read higher.</div>
+        </div>
+
+        <span style="color:var(--border2);grid-column:1/-1;border-top:1px solid var(--border);margin:6px 0"></span>
+
+        <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">Acoustic Δ</span>
+        <div>
+          <div><span style="color:var(--amber)">Edit / Mixed</span> · Per-channel LUFS difference. LUFS gating neutralises turn-distribution imbalance between channels.</div>
+        </div>
+
+        <span style="color:var(--border2);grid-column:1/-1;border-top:1px solid var(--border);margin:6px 0"></span>
+
+        <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">RMS Level</span>
+        <div>
+          <div><span style="color:var(--blue)">RAW</span> · Full-file average RMS.</div>
+          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · Full-file stereo average RMS including silence. Not comparable to LUFS or to RX Min/Max RMS.</div>
+        </div>
+
+      </div>
     </div>
   </div>
 
@@ -1424,8 +1476,10 @@ function computeStereoRawAnalysis(buf, simultaneousOnly) {
   // Compute per-channel noise floor for threshold
   const nf0 = analyzeChannel(ch0, sr).noiseFloorDb;
   const nf1 = analyzeChannel(ch1, sr).noiseFloorDb;
-  const thresh0 = Math.pow(10, (nf0 + 12) / 20);
-  const thresh1 = Math.pow(10, (nf1 + 12) / 20);
+  // NF+24dB threshold — excludes breathing and clothing rustling (typically NF+12 to NF+20)
+  // while reliably catching actual speech (typically NF+25dB and above).
+  const thresh0 = Math.pow(10, (nf0 + 24) / 20);
+  const thresh1 = Math.pow(10, (nf1 + 24) / 20);
 
   const winSz = Math.floor(sr * 0.05); // 50ms windows
   const GAP_WINDOWS = Math.ceil(0.425 / 0.05); // 425ms = 8.5 → 9 windows
@@ -1604,6 +1658,9 @@ async function runAnalysis() {
         // Acoustic delta: per-channel LUFS difference — gating makes this
         // immune to unequal speech distribution between channels.
         if (eA.lufsL != null && eA.lufsR != null && isFinite(eA.lufsL) && isFinite(eA.lufsR)) {
+          // Preserve original RMS for display before overwriting with LUFS
+          eA.ch0.rmsDbRaw = eA.ch0.rmsDb;
+          eA.ch1.rmsDbRaw = eA.ch1.rmsDb;
           eA.ch0.rmsDb = eA.lufsL;
           eA.ch1.rmsDb = eA.lufsR;
           eA.lrDelta   = Math.abs(eA.lufsL - eA.lufsR);
@@ -1674,6 +1731,9 @@ async function runAnalysis() {
         mA.lufsR = computeIntegratedLUFS(chR);
         // Acoustic delta: per-channel LUFS difference — same rationale as Edit.
         if (mA.lufsL != null && mA.lufsR != null && isFinite(mA.lufsL) && isFinite(mA.lufsR)) {
+          // Preserve original RMS for display before overwriting with LUFS
+          mA.ch0.rmsDbRaw = mA.ch0.rmsDb;
+          mA.ch1.rmsDbRaw = mA.ch1.rmsDb;
           mA.ch0.rmsDb = mA.lufsL;
           mA.ch1.rmsDb = mA.lufsR;
           mA.lrDelta   = Math.abs(mA.lufsL - mA.lufsR);
@@ -2265,7 +2325,7 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
       })(),
       lufsBarHTML(a.lufs, lufsTarget),
     ] : []),
-    mRow('Peak Level',     a.peakDb.toFixed(1)+' dBFS',
+    mRow('Sample Peak',     a.peakDb.toFixed(1)+' dBFS',
       (a.maxPeakDb != null && a.maxPeakDb >= -0.1)
         ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP</span>`
         : '',
@@ -2295,10 +2355,10 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
         const badge = (lClip || rClip)
           ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP${lClip && rClip ? ' L+R' : lClip ? ' L' : ' R'}</span>`
           : '';
-        return mRow('L / R Peak', lp.toFixed(1)+' / '+rp.toFixed(1)+' dBFS', badge, lClip || rClip ? 'hl-red' : '');
+        return mRow('L / R Sample Peak', lp.toFixed(1)+' / '+rp.toFixed(1)+' dBFS', badge, lClip || rClip ? 'hl-red' : '');
       })(),
-      mRow('L / R RMS',   a.ch0.rmsDb.toFixed(1)+' / '+a.ch1.rmsDb.toFixed(1)+' dBFS', '', ''),
-      mRow('L / R Noise', a.ch0.noiseFloorDb.toFixed(1)+' / '+a.ch1.noiseFloorDb.toFixed(1)+' dBFS', '', ''),
+      mRow('L / R RMS', (a.ch0.rmsDbRaw ?? a.ch0.rmsDb).toFixed(1)+' / '+(a.ch1.rmsDbRaw ?? a.ch1.rmsDb).toFixed(1)+' dBFS', '', ''),
+      mRow('L / R Noise Floor', a.ch0.noiseFloorDb.toFixed(1)+' / '+a.ch1.noiseFloorDb.toFixed(1)+' dBFS', '', ''),
     ] : []),
   ].join('');
 }
@@ -3428,8 +3488,11 @@ function detectInterference(data, sr, nfDb, winSecs = 2) {
       ctx.sort((a, c) => a - c);
       const localFloor = ctx[Math.floor(ctx.length / 2)] || 1e-12;
       const freqHz = b * binHz;
-      // Tiered threshold: more conservative for HF (quantization noise is spikier at HF)
-      const TONAL_DB = freqHz < 8000 ? 10.0 : 12.0;
+      // Tiered threshold: 16 dB for midrange (<8kHz) — only catches audible/visible
+      // tones that a trained engineer would flag in RX or by ear. Room tone spectral
+      // texture typically runs 10–12 dB and is correctly excluded at this level.
+      // 12 dB for HF (≥8kHz) where quantization noise is spikier.
+      const TONAL_DB = freqHz < 8000 ? 16.0 : 12.0;
       const ratioDb = 20 * Math.log10((peak + 1e-12) / (localFloor + 1e-12));
       if (ratioDb > TONAL_DB) {
         const ls = (mag[Math.max(0, b-6)] + mag[Math.max(0, b-7)] + mag[Math.max(0, b-8)]) / 3;
@@ -4329,10 +4392,12 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       ? `<span class="nf-chip nf-warn">${status}</span>`
       : `<span class="nf-chip nf-pass">${status}</span>`;
     const clipsHTML = clips && clips.length ? clipListHTML(clips) : '';
+    // Clean rows: pill is self-explanatory — suppress description text
+    const showDetail = level !== 'pass';
     return `<div style="display:grid;grid-template-columns:150px 120px 1fr;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
       <div style="font-family:'Share Tech Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2)">${label}</div>
       <div>${chip}</div>
-      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text)">${detail}${clipsHTML}</div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text)">${showDetail ? detail : ''}${clipsHTML}</div>
     </div>`;
   }
 
@@ -4456,13 +4521,12 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const maxRatio     = allSpikes.length ? Math.max(...allSpikes.map(s => s.ratio)) : 0;
   const interfScore  = !interfDet ? 1
     : !allAudible ? 2              // ultrasonic only — observation, not a quality issue
-    : maxRatio < 12 ? 2
-    : maxRatio < 16 ? 2
-    : maxRatio < 20 ? 3
+    : maxRatio < 16 ? 2            // below audible gate — faint, Minor
+    : maxRatio < 20 ? 3            // audible, passed 16dB gate — Serious
     : maxRatio < 28 ? 4
     : 5;
   const combinedScore = Math.max(humScore, interfScore);
-  const humLevel  = combinedScore === 1 ? 'pass' : 'warn';
+  const humLevel  = combinedScore === 1 ? 'pass' : combinedScore <= 2 ? 'warn' : 'fail';
 
   function spikeListStr(spikes) {
     return spikes.map(s => {
@@ -4634,11 +4698,20 @@ function buildRecommendations(rawLA, rawRA, eA, mA) {
         mA.lufs.toFixed(1) + ' LUFS · ↑ Raise output gain by ' + ((-20) - mA.lufs).toFixed(1) + ' dB.');
   }
 
-  // ── Acoustic Δ > 3 dB ────────────────────────────────────
-  if (eA && eA.lrDelta !== null && eA.lrDelta > 3) {
-    const louder = eA.ch0.rmsDb > eA.ch1.rmsDb ? 'Left' : 'Right';
+  // ── Acoustic Δ > 2 dB ────────────────────────────────────
+  if (eA && eA.lrDelta !== null && eA.lrDelta > 2) {
+    const louder  = eA.ch0.rmsDb > eA.ch1.rmsDb ? 'Left' : 'Right';
+    const quieter = louder === 'Left' ? 'Right' : 'Left';
+    const half    = (eA.lrDelta / 2).toFixed(1);
     rec('warn', 'Edit — Channel Imbalance',
-      eA.lrDelta.toFixed(2) + ' dB · ↓ Trim ' + louder + ' by ' + eA.lrDelta.toFixed(1) + ' dB.');
+      `${eA.lrDelta.toFixed(1)} dB · ${louder} is heavier · ↓ Lower ${louder} by ${half} dB · ↑ Raise ${quieter} by ${half} dB`);
+  }
+  if (mA && mA.lrDelta !== null && mA.lrDelta > 2) {
+    const louder  = mA.ch0.rmsDb > mA.ch1.rmsDb ? 'Left' : 'Right';
+    const quieter = louder === 'Left' ? 'Right' : 'Left';
+    const half    = (mA.lrDelta / 2).toFixed(1);
+    rec('warn', 'Mixed — Channel Imbalance',
+      `${mA.lrDelta.toFixed(1)} dB · ${louder} is heavier · ↓ Lower ${louder} by ${half} dB · ↑ Raise ${quieter} by ${half} dB`);
   }
 
   // ── Edit checks ──────────────────────────────────────────
@@ -5124,7 +5197,7 @@ function buildQCQuestionnaire() {
     const bt = (ec && ec.bleedType) || (a && a.bleedType) || 'clean';
     const typeNote = bt === 'headphone' ? 'headphone bleed' : bt === 'wall' ? 'low frequency wall transfer' : bt === 'combined' ? 'headphone and wall bleed' : 'bleed';
     q5 = bleedScore <= 1
-      ? pick(['No headphone bleed detected.', 'Both channels are free of headphone bleed.', 'No bleed between channels observed.', 'Headphones are well isolated throughout the session.'])
+      ? pick(['No headphone bleed.', 'No bleed.', 'No bleed detected.'])
       : bleedScore === 2
       ? pick([`Trace ${typeNote} present in the recording.`, `A faint trace of ${typeNote} is present.`, `Very slight ${typeNote} detectable in places.`])
       : bleedScore === 3
@@ -5149,16 +5222,22 @@ function buildQCQuestionnaire() {
     const audibleSpikes = allSpikes.some(s => s.freq < 18000);
     const iS6 = !interfDet ? 1 : !audibleSpikes ? 2 : maxRatio6 < 16 ? 2 : maxRatio6 < 20 ? 3 : maxRatio6 < 28 ? 4 : 5;
     const allUltrasonic = allSpikes.length > 0 && allSpikes.every(s => s.freq >= 18000);
-    const maxFreq = allSpikes.length ? Math.max(...allSpikes.map(s => s.freq)) : 0;
-    const freqFmt = maxFreq < 1000 ? `${Math.round(maxFreq)}Hz` : `${(maxFreq/1000).toFixed(1)}kHz`;
+    // Use the strongest audible spike for sentence — not maxFreq which could be ultrasonic
+    const audibleSpikesSorted = allSpikes.filter(s => s.freq < 18000).sort((a,b) => b.ratio - a.ratio);
+    const ultrasonicSpikes    = allSpikes.filter(s => s.freq >= 18000);
+    const primarySpike = audibleSpikesSorted.length ? audibleSpikesSorted[0] : allSpikes.sort((a,b) => b.ratio-a.ratio)[0];
+    const primaryFreq  = primarySpike ? primarySpike.freq : 0;
+    const freqFmt = primaryFreq < 1000 ? `${Math.round(primaryFreq)}Hz` : `${(primaryFreq/1000).toFixed(1)}kHz`;
+    // Also build an ultrasonic note if audible + ultrasonic coexist
+    const ultraNote = audibleSpikesSorted.length && ultrasonicSpikes.length
+      ? ` An additional ultrasonic tone is present above 18kHz.` : '';
     const trackNote = interfSpikeL.length && interfSpikeR.length ? 'both tracks'
                     : interfSpikeL.length ? 'the Left track' : interfSpikeR.length ? 'the Right track' : 'the recording';
     if (!humDet && !interfDet) {
       q6 = pick([
-        'No hum, buzz or tonal interference detected.',
-        'The recording is free of electrical hum or tonal interference.',
-        'No tonal interference or background hum detected in this session.',
-        'Both channels are clean with no detectable hum or buzz.'
+        'No hum or interference.',
+        'No interference detected.',
+        'No hum or tonal interference.'
       ]);
     } else if (humDet && !interfDet) {
       const humSev = hS6 <= 2 ? 'faint' : hS6 === 3 ? 'moderate' : 'strong';
@@ -5176,9 +5255,9 @@ function buildQCQuestionnaire() {
     } else if (!humDet && interfDet) {
       const severity = iS6 <= 2 ? 'faint' : iS6 === 3 ? 'moderate' : 'strong';
       q6 = pick([
-        `A ${severity} tonal interference is present on ${trackNote} at approximately ${freqFmt}.`,
-        `${trackNote.charAt(0).toUpperCase()+trackNote.slice(1)} contains a ${severity} narrowband tone at approximately ${freqFmt}.`,
-        `A ${severity} persistent tone at around ${freqFmt} is present on ${trackNote}.`
+        `A ${severity} tonal interference is present on ${trackNote} at approximately ${freqFmt}.${ultraNote}`,
+        `${trackNote.charAt(0).toUpperCase()+trackNote.slice(1)} contains a ${severity} narrowband tone at approximately ${freqFmt}.${ultraNote}`,
+        `A ${severity} persistent tone at around ${freqFmt} is present on ${trackNote}.${ultraNote}`
       ]);
     } else {
       const severity = iS6 <= 2 ? 'faint' : iS6 === 3 ? 'moderate' : 'strong';
@@ -5195,10 +5274,9 @@ function buildQCQuestionnaire() {
   if (noisesScore !== na) {
     q7 = noisesScore <= 1
       ? pick([
-          'No noticeable page turns, water, clothing or other physical noises detected.',
-          'The recording environment is clean with no physical noise events.',
-          'No external physical noises such as clothing, impacts or page turns were detected.',
-          'Both talents recorded in a quiet environment with no physical noise interference.'
+          'No physical noises.',
+          'No physical noise detected.',
+          'No noises detected.'
         ])
       : noisesScore === 2
       ? pick([
@@ -5230,10 +5308,9 @@ function buildQCQuestionnaire() {
   if (popsScore !== na) {
     q8 = popsScore <= 1
       ? pick([
+          'No mic pops.',
           'No mic pops detected.',
-          'Both talents are free of mic pops throughout the session.',
-          'No diaphragm displacement events detected in any take.',
-          'The recording is clean with no mic pop activity.'
+          'No pop events detected.'
         ])
       : popsScore === 2
       ? pick([
@@ -5265,10 +5342,9 @@ function buildQCQuestionnaire() {
   if (clicksScore !== na) {
     q9 = clicksScore <= 1
       ? pick([
+          'No mouth clicks.',
           'No mouth clicks detected.',
-          'Both talents are free of mouth click activity.',
-          'The recording is clean with no mouth click events.',
-          'No oral noise candidates detected in the session.'
+          'No click events detected.'
         ])
       : clicksScore === 2
       ? pick([
@@ -5301,10 +5377,9 @@ function buildQCQuestionnaire() {
     const ov = parseInt(overlapCount);
     q10 = ov === 0
       ? pick([
-          'No overlapping speech detected. No room tone insertions needed.',
-          'All speaker transitions are clean with no simultaneous speech.',
-          'There are no overlaps in the session. The edit requires no room tone insertions.',
-          'Speaker turns are well spaced throughout with no overlapping passages.'
+          'No overlaps.',
+          'No overlaps detected.',
+          'No overlaps. No room tone insertions needed.'
         ])
       : ov <= 3
       ? pick([
@@ -5336,19 +5411,21 @@ function buildQCQuestionnaire() {
     const micStable = delta == null || delta < 2;
     if (nfStable && micStable) {
       q11 = pick([
-        'Waveform levels are consistent, mic distance is stable, and the noise floor remains constant throughout.',
-        'The recording maintains uniform waveform levels, steady mic positioning, and a consistent noise floor.',
-        'Waveform activity is uniform across takes, mic distance is steady, and the noise floor is stable.'
+        'Waveform levels are uniform, mic distance is stable, and the noise floor stays constant.',
+        'Waveform levels, mic distance, and noise floor remain constant.',
+        'Noise floor, mic distance and waveform levels are uniform and constant.',
+        'Consistent waveform levels, stable mic distance and a uniform noise floor throughout.',
+        'Mic distance is steady, waveform levels are uniform, and the noise floor is consistent.'
       ]);
     } else if (!micStable) {
       q11 = pick([
-        'Waveform levels are generally consistent. Some variation in mic distance is present across takes.',
-        'The noise floor is stable but some inconsistency in mic distance is noticeable across the session.'
+        'Some variation in mic distance across takes. Noise floor and waveform levels are otherwise consistent.',
+        'Mic distance shows some inconsistency. Waveform levels and noise floor remain stable.'
       ]);
     } else {
       q11 = pick([
-        'Waveform levels are consistent. Some variation in noise floor is present between the two tracks.',
-        'Mic distance appears stable. Slight noise floor differences are present between the two channels.'
+        'Waveform levels and mic distance are stable. Some variation in noise floor between channels.',
+        'Mic distance is steady. Minor noise floor differences present between the two channels.'
       ]);
     }
   }
@@ -5360,19 +5437,20 @@ function buildQCQuestionnaire() {
     const lrLufsMatch = e.lufsL != null && e.lufsR != null ? Math.abs(e.lufsL - e.lufsR) : null;
     if (d < 1) {
       q12 = pick([
-        'Acoustic delta is minimal. Both channels are well matched in waveform alignment, spectral content, and noise characteristics.',
-        'Both channels align closely with minimal acoustic delta. Spectral content and noise floor are uniform across the session.',
-        'The two channels are tightly matched. Acoustic balance, spectral uniformity, and noise floor are consistent throughout.'
+        'Acoustic delta is minimal making both channels match in waveform alignment, spectral content is uniform and the audio throughout the entire session is consistently high-quality.',
+        'Minimal acoustic delta. Both channels match in waveform alignment, spectral content, and audio quality throughout the session.',
+        'Acoustic delta is within acceptable levels.',
+        'Both channels are well matched with minimal acoustic delta and uniform spectral content.'
       ]);
     } else if (d < 2.5) {
       q12 = pick([
-        'Both channels are generally well matched. A slight acoustic delta is present but does not impact overall quality.',
-        'Channel matching is good. Minor acoustic differences are present but spectral content and noise characteristics remain consistent.'
+        'Slight acoustic delta present. Channel matching is good overall.',
+        'Minor acoustic delta. Spectral content and noise characteristics remain consistent.'
       ]);
     } else {
       q12 = pick([
-        'Some acoustic difference between channels is present. Waveform alignment and spectral content show minor variation.',
-        'The two channels show a noticeable acoustic delta. Overall noise characteristics remain acceptable but some level imbalance is present.'
+        'Noticeable acoustic delta between channels. Some level imbalance is present.',
+        'Acoustic delta exceeds acceptable range. Channel levels show some imbalance.'
       ]);
     }
   }
@@ -5382,19 +5460,22 @@ function buildQCQuestionnaire() {
   const ovCount13 = overlapCount !== na ? parseInt(overlapCount) : 0;
   if (ovCount13 === 0) {
     q13 = pick([
-      'Both talents deliver clean performances with natural pacing. The emotional tone is appropriate and turn-taking is well-spaced with no overlaps.',
-      'Performances are natural and well-paced. No mispronunciations or rushed turns were detected and no overlaps require editing.',
-      'Both talents carry their performances consistently throughout the session. Turn-taking is clean and no overlapping speech requires correction.'
+      'Clean performances with natural pacing. No overlaps.',
+      'Both talents are well-paced with clean turn-taking and no overlapping speech.',
+      'Natural and consistent performances throughout. No overlaps detected.',
+      'Good pacing and clean turn-taking. No overlaps require editing.'
     ]);
   } else if (ovCount13 <= 5) {
     q13 = pick([
-      'Both talents deliver natural performances with good pacing. A small number of overlapping turns are present but do not significantly impact the flow.',
-      'Performances are consistent and well-delivered. Minor turn overlap is present in a few instances across the session.'
+      'Natural performances with good pacing. A few overlapping turns are present.',
+      'Consistent delivery with minor turn overlap in a few instances.',
+      'Good performances overall. Small number of overlapping turns present.'
     ]);
   } else {
     q13 = pick([
-      'Both talents perform consistently throughout. Several overlapping turns are present and will require room tone work during editing.',
-      'Performances are natural overall. Turn-taking shows some overlap across the session which will need attention during the edit.'
+      'Consistent performances. Several overlapping turns present across the session.',
+      'Natural delivery overall. Turn overlap is present and will need attention in the edit.',
+      'Performances are solid. Multiple overlapping turns will require room tone work.'
     ]);
   }
 
@@ -5423,7 +5504,7 @@ function buildQCQuestionnaire() {
       ${qRow(1,  'Edit RT + LUFS',                                        q1,          false)}
       ${qRow(2,  'Mixed RT + LUFS',                                       q2,          false)}
       ${qRow(3,  'Acoustic Delta + L/R RMS',   q3,  false, q3)}
-      ${qRow(4,  'Peak Level',                 q4,  false, `Peak Level: ${q4}`)}
+      ${qRow(4,  'Sample Peak',            q4,  false, `Sample Peak: ${q4}`)}
       ${qRow(5,  'Headphone Bleed',              q5,  false, q5,  bleedScore)}
       ${qRow(6,  'HVAC / Hum / Interference',    q6,  false, q6,  humScore)}
       ${qRow(7,  'Physical Noises',               q7,  false, q7,  noisesScore)}
