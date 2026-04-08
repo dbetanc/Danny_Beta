@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.6.5
+  SOBA — Audio QA & QC Checker v3.6.6
   Created by: Danny Beta
   Date: April 2026
 
@@ -29,7 +29,7 @@
 </script>
 <title>Sound Analyzer QC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ── DARK THEME (default) ─────────────────────────── */
 [data-theme="dark"] {
@@ -89,6 +89,13 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Chivo Mono — plain zero (no slash) */
+[style*='Chivo Mono'], .version-badge, .header-sub, .theme-toggle,
+.card-header-label, .card-meta, .row-label, .row-val, .compare-val,
+.nf-chip, .legend-item, .legend-nf-item, .progress-pct, .slot-info {
+  font-feature-settings: 'zero' 0;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -145,7 +152,7 @@ h1 { font-size: 28px; font-weight: 800; letter-spacing: -.5px; color: var(--text
 h1 span { color: var(--green); }
 
 .header-sub {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 13px; color: var(--text2);
   letter-spacing: .9px; text-transform: uppercase;
   margin-top: 5px;
@@ -154,7 +161,7 @@ h1 span { color: var(--green); }
 .header-right { display: flex; align-items: center; gap: 12px; }
 
 .version-badge {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 12px; color: var(--text2);
   border: 1px solid var(--border2);
   border-radius: 5px; padding: 5px 10px; letter-spacing: .5px;
@@ -168,7 +175,7 @@ h1 span { color: var(--green); }
   border-radius: 20px;
   padding: 5px 12px 5px 8px;
   cursor: pointer;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 12px; color: var(--text2);
   letter-spacing: .5px;
   transition: border-color .2s, background .2s;
@@ -239,7 +246,7 @@ h1 span { color: var(--green); }
 .drop-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
 
 .drop-sub {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 14px; color: var(--text2);
   letter-spacing: .2px; line-height: 1.85;
 }
@@ -248,7 +255,7 @@ h1 span { color: var(--green); }
   color: var(--green);
   background: var(--green-dim);
   padding: 1px 6px; border-radius: 3px;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
 }
 
 /* ── FILE SLOTS ────────────────────────────────────── */
@@ -278,12 +285,12 @@ h1 span { color: var(--green); }
 }
 
 .slot-label {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 11px; color: var(--text3);
   text-transform: uppercase; letter-spacing: .9px; margin-bottom: 3px;
 }
 .slot-name { font-size: 14px; font-weight: 700; color: var(--text); word-break: break-all; line-height: 1.45; }
-.slot-info { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); margin-top: 2px; }
+.slot-info { font-family: 'Chivo Mono', monospace; font-size: 12px; color: var(--text2); margin-top: 2px; }
 
 /* ── ANALYZE BUTTON ───────────────────────────────── */
 .btn-analyze {
@@ -311,7 +318,7 @@ h1 span { color: var(--green); }
 }
 .progress-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .progress-text {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 13px; color: var(--text2);
   display: flex; align-items: center; gap: 9px;
 }
@@ -321,7 +328,7 @@ h1 span { color: var(--green); }
   border-top-color: var(--green);
   border-radius: 50%; animation: spin .7s linear infinite;
 }
-.progress-pct { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--green); font-weight: 600; }
+.progress-pct { font-family: 'Chivo Mono', monospace; font-size: 13px; color: var(--green); font-weight: 600; }
 .progress-bar-track { width: 100%; height: 3px; background: var(--border2); border-radius: 2px; overflow: hidden; }
 .progress-bar-fill  { height: 3px; background: var(--green); border-radius: 2px; width: 0; transition: width .35s ease; }
 
@@ -331,7 +338,7 @@ h1 span { color: var(--green); }
 
 .overall-badge {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 13px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
   padding: 7px 16px; border-radius: 6px;
 }
@@ -372,8 +379,8 @@ h1 span { color: var(--green); }
   border:1px solid rgba(61,176,255,0.35);
   background:#ffffff;
 }
-.beta-disclaimer .beta-title { font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;color:#C0392B;display:block;margin-bottom:2px; }
-.beta-disclaimer .beta-body { font-family:'Share Tech Mono',monospace;font-size:10px;line-height:1.6;display:block;color:var(--text); }
+.beta-disclaimer .beta-title { font-family:'Chivo Mono',monospace;font-size:11px;font-weight:700;color:#C0392B;display:block;margin-bottom:2px; }
+.beta-disclaimer .beta-body { font-family:'Chivo Mono',monospace;font-size:10px;line-height:1.6;display:block;color:var(--text); }
 [data-theme="dark"] .beta-disclaimer { background:rgba(255,255,255,0.07); }
 [data-theme="dark"] .beta-disclaimer .beta-body { color:rgba(255,255,255,0.85); }
 
@@ -396,10 +403,10 @@ h1 span { color: var(--green); }
   letter-spacing: 0;
 }
 
-.card-meta { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); margin-top: 5px; }
+.card-meta { font-family: 'Chivo Mono', monospace; font-size: 12px; color: var(--text2); margin-top: 5px; }
 
 .nf-badge {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 11px; font-weight: 700;
   letter-spacing: 1.2px; text-transform: uppercase;
   padding: 5px 11px; border-radius: 5px; flex-shrink: 0; white-space: nowrap;
@@ -424,7 +431,7 @@ h1 span { color: var(--green); }
 .metric-row:hover { background: var(--card-hover); }
 
 .metric-label {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 13px; color: var(--text2);
   text-transform: uppercase; letter-spacing: .6px; flex-shrink: 0;
 }
@@ -432,7 +439,7 @@ h1 span { color: var(--green); }
 .metric-right { display: flex; align-items: center; gap: 9px; justify-content: flex-end; }
 
 .metric-value {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 15px; font-weight: 600;
   color: var(--text); text-align: right;
 }
@@ -443,7 +450,7 @@ h1 span { color: var(--green); }
 .metric-value.hl-purple { color: #a050ff; }
 
 .rating-tag {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 11px; font-weight: 700;
   letter-spacing: .9px; text-transform: uppercase;
   padding: 3px 8px; border-radius: 4px;
@@ -456,7 +463,7 @@ h1 span { color: var(--green); }
 /* ── dBFS RULER ───────────────────────────────────── */
 .ruler-row { padding: 10px 20px 16px; border-bottom: 1px solid var(--border); }
 .ruler-legend { display:flex; flex-wrap:wrap; gap:22px; margin-top:10px; }
-.ruler-legend-item { display:flex; align-items:center; gap:8px; font-family:'Share Tech Mono',monospace; font-size:13px; }
+.ruler-legend-item { display:flex; align-items:center; gap:8px; font-family:'Chivo Mono',monospace; font-size:13px; }
 .ruler-legend-swatch { width:18px; height:4px; border-radius:2px; flex-shrink:0; }
 
 /* ── COMPARE PANEL ────────────────────────────────── */
@@ -472,7 +479,7 @@ h1 span { color: var(--green); }
   display: flex; align-items: center; gap: 8px;
 }
 .compare-title {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 12px; color: var(--text2);
   text-transform: uppercase; letter-spacing: 1.2px;
 }
@@ -480,18 +487,18 @@ h1 span { color: var(--green); }
 .compare-cell { padding: 16px 20px; border-right: 1px solid var(--border); }
 .compare-cell:last-child { border-right: none; }
 .compare-cell-label {
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 12px; color: var(--text2);
   text-transform: uppercase; letter-spacing: .9px; margin-bottom: 8px;
 }
-.compare-val { font-family: 'Share Tech Mono', monospace; font-size: 20px; font-weight: 600; color: var(--text); line-height: 1; }
+.compare-val { font-family: 'Chivo Mono', monospace; font-size: 20px; font-weight: 600; color: var(--text); line-height: 1; }
 .compare-val.pos { color: var(--amber); }
 .compare-val.neg { color: var(--blue); }
 
 /* ── ALERTS ───────────────────────────────────────── */
 .alert {
   border-radius: 9px; padding: 12px 16px; margin-bottom: 10px;
-  font-family: 'Share Tech Mono', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-size: 13px; line-height: 1.75;
   display: flex; align-items: flex-start; gap: 11px;
 }
@@ -508,14 +515,14 @@ h1 span { color: var(--green); }
   display: flex; align-items: flex-start; flex-wrap: nowrap; gap: 10px;
   animation: fadeUp .4s .15s ease both;
 }
-.legend-title { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
+.legend-title { font-family: 'Chivo Mono', monospace; font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
 .legend-items { display: flex; flex-wrap: wrap; gap: 16px; }
-.legend-item  { display: flex; align-items: center; gap: 6px; font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); }
+.legend-item  { display: flex; align-items: center; gap: 6px; font-family: 'Chivo Mono', monospace; font-size: 12px; color: var(--text2); }
 .legend-dot   { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .divider-l    { width: 1px; align-self: stretch; background: var(--border2); margin: 0 4px; }
 .legend-nf    { display: flex; flex-direction: column; gap: 6px; }
-.legend-nf-item { display: flex; align-items: center; gap: 7px; font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--text2); }
-.nf-chip      { font-family: 'Share Tech Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: .6px; padding: 3px 9px; border-radius: 3px; }
+.legend-nf-item { display: flex; align-items: center; gap: 7px; font-family: 'Chivo Mono', monospace; font-size: 12px; color: var(--text2); }
+.nf-chip      { font-family: 'Chivo Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: .6px; padding: 3px 9px; border-radius: 3px; }
 
 /* ── KEYFRAMES ─────────────────────────────────────── */
 @keyframes fadeUp   { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
@@ -561,7 +568,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.6.5</div>
+            <div class="version-badge">v3.6.6</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -648,19 +655,19 @@ h1 span { color: var(--green); }
   <div id="resultsBar" style="display:none;align-items:center;justify-content:space-between;margin-bottom:18px;padding:10px 16px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px">
     <div id="overallBadge"></div>
     <div style="display:flex;gap:8px">
-      <button id="exportQABtn" onclick="exportQAReport()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QA Report</button>
-      <button id="exportQCBtn" onclick="showQCQuestionnaire()" style="display:none;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">QC Report</button>
+      <button id="exportQABtn" onclick="exportQAReport()" style="display:none;font-family:'Chivo Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--blue);background:transparent;color:var(--blue);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">⬇ QA Report</button>
+      <button id="exportQCBtn" onclick="showQCQuestionnaire()" style="display:none;font-family:'Chivo Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.6px;padding:5px 12px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;opacity:.85;transition:opacity .15s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.85">QC Report</button>
     </div>
   </div>
 
   <!-- MEASUREMENT DISCLAIMER -->
   <div style="margin-bottom:14px">
-    <button onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden;this.querySelector('.disc-arrow').textContent=this.nextElementSibling.hidden?'▶':'▼'" style="width:100%;display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.6px;text-align:left;transition:border-color .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border2)'">
+    <button onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden;this.querySelector('.disc-arrow').textContent=this.nextElementSibling.hidden?'▶':'▼'" style="width:100%;display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;cursor:pointer;font-family:'Chivo Mono',monospace;font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.6px;text-align:left;transition:border-color .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border2)'">
       <span style="color:var(--blue)">ℹ</span>
       <span>ABOUT THESE MEASUREMENTS</span>
       <span class="disc-arrow" style="margin-left:auto">▶</span>
     </button>
-    <div hidden style="margin-top:4px;padding:16px 20px;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2);line-height:1.7">
+    <div hidden style="margin-top:4px;padding:16px 20px;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--text2);line-height:1.7">
 
       <div style="display:grid;grid-template-columns:120px 1fr;gap:6px 16px;align-items:baseline">
 
@@ -851,7 +858,7 @@ h1 span { color: var(--green); }
     <div class="legend">
 
       <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:140px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Acoustic Delta L/R</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Acoustic Delta L/R</div>
         <div class="legend-nf">
           <div class="legend-nf-item"><span class="nf-chip nf-pass">EXCELLENT</span>&lt; 1 dB</div>
           <div class="legend-nf-item"><span class="nf-chip nf-blue">ACCEPTABLE</span>1–2 dB</div>
@@ -863,7 +870,7 @@ h1 span { color: var(--green); }
       <div class="divider-l"></div>
 
       <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:140px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Noise Floor Threshold</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Noise Floor Threshold</div>
         <div class="legend-nf">
           <div class="legend-nf-item"><span class="nf-chip nf-fail">FAIL</span>&gt; −50 dBFS &nbsp;<span style="color:var(--text3)">too noisy</span></div>
           <div class="legend-nf-item"><span class="nf-chip nf-orange">WARN</span>−50 to −57 dBFS &nbsp;<span style="color:var(--text3)">trending noisy</span></div>
@@ -876,7 +883,7 @@ h1 span { color: var(--green); }
       <div class="divider-l"></div>
 
       <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:140px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Integrated LUFS</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Integrated LUFS</div>
         <div class="legend-nf">
           <div class="legend-nf-item"><span class="nf-chip nf-fail">LOUD</span>&gt; −14 LUFS &nbsp;<span style="color:var(--text3)">too loud</span></div>
           <div class="legend-nf-item"><span class="nf-chip nf-pass">TARGET</span>−14 to −23 LUFS &nbsp;<span style="color:var(--text3)">delivery range</span></div>
@@ -887,7 +894,7 @@ h1 span { color: var(--green); }
       <div class="divider-l"></div>
 
       <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:140px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Mix Compression (PLR)</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3)">Mix Compression (PLR)</div>
         <div class="legend-nf">
           <div class="legend-nf-item"><span class="nf-chip nf-pass">NONE</span>&gt; 20 dB PLR &nbsp;<span style="color:var(--text3)">no compression</span></div>
           <div class="legend-nf-item"><span class="nf-chip nf-pass">LIGHT TOUCH</span>14–20 dB PLR &nbsp;<span style="color:var(--text3)">natural dynamics</span></div>
@@ -1975,7 +1982,7 @@ function lrBalanceBarHTML(lrDelta, ch0rms, ch1rms) {
       <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:${centerCol};transform:translateX(-50%)"></div>
       <div style="position:absolute;top:0;bottom:0;border-radius:5px;background:${green};${fillStyle}"></div>
     </div>
-    <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-top:3px">
+    <div style="display:flex;justify-content:space-between;font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text3);margin-top:3px">
       <span>L</span>
       <span>${side === 'C' ? 'CENTER' : side + ' ' + halfPct + '%'}</span>
       <span>R</span>
@@ -2053,7 +2060,7 @@ function dbBarHTML(db, type) {
         ${markers}
         <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${gradient};border-radius:3px"></div>
       </div>
-      <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
+      <div style="position:relative;height:16px;font-family:'Chivo Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
         ${ticksHTML}
       </div>
     </div>`;
@@ -2107,7 +2114,7 @@ function dbBarHTML(db, type) {
         ${rmsMarkers}
         <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${rmsGradient};border-radius:3px"></div>
       </div>
-      <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
+      <div style="position:relative;height:16px;font-family:'Chivo Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
         ${rmsTicksHTML}
       </div>
     </div>`;
@@ -2161,7 +2168,7 @@ function dbBarHTML(db, type) {
       ${pkMarkers}
       <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${pkGradient};border-radius:3px"></div>
     </div>
-    <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
+    <div style="position:relative;height:16px;font-family:'Chivo Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
       ${pkTicksHTML}
     </div>
   </div>`;
@@ -2250,7 +2257,7 @@ function lufsBarHTML(lufs, target) {
       <div style="position:absolute;top:0;bottom:0;left:${zoneRPct.toFixed(1)}%;width:1px;background:${isDark?'rgba(255,255,255,0.28)':'rgba(0,0,0,0.18)'}"></div>`}
       <div style="position:absolute;top:0;left:0;height:100%;width:${fillPct.toFixed(1)}%;background:${gradient};border-radius:3px"></div>
     </div>
-    <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
+    <div style="position:relative;height:16px;font-family:'Chivo Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
       ${ticksHTML}
     </div>
   </div>`;
@@ -2285,7 +2292,7 @@ function snrDrBarHTML(nf, rms, peak) {
   }).join('');
 
   return `<div style="padding:6px 20px 10px;border-bottom:1px solid var(--border)">
-    <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2);margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;font-family:'Chivo Mono',monospace;font-size:13px;color:var(--text2);margin-bottom:6px">
       <span>SNR <span style="color:${snrLblCol};font-weight:700">${snr} dB</span></span>
       <span>Dynamic Range <span style="color:${pkCol};font-weight:700">${dr} dB</span></span>
     </div>
@@ -2304,10 +2311,10 @@ function snrDrBarHTML(nf, rms, peak) {
       <!-- RMS dot -->
       <div style="position:absolute;top:0;bottom:0;left:${(rmsPct - 0.3).toFixed(1)}%;width:3px;background:${isDark?'#ffffff':'#000000'};opacity:0.6;border-radius:2px"></div>
     </div>
-    <div style="position:relative;height:16px;font-family:'Share Tech Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
+    <div style="position:relative;height:16px;font-family:'Chivo Mono',monospace;font-size:11px;margin-top:3px;overflow:visible">
       ${ticksHTML}
     </div>
-    <div style="display:flex;gap:14px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-top:3px">
+    <div style="display:flex;gap:14px;font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-top:3px">
       <span><span style="display:inline-block;width:8px;height:8px;background:${nfCol};border-radius:2px;vertical-align:middle;margin-right:3px"></span>Noise Floor</span>
       <span><span style="display:inline-block;width:8px;height:8px;background:${snrCol};border-radius:2px;vertical-align:middle;margin-right:3px"></span>SNR → RMS</span>
       <span><span style="display:inline-block;width:8px;height:8px;background:${pkCol};border-radius:2px;vertical-align:middle;margin-right:3px"></span>Peak</span>
@@ -2320,7 +2327,7 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
   const lrVal = a.lrDelta !== null ? a.lrDelta.toFixed(2)+' dB' : 'N/A — Mono';
   const rTag  = dr.cls
     ? `<span class="rating-tag ${dr.cls}">${dr.label}</span>`
-    : `<span style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">${dr.label}</span>`;
+    : `<span style="font-family:'Chivo Mono',monospace;font-size:11px;color:var(--text3)">${dr.label}</span>`;
   return [
     mRow('Noise Floor',    a.noiseFloorDb.toFixed(1)+' dBFS', nfBadgeHTML(a.noiseFloorDb, hpf), nfColorCls(a.noiseFloorDb, hpf)),
     dbBarHTML(a.noiseFloorDb, 'nf'),
@@ -2395,23 +2402,23 @@ function buildQASessionAnalysis(a) {
   const speechR = s ? s.speechR.toFixed(1) : null;
 
   const speechCol = `<div style="flex:1;min-width:0;padding-right:14px">
-    <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
+    <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
       <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.signalDur)}</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.signalDur)}</div>
       </div>
       <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
       </div>
     </div>
     <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
       <div style="height:100%;width:${a.signalPct.toFixed(1)}%;background:#00ff88;border-radius:3px"></div>
     </div>
-    ${speechL !== null ? `<div style="display:flex;gap:10px;margin-top:8px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3)">
+    ${speechL !== null ? `<div style="display:flex;gap:10px;margin-top:8px;font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text3)">
       <span>Left talent: <span style="color:var(--blue)">${speechL}%</span></span>
       <span>Right talent: <span style="color:var(--purple, #a050ff)">${speechR}%</span></span>
     </div>` : ''}
@@ -2423,16 +2430,16 @@ function buildQASessionAnalysis(a) {
     const oc = s.overlapPct < 5 ? 'var(--green)' : s.overlapPct < 15 ? 'var(--amber)' : 'var(--red)';
     const or = s.overlapPct < 5 ? 'Low' : s.overlapPct < 15 ? 'Moderate' : 'High';
     overlapCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(simultaneous only)</span></div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(simultaneous only)</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OVERLAPS</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(s.overlapDur)}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OVERLAPS</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(s.overlapDur)}</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${or}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${or}</div>
         </div>
       </div>
       <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
@@ -2500,21 +2507,21 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     const chNote = worstCh ? ` <span style="font-size:9px;color:var(--text3)">(${worstCh} ch)</span>` : '';
 
     compressionCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Mixed WAV Compression</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Mixed WAV Compression</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">${metricLabel}${chNote}</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${crestCol}">${usesDelta ? '+' : ''}${mixCrest.toFixed(1)} dB</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">${metricLabel}${chNote}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${crestCol}">${usesDelta ? '+' : ''}${mixCrest.toFixed(1)} dB</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:14px;font-weight:700;color:${crestCol};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${crestLabel}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:14px;font-weight:700;color:${crestCol};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${crestLabel}</div>
         </div>
       </div>
       <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:4px">
         <div style="height:100%;width:${mixCrest >= 25 ? '0' : mixPct.toFixed(1)}%;background:${crestCol};border-radius:3px"></div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3)">
+      <div style="display:flex;justify-content:space-between;font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3)">
         <span>Light Touch</span><span>Processed</span><span>Compressed</span>
       </div>
     </div>`;
@@ -2528,17 +2535,17 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     const diff = a.signalPct - mSpeechPct;
     const diffCol = Math.abs(diff) < 3 ? 'var(--green)' : Math.abs(diff) < 8 ? 'var(--amber)' : 'var(--red)';
     markersCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Markers Analysis <span style="font-weight:400;font-size:9px">(${markersData.pairs} pairs)</span></div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Markers Analysis <span style="font-weight:400;font-size:9px">(${markersData.pairs} pairs)</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">BILLABLE TIME</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--blue)">${fmtDur(correctedNet)}</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${mSpeechPct.toFixed(1)}% of session</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">BILLABLE TIME</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--blue)">${fmtDur(correctedNet)}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${mSpeechPct.toFixed(1)}% of session</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SESSION TOTAL</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${fmtDur(markersData.grossSeconds)}</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${markersData.pairs} pairs</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SESSION TOTAL</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${fmtDur(markersData.grossSeconds)}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${markersData.pairs} pairs</div>
         </div>
       </div>
       <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:5px">
@@ -2561,11 +2568,11 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     if (ov > 0 && editChecks.overlapTimestamps && editChecks.overlapTimestamps.length) {
       const id = 'ovCol_' + Date.now();
       const items = editChecks.overlapTimestamps.map(t =>
-        `<span onclick="copyTS(this,this.dataset.ts)"  data-ts="${fmtTS(t)}" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px;cursor:pointer" title="Click to copy">${fmtTS(t)}</span>`
+        `<span onclick="copyTS(this,this.dataset.ts)"  data-ts="${fmtTS(t)}" style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px;cursor:pointer" title="Click to copy">${fmtTS(t)}</span>`
       ).join(' ');
       timestamps = `<div style="margin-top:5px">
         <div onclick="const el=document.getElementById('${id}');const arr=this.querySelector('.arr');el.style.display=el.style.display==='none'?'flex':'none';arr.textContent=el.style.display==='none'?'▶':'▼';"
-          style="cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px;user-select:none">
+          style="cursor:pointer;font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px;user-select:none">
           <span class="arr">▶</span> ${editChecks.overlapTimestamps.length} event${editChecks.overlapTimestamps.length>1?'s':''}
         </div>
         <div id="${id}" style="display:none;flex-wrap:wrap;gap:4px;margin-top:5px">${items}</div>
@@ -2577,11 +2584,11 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     if (warn > 0 && editChecks.overlapWarnTimestamps && editChecks.overlapWarnTimestamps.length) {
       const wid = 'ovWarn_' + Date.now();
       const witems = editChecks.overlapWarnTimestamps.map(t =>
-        `<span onclick="copyTS(this,this.dataset.ts)"  data-ts="${fmtTS(t)}" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px;cursor:pointer" title="Click to copy">${fmtTS(t)}</span>`
+        `<span onclick="copyTS(this,this.dataset.ts)"  data-ts="${fmtTS(t)}" style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px;cursor:pointer" title="Click to copy">${fmtTS(t)}</span>`
       ).join(' ');
       warnTimestamps = `<div style="margin-top:4px">
         <div onclick="const el=document.getElementById('${wid}');const arr=this.querySelector('.arr');el.style.display=el.style.display==='none'?'flex':'none';arr.textContent=el.style.display==='none'?'▶':'▼';"
-          style="cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px;user-select:none">
+          style="cursor:pointer;font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text3);display:flex;align-items:center;gap:5px;user-select:none">
           <span class="arr">▶</span> ${warn} tight event${warn>1?'s':''}
         </div>
         <div id="${wid}" style="display:none;flex-wrap:wrap;gap:4px;margin-top:5px">${witems}</div>
@@ -2590,23 +2597,23 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
 
     // Offset recommendation note (only if tight gaps recurrent ≥ 6)
     const offsetNote = warn >= 6
-      ? `<div style="margin-top:6px;font-family:'Share Tech Mono',monospace;font-size:9px;color:${wc};line-height:1.4">
+      ? `<div style="margin-top:6px;font-family:'Chivo Mono',monospace;font-size:9px;color:${wc};line-height:1.4">
           ⚠ ${warn} tight gaps (400–425ms) — use minimum offsets (line 100ms / lout 285ms) or insert time
         </div>`
       : '';
 
     overlapCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(&lt;400ms gap)</span></div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(&lt;400ms gap)</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">VIOLATIONS</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${ov}</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3);margin-top:2px">${ov === 0 ? 'Clean' : ov <= 3 ? 'Minor' : 'Flag session'}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">VIOLATIONS</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${ov}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text3);margin-top:2px">${ov === 0 ? 'Clean' : ov <= 3 ? 'Minor' : 'Flag session'}</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OF TRANSITIONS</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${editChecks.overlapPct != null ? editChecks.overlapPct + '%' : '—'}</div>
-          ${warn > 0 ? `<div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:${wc};margin-top:2px">${warn} tight (400–425ms)</div>` : ''}
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OF TRANSITIONS</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${editChecks.overlapPct != null ? editChecks.overlapPct + '%' : '—'}</div>
+          ${warn > 0 ? `<div style="font-family:'Chivo Mono',monospace;font-size:9px;color:${wc};margin-top:2px">${warn} tight (400–425ms)</div>` : ''}
         </div>
       </div>
       ${timestamps}
@@ -2619,15 +2626,15 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     const oc = s.overlapPct < 5 ? 'var(--green)' : s.overlapPct < 15 ? 'var(--amber)' : 'var(--red)';
     const or = s.overlapPct < 5 ? 'Low' : s.overlapPct < 15 ? 'Moderate' : 'High';
     overlapCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OVERLAPS</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OVERLAPS</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${or}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${or}</div>
         </div>
       </div>
     </div>`;
@@ -2639,11 +2646,11 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     const bs = editChecks.bleedScore || 1;
 
     bleedCol = `<div style="flex:0 0 auto;width:110px;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Edit Bleed</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Edit Bleed</div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:4px">SCORE</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${(6-bs)>=4?'var(--green)':(6-bs)>=3?'var(--amber)':'var(--red)'}">${6-bs}<span style="font-size:20px;font-weight:400;color:var(--text3)"> /5</span></div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:4px">SCORE</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${(6-bs)>=4?'var(--green)':(6-bs)>=3?'var(--amber)':'var(--red)'}">${6-bs}<span style="font-size:20px;font-weight:400;color:var(--text3)"> /5</span></div>
         </div>
       </div>
     </div>`;
@@ -2662,13 +2669,13 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
       const fmtHz = f => f < 1000 ? `${Math.round(f)}Hz` : `${(f/1000).toFixed(1)}kHz`;
       const audibleDesc   = audibleESpikes.slice(0,3).map(s => fmtHz(s.freq)).join(', ');
       const ultraDesc     = ultraESpikes.length ? `, ${ultraESpikes.slice(0,2).map(s => fmtHz(s.freq)).join(', ')}` : '';
-      editInterfRow = `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--red)">
+      editInterfRow = `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
         ⚠ Signal interference in Edit — ${audibleDesc}${ultraDesc} · Check by ear in silence regions
       </div>`;
     }
   }
   if (editA && editA.editHum && editA.editHum.detected && (editA.editHum.strength||0) >= 150) {
-    editInterfRow += `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--red)">
+    editInterfRow += `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
       ⚠ ${editA.editHum.freq||50}Hz hum in Edit · Check by ear
     </div>`;
   }
@@ -2676,17 +2683,17 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
   return `<div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:0;align-items:flex-start">
     <!-- Speech vs Silence column -->
     <div style="flex:1;min-width:0;padding-right:14px">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.signalDur)}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.signalDur)}</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
         </div>
       </div>
       <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
@@ -2711,17 +2718,17 @@ function buildStereoRawSection(a, skipSpeech) {
   const overlapLabel = skipSpeech ? '(simultaneous only)' : '(simultaneous + gap < 425ms)';
 
   const speechSection = skipSpeech ? '' : `<div style="flex:1;min-width:0;padding-right:14px">
-    <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
+    <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
       <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${speechPct.toFixed(1)}%</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.duration * speechPct / 100)}</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${speechPct.toFixed(1)}%</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.duration * speechPct / 100)}</div>
       </div>
       <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${s.silencePct.toFixed(1)}%</div>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(s.silenceDur)}</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${s.silencePct.toFixed(1)}%</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(s.silenceDur)}</div>
       </div>
     </div>
     <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
@@ -2732,18 +2739,18 @@ function buildStereoRawSection(a, skipSpeech) {
   return `<div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:0;align-items:flex-start">
     ${speechSection}
     <div style="flex:1;min-width:0;${skipSpeech ? '' : 'padding:0 14px;border-left:1px solid var(--border)'}">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">${overlapLabel}</span></div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">${overlapLabel}</span></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
         <div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(s.overlapDur)}</div>
-          <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;color:${oc}">${or}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:11px;color:var(--text2)">${fmtDur(s.overlapDur)}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;color:${oc}">${or}</div>
         </div>
       </div>
       <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:${skipSpeech ? '0' : '5px'}">
         <div style="height:100%;width:${Math.min(100,s.overlapPct).toFixed(1)}%;background:${oc};border-radius:3px"></div>
       </div>
-      ${skipSpeech ? '' : `<div style="display:flex;gap:12px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text3)">
+      ${skipSpeech ? '' : `<div style="display:flex;gap:12px;font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text3)">
         <span>Simultaneous: <span style="color:var(--text2)">${s.directOverlapPct.toFixed(1)}%</span></span>
         <span>Near-gap: <span style="color:var(--text2)">${s.gapOverlapPct.toFixed(1)}%</span></span>
       </div>`}
@@ -2753,7 +2760,7 @@ function buildStereoRawSection(a, skipSpeech) {
 
 function buildEditChecksSection(c) {
   if (!c) return '';
-  const mono = `font-family:'Share Tech Mono',monospace`;
+  const mono = `font-family:'Chivo Mono',monospace`;
   const rows = [];
 
   // Panning error — only when detected
@@ -4396,12 +4403,12 @@ function dotsHTML(score, max, level) {
 function scoreSpan(score) {
   // Score 2 is yellow — use darker shade for text contrast
   const textCol = score === 2 ? '#2C2C2A' : scoreColor(score);
-  return `<span style="font-family:'Share Tech Mono',monospace;font-size:12px;margin-left:4px;vertical-align:middle;color:${textCol};font-weight:700">${score}/5</span>`;
+  return `<span style="font-family:'Chivo Mono',monospace;font-size:12px;margin-left:4px;vertical-align:middle;color:${textCol};font-weight:700">${score}/5</span>`;
 }
 
 // QA 3-state pill: Clean / Minor / Serious — uses CSS variables so theme toggle works without re-render
 function qaChip(score) {
-  const base = `display:inline-block;padding:3px 10px;border-radius:4px;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.4px;border:1.5px solid`;
+  const base = `display:inline-block;padding:3px 10px;border-radius:4px;font-family:'Chivo Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.4px;border:1.5px solid`;
   if (score <= 1)
     return `<span style="${base} var(--qa-clean-border);background:var(--qa-clean-bg);color:var(--qa-clean-text)">Clean</span>`;
   if (score <= 3)
@@ -4418,14 +4425,14 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     if (!clips || !clips.length) return '';
     const id = 'qa-clips-' + (++_collapseId);
     const items = clips.map(c =>
-      `<div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);padding:2px 0">
+      `<div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);padding:2px 0">
         <span style="color:var(--green);font-weight:700">${c.label}</span>
         <span style="color:var(--text3);margin-left:8px">${c.file}${c.count != null ? ' · ' + c.count + ' event' + (c.count>1?'s':'') : ''}</span>
       </div>`
     ).join('');
     return `<div style="margin-top:4px">
       <span onclick="const el=document.getElementById('${id}');const open=el.style.display!=='none';el.style.display=open?'none':'block';this.textContent=open?'▶ Detected in:':'▼ Detected in:'"
-        style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);cursor:pointer;user-select:none">▶ Detected in:</span>
+        style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);cursor:pointer;user-select:none">▶ Detected in:</span>
       <div id="${id}" style="display:none;margin-top:4px;padding:6px 10px;background:var(--bg3);border-radius:5px;border:1px solid var(--border)">
         ${items}
       </div>
@@ -4443,9 +4450,9 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     // Clean rows: pill is self-explanatory — suppress description text
     const showDetail = level !== 'pass';
     return `<div style="display:grid;grid-template-columns:150px 120px 1fr;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2)">${label}</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2)">${label}</div>
       <div>${chip}</div>
-      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text)">${showDetail ? detail : ''}${clipsHTML}</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:13px;color:var(--text)">${showDetail ? detail : ''}${clipsHTML}</div>
     </div>`;
   }
 
@@ -4481,14 +4488,14 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       ? (isDark ? 'rgba(0,255,136,0.06)'  : 'rgba(0,153,68,0.06)')
       : (isDark ? 'rgba(255,140,0,0.10)'  : 'rgba(154,122,0,0.07)');
     const gainLine = inRange
-      ? `<div style="font-family:'Share Tech Mono',monospace;font-size:15px;font-weight:700;color:${accentCol};letter-spacing:.3px">In range</div>`
-      : `<div style="font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;color:${accentCol};letter-spacing:.3px">${dir} ${Math.abs(delta).toFixed(1)} dB</div>`;
+      ? `<div style="font-family:'Chivo Mono',monospace;font-size:15px;font-weight:700;color:${accentCol};letter-spacing:.3px">In range</div>`
+      : `<div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${accentCol};letter-spacing:.3px">${dir} ${Math.abs(delta).toFixed(1)} dB</div>`;
     const warnNote = peakWarn
-      ? `<div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--amber);margin-top:3px">⚠ Check peaks after applying</div>`
+      ? `<div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--amber);margin-top:3px">⚠ Check peaks after applying</div>`
       : '';
     return `<div style="display:flex;flex-direction:column;gap:4px;padding:10px 16px;border:1px solid ${borderCol};border-radius:8px;background:${bgCol};min-width:160px;flex:1;max-width:240px">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">${label}</div>
-      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2)">${lufs.toFixed(1)} LUFS</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">${label}</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:13px;color:var(--text2)">${lufs.toFixed(1)} LUFS</div>
       ${gainLine}
       ${warnNote}
     </div>`;
@@ -4499,7 +4506,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   // Custom clip gain row — bypasses aRow() to get full-width layout with no chip
   function cgRow(sectionsHTML) {
     return `<div style="display:grid;grid-template-columns:150px 120px 1fr;align-items:start;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);padding-top:12px">Clip Gain<br>Recommendation</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);padding-top:12px">Clip Gain<br>Recommendation</div>
       <div style="display:flex;flex-direction:row;gap:12px;align-items:flex-start;grid-column:2/4">${sectionsHTML}</div>
     </div>`;
   }
@@ -4670,7 +4677,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     rows.push(aRow('Peak Clipping', `<span class="nf-chip nf-fail">CLIP</span>`, clipDetail, 'fail', clipClips, true));
   }
 
-  const footerNote = `<div style="padding:6px 20px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);border-top:1px solid var(--border)">
+  const footerNote = `<div style="padding:6px 20px;font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);border-top:1px solid var(--border)">
     Artifact scan · all ${a.takesAnalyzed} take${a.takesAnalyzed>1?'s':''} · 10s per take · Scores are indicators — review by ear before editing
   </div>`;
 
@@ -4687,7 +4694,7 @@ function buildRecommendations(rawLA, rawRA, eA, mA, artifactData) {
     const icon = level === 'fail' ? '🔴' : '🟠';
     recs.push(`<div style="display:flex;align-items:baseline;gap:10px;padding:9px 14px;background:${bg};border:1px solid ${bdr};border-radius:7px;margin-bottom:6px">
       <span style="font-size:13px;flex-shrink:0">${icon}</span>
-      <div style="font-family:'Share Tech Mono',monospace;font-size:11px">
+      <div style="font-family:'Chivo Mono',monospace;font-size:11px">
         <span style="color:${col};font-weight:700;text-transform:uppercase;letter-spacing:.6px">${title}</span>
         <span style="color:var(--text3);margin:0 6px">·</span>
         <span style="color:var(--text2)">${action}</span>
@@ -5008,14 +5015,14 @@ function buildReportShell(title, bodyHTML, sessionInfo, theme, styles) {
 <head>
 <meta charset="utf-8">
 <title>${title} — ${sessionInfo.sessionName}</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 ${styles}
 body { padding: 24px 28px; max-width: 1200px; margin: 0 auto; }
 .report-header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border2); }
 .report-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
-.report-meta  { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text3); }
-.report-session { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text2); margin-top: 6px; }
+.report-meta  { font-family: 'Chivo Mono', monospace; font-size: 11px; color: var(--text3); }
+.report-session { font-family: 'Chivo Mono', monospace; font-size: 13px; color: var(--text2); margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -5159,15 +5166,15 @@ function buildQCQuestionnaire() {
     if (refScore != null && refScore !== na) {
       const disp = 6 - parseInt(refScore);
       const col  = disp >= 4 ? 'var(--green)' : disp >= 3 ? 'var(--amber)' : 'var(--red)';
-      refBadge = `<span style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;color:${col};opacity:.7;white-space:nowrap">${disp}/5</span>`;
+      refBadge = `<span style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;color:${col};opacity:.7;white-space:nowrap">${disp}/5</span>`;
     }
 
     return `<div style="display:grid;grid-template-columns:28px 1fr auto auto auto;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--text3);font-weight:700">${num}.</div>
-      <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">${label}</div>
-      <div style="font-family:'Share Tech Mono',monospace;font-size:${isScore?'18px':'14px'};font-weight:700;color:${scoreColor};min-width:60px;text-align:right">${scoreDisp || '<span style="color:var(--text3);font-size:12px">—</span>'}</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:12px;color:var(--text3);font-weight:700">${num}.</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:13px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">${label}</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:${isScore?'18px':'14px'};font-weight:700;color:${scoreColor};min-width:60px;text-align:right">${scoreDisp || '<span style="color:var(--text3);font-size:12px">—</span>'}</div>
       ${refBadge}
-      <button onclick="copyQField(this);return false;" data-num="${num}" data-label="${label.replace(/"/g,'&quot;')}" data-val="${hasVal ? copyVal.replace(/"/g,'&quot;') : ''}" ${refScore != null && refScore !== na ? `data-score="${6 - parseInt(refScore)}"` : ''} style="font-family:'Share Tech Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s" ${!hasVal?'disabled':''}>${hasVal ? 'Copy' : '—'}</button>
+      <button onclick="copyQField(this);return false;" data-num="${num}" data-label="${label.replace(/"/g,'&quot;')}" data-val="${hasVal ? copyVal.replace(/"/g,'&quot;') : ''}" ${refScore != null && refScore !== na ? `data-score="${6 - parseInt(refScore)}"` : ''} style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s" ${!hasVal?'disabled':''}>${hasVal ? 'Copy' : '—'}</button>
     </div>`;
   }
 
@@ -5563,19 +5570,19 @@ function buildQCQuestionnaire() {
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;padding:10px 16px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px">
       <div style="display:flex;align-items:center;gap:12px">
-        <button onclick="hideQCQuestionnaire()" style="font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;padding:5px 12px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;letter-spacing:.5px;transition:border-color .15s,color .15s" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">← Go Back</button>
+        <button onclick="hideQCQuestionnaire()" style="font-family:'Chivo Mono',monospace;font-size:11px;font-weight:700;padding:5px 12px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;letter-spacing:.5px;transition:border-color .15s,color .15s" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">← Go Back</button>
         <div style="font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:var(--amber);text-transform:uppercase;letter-spacing:1px">QC Report</div>
       </div>
       <div style="display:flex;align-items:center;gap:12px">
-        <button onclick="copyAllQFields(this)" style="font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;padding:5px 14px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;letter-spacing:.5px;transition:background .15s,color .15s,border-color .15s" onmouseover="this.style.background='var(--amber)';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='var(--amber)'">Copy All</button>
-        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3)">${sessionName}</div>
+        <button onclick="copyAllQFields(this)" style="font-family:'Chivo Mono',monospace;font-size:11px;font-weight:700;padding:5px 14px;border-radius:5px;border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;letter-spacing:.5px;transition:background .15s,color .15s,border-color .15s" onmouseover="this.style.background='var(--amber)';this.style.color='#000'" onmouseout="this.style.background='transparent';this.style.color='var(--amber)'">Copy All</button>
+        <div style="font-family:'Chivo Mono',monospace;font-size:11px;color:var(--text3)">${sessionName}</div>
       </div>
     </div>
 
     <!-- Questions card -->
     <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
       <div style="background:var(--bg3);padding:12px 20px;border-bottom:1px solid var(--border2)">
-        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px">QC — Edit / Mix Evaluation</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px">QC — Edit / Mix Evaluation</div>
       </div>
       ${qRow(1,  'Edit RT + LUFS',                                        q1,          false)}
       ${qRow(2,  'Mixed RT + LUFS',                                       q2,          false)}
@@ -5599,7 +5606,7 @@ function buildQCQuestionnaire() {
   <!-- QC QUESTIONNAIRE PAGE -->
   <div id="qcQuestionnairePage" hidden></div>
 
-  <footer style="text-align:center;padding:32px 0 20px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text3);letter-spacing:.8px;border-top:1px solid var(--border2);margin-top:40px">
+  <footer style="text-align:center;padding:32px 0 20px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--text3);letter-spacing:.8px;border-top:1px solid var(--border2);margin-top:40px">
     Created by Danny Beta
   </footer>
 
