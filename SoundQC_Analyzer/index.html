@@ -2376,6 +2376,7 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
       (a.lrDelta !== null && a.ch0 && a.ch1) ? lrBalanceBarHTML(a.lrDelta, a.ch0.rmsDb, a.ch1.rmsDb) : '',
     ]),
     ...(a.ch1 ? [
+      mRow('L / R Noise Floor', a.ch0.noiseFloorDb.toFixed(1)+' / '+a.ch1.noiseFloorDb.toFixed(1)+' dBFS', '', ''),
       ...(a.lufsL != null && a.lufsR != null ? [
         mRow('L / R LUFS', a.lufsL.toFixed(1)+' / '+a.lufsR.toFixed(1)+' LUFS', '', ''),
       ] : []),
@@ -2388,7 +2389,6 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
         return mRow('L / R Sample Peak', lp.toFixed(1)+' / '+rp.toFixed(1)+' dBFS', badge, lClip || rClip ? 'hl-red' : '');
       })(),
       mRow('L / R RMS', (a.ch0.rmsDbRaw ?? a.ch0.rmsDb).toFixed(1)+' / '+(a.ch1.rmsDbRaw ?? a.ch1.rmsDb).toFixed(1)+' dBFS', '', ''),
-      mRow('L / R Noise Floor', a.ch0.noiseFloorDb.toFixed(1)+' / '+a.ch1.noiseFloorDb.toFixed(1)+' dBFS', '', ''),
     ] : []),
   ].join('');
 }
