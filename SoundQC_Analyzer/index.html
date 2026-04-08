@@ -4763,14 +4763,16 @@ function buildRecommendations(rawLA, rawRA, eA, mA, artifactData) {
         eA.lufs.toFixed(1) + ' LUFS · ↓ Reduce clip gain by ' + (eA.lufs - (-21)).toFixed(1) + ' dB.');
     else if (eA.lufs < -24) {
       const lufsGain  = (-24) - eA.lufs;
-      const rawPeak   = rawLA ? rawLA.peakDb : (rawRA ? rawRA.peakDb : null);
-      const peakRoom  = rawPeak != null ? (-3) - rawPeak : Infinity;
-      const safeGain  = Math.min(lufsGain, peakRoom);
-      const limited   = rawPeak != null && peakRoom < lufsGain;
-      const gainStr   = safeGain.toFixed(1);
-      const limitNote = limited ? ` (peak limited — RAW peak ${rawPeak.toFixed(1)} dBFS)` : '';
-      rec('warn', 'Edit LUFS Too Low',
-        eA.lufs.toFixed(1) + ' LUFS · ↑ Raise clip gain by ' + gainStr + ' dB.' + limitNote);
+      const editPeak  = eA.peakDb != null ? eA.peakDb : (rawLA ? rawLA.peakDb : (rawRA ? rawRA.peakDb : null));
+      const peakRoom  = editPeak != null ? (-3) - editPeak : Infinity;
+      if (peakRoom > 0) {
+        const safeGain  = Math.min(lufsGain, peakRoom);
+        const limited   = peakRoom < lufsGain;
+        const gainStr   = safeGain.toFixed(1);
+        const limitNote = limited ? ` (peak limited — Edit peak ${editPeak.toFixed(1)} dBFS)` : '';
+        rec('warn', 'Edit LUFS Too Low',
+          eA.lufs.toFixed(1) + ' LUFS · ↑ Raise clip gain by ' + gainStr + ' dB.' + limitNote);
+      }
     }
   }
 
