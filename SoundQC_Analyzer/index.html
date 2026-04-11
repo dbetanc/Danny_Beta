@@ -1427,7 +1427,7 @@ async function decodeFileSlice(file, maxSeconds) {
 }
 
 // Full-file peak scan — reads raw WAV bytes in chunks, no full decode.
-// Returns { peakDb, ch0PeakDb, ch1PeakDb } or null on unsupported format.
+// Returns { peakDb, ch0PeakDb, ch1PeakDb, rmsDb, ch0RmsDb, ch1RmsDb } or null on unsupported format.
 async function scanFullFilePeak(file) {
   const headAB = await file.slice(0, 8192).arrayBuffer();
   const hv = new DataView(headAB);
@@ -1452,6 +1452,8 @@ async function scanFullFilePeak(file) {
   const bytesPerFrame = numChannels * Math.ceil(bitsPerSample / 8);
   const CHUNK = 4 * 1024 * 1024;
   const chPeaks = new Float32Array(numChannels);
+  const chSumSq = new Float64Array(numChannels); // accumulate squared samples for RMS
+  let totalFrames = 0;
   let offset = dataStart;
   while (offset < dataEnd) {
     const raw = Math.min(CHUNK, dataEnd - offset);
@@ -1460,10 +1462,13 @@ async function scanFullFilePeak(file) {
     const ab = await file.slice(offset, offset + aligned).arrayBuffer();
     const dv = new DataView(ab);
     const frames = aligned / bytesPerFrame;
+    totalFrames += frames;
     if (bitsPerSample === 16 && audioFormat === 1) {
       for (let f = 0; f < frames; f++) for (let c = 0; c < numChannels; c++) {
-        const a = Math.abs(dv.getInt16((f * numChannels + c) * 2, true) / 32768);
+        const s = dv.getInt16((f * numChannels + c) * 2, true) / 32768;
+        const a = Math.abs(s);
         if (a > chPeaks[c]) chPeaks[c] = a;
+        chSumSq[c] += s * s;
       }
     } else if (bitsPerSample === 24 && audioFormat === 1) {
       const bytes = new Uint8Array(ab);
@@ -1471,18 +1476,24 @@ async function scanFullFilePeak(file) {
         const bp = (f * numChannels + c) * 3;
         let v = (bytes[bp+2] << 16) | (bytes[bp+1] << 8) | bytes[bp];
         if (v & 0x800000) v |= ~0xFFFFFF;
-        const a = Math.abs(v / 8388608);
+        const s = v / 8388608;
+        const a = Math.abs(s);
         if (a > chPeaks[c]) chPeaks[c] = a;
+        chSumSq[c] += s * s;
       }
     } else if (bitsPerSample === 32 && audioFormat === 3) {
       for (let f = 0; f < frames; f++) for (let c = 0; c < numChannels; c++) {
-        const a = Math.abs(dv.getFloat32((f * numChannels + c) * 4, true));
+        const s = dv.getFloat32((f * numChannels + c) * 4, true);
+        const a = Math.abs(s);
         if (a > chPeaks[c]) chPeaks[c] = a;
+        chSumSq[c] += s * s;
       }
     } else if (bitsPerSample === 32 && audioFormat === 1) {
       for (let f = 0; f < frames; f++) for (let c = 0; c < numChannels; c++) {
-        const a = Math.abs(dv.getInt32((f * numChannels + c) * 4, true) / 2147483648);
+        const s = dv.getInt32((f * numChannels + c) * 4, true) / 2147483648;
+        const a = Math.abs(s);
         if (a > chPeaks[c]) chPeaks[c] = a;
+        chSumSq[c] += s * s;
       }
     }
     offset += aligned;
@@ -1491,7 +1502,10 @@ async function scanFullFilePeak(file) {
   const toDB = v => v > 0 ? 20 * Math.log10(v) : -Infinity;
   const ch0PeakDb = toDB(chPeaks[0]);
   const ch1PeakDb = numChannels >= 2 ? toDB(chPeaks[1]) : ch0PeakDb;
-  return { peakDb: Math.max(ch0PeakDb, ch1PeakDb), ch0PeakDb, ch1PeakDb };
+  const ch0RmsDb  = toDB(Math.sqrt(chSumSq[0] / totalFrames));
+  const ch1RmsDb  = numChannels >= 2 ? toDB(Math.sqrt(chSumSq[1] / totalFrames)) : ch0RmsDb;
+  const rmsDb     = toDB(Math.sqrt((chSumSq[0] + (numChannels >= 2 ? chSumSq[1] : chSumSq[0])) / (totalFrames * (numChannels >= 2 ? 2 : 1))));
+  return { peakDb: Math.max(ch0PeakDb, ch1PeakDb), ch0PeakDb, ch1PeakDb, rmsDb, ch0RmsDb, ch1RmsDb };
 }
 
 // Full-file integrated LUFS scan (ITU-R BS.1770-4) — chunked, no full decode.
@@ -1830,6 +1844,9 @@ async function runAnalysis() {
         eA.peakDb = ePeakFull.peakDb;
         if (eA.ch0) eA.ch0.peakDb = ePeakFull.ch0PeakDb;
         if (eA.ch1) eA.ch1.peakDb = ePeakFull.ch1PeakDb;
+        eA.rmsDb = ePeakFull.rmsDb;
+        if (eA.ch0) eA.ch0.rmsDb = ePeakFull.ch0RmsDb;
+        if (eA.ch1) eA.ch1.rmsDb = ePeakFull.ch1RmsDb;
       }
       // Override noise floor with first 10s silence window.
       // Both channels are guaranteed silent at the start of every Edit bounce.
@@ -1953,6 +1970,9 @@ async function runAnalysis() {
         mA.peakDb = mPeakFull.peakDb;
         if (mA.ch0) mA.ch0.peakDb = mPeakFull.ch0PeakDb;
         if (mA.ch1) mA.ch1.peakDb = mPeakFull.ch1PeakDb;
+        mA.rmsDb = mPeakFull.rmsDb;
+        if (mA.ch0) mA.ch0.rmsDb = mPeakFull.ch0RmsDb;
+        if (mA.ch1) mA.ch1.rmsDb = mPeakFull.ch1RmsDb;
       }
       // Override noise floor with first 10s silence window — same logic as Edit.
       if (mBuf.numberOfChannels >= 2) {
