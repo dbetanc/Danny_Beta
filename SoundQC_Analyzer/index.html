@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.6.8
+  SOBA — Audio QA & QC Checker v3.6.9
   Created by: Danny Beta
   Date: April 2026
 
@@ -721,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.6.8</div>
+            <div class="version-badge">v3.6.9</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -2656,6 +2656,19 @@ async function analyzeGroup(files) {
   const avg = k => results.reduce((s,r) => s+r[k], 0) / n;
   const lufsArr = results.filter(r => r.lufs != null);
   const lrArr = results.filter(r => r.lrDelta !== null);
+
+  // PLR-filtered peak: exclude takes with abnormally high PLR (clipped/over-performed rejects)
+  // PLR = peakDb - lufs. Normal takes cluster tightly; clipped rejects have inflated PLR.
+  const plrResults = results.filter(r => r.lufs != null && r.peakDb != null);
+  let plrPeakDb = null;
+  if (plrResults.length) {
+    const plrs = plrResults.map(r => r.peakDb - r.lufs).sort((a, b) => a - b);
+    const medianPLR = plrs[Math.floor(plrs.length / 2)];
+    const PLR_GATE = 6; // dB above median PLR → likely abnormal take
+    const normalTakes = plrResults.filter(r => (r.peakDb - r.lufs) <= medianPLR + PLR_GATE);
+    plrPeakDb = normalTakes.length ? Math.max(...normalTakes.map(r => r.peakDb)) : null;
+  }
+
   return {
     _fileCount: n, _talentCode: getTalentCode(files[0].name),
     channels: results[0].channels, sampleRate: results[0].sampleRate,
@@ -2663,6 +2676,7 @@ async function analyzeGroup(files) {
     rmsDb:         avg('rmsDb'),    peakDb:       avg('peakDb'),
     maxPeakDb:     Math.max(...results.map(r => r.peakDb)),
     p95PeakDb:     (arr => arr[Math.floor(arr.length * 0.95)])(results.map(r => r.peakDb).sort((a,b) => a-b)),
+    plrPeakDb,
     clipFiles:     files.filter((f,i) => results[i] && results[i].peakDb >= -0.1).map(f => f.name),
     noiseFloorDb:  avg('noiseFloorDb'), snr:       avg('snr'),
     dynamicRange:  avg('dynamicRange'),
@@ -3647,15 +3661,15 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
       })(),
       lufsBarHTML(a.lufs, lufsTarget),
     ] : []),
-    mRow('Sample Peak',     a.peakDb.toFixed(1)+' dBFS',
+    mRow('Sample Peak',     (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb).toFixed(1)+' dBFS',
       (a.maxPeakDb != null && a.maxPeakDb >= -0.1)
         ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP</span>`
         : '',
-      a.peakDb >= -1  ? 'hl-red'
-      : a.peakDb > -20 ? 'hl-amber'
-      : a.peakDb > -70 ? 'hl-green'
+      (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) >= -1  ? 'hl-red'
+      : (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) > -20 ? 'hl-amber'
+      : (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) > -70 ? 'hl-green'
       : 'hl-purple'),
-    dbBarHTML(a.peakDb, 'peak'),
+    dbBarHTML(a.plrPeakDb != null ? a.plrPeakDb : a.peakDb, 'peak'),
     mRow('RMS Level',      a.rmsDb.toFixed(1)+' dBFS', '',
       a.rmsDb >= -1  ? 'hl-red'
       : a.rmsDb > -20 ? 'hl-amber'
@@ -5858,65 +5872,10 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   const a = artifactData;
   const rows = [];
   let bleedScore = 1;
-  // ── Clip Gain Advisory row — dual character only ──────────
-  // Replaces Acoustic Delta: shows per-track LUFS and recommended clip gain to reach −22.5 LUFS
-  const EDIT_TARGET = -24;
-  const EDIT_LO = -24, EDIT_HI = -21;
-
-  function clipGainSection(label, lufs, peakDb, p95PeakDb) {
-    if (lufs == null) return '';
-    const PEAK_CEILING = -1.0;
-    const PEAK_WARN    = -3.0;
-    const lufsGain   = EDIT_TARGET - lufs;          // pure LUFS-based gain
-    const peakRoom   = peakDb != null ? PEAK_CEILING - peakDb : Infinity;
-    const delta      = Math.min(lufsGain, peakRoom); // still cap by avg peak ceiling
-    const inRange    = lufs >= EDIT_LO && lufs <= EDIT_HI;
-    const dir        = delta > 0 ? '↑' : '↓';
-
-    // Peak warning: will p95 peak exceed -3 dBFS after applying the gain?
-    const p95After   = p95PeakDb != null ? p95PeakDb + delta : null;
-    const peakWarn   = p95After != null && p95After > PEAK_WARN && !inRange;
-
-    const accentCol = inRange
-      ? (isDark ? '#00ff88' : '#009944')
-      : (isDark ? '#FF8C00' : '#9A7A00');
-    const borderCol = inRange
-      ? (isDark ? 'rgba(0,255,136,0.3)'   : 'rgba(0,153,68,0.3)')
-      : (isDark ? 'rgba(255,140,0,0.55)'  : 'rgba(154,122,0,0.35)');
-    const bgCol = inRange
-      ? (isDark ? 'rgba(0,255,136,0.06)'  : 'rgba(0,153,68,0.06)')
-      : (isDark ? 'rgba(255,140,0,0.10)'  : 'rgba(154,122,0,0.07)');
-    const gainLine = inRange
-      ? `<div style="font-family:'Chivo Mono',monospace;font-size:15px;font-weight:700;color:${accentCol};letter-spacing:.3px">In range</div>`
-      : `<div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${accentCol};letter-spacing:.3px">${dir} ${Math.abs(delta).toFixed(1)} dB</div>`;
-    const warnNote = peakWarn
-      ? `<div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--amber);margin-top:3px">⚠ Check peaks after applying</div>`
-      : '';
-    return `<div style="display:flex;flex-direction:column;gap:4px;padding:10px 16px;border:1px solid ${borderCol};border-radius:8px;background:${bgCol};min-width:160px;flex:1;max-width:240px">
-      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)">${label}</div>
-      <div style="font-family:'Chivo Mono',monospace;font-size:13px;color:var(--text2)">${lufs.toFixed(1)} LUFS</div>
-      ${gainLine}
-      ${warnNote}
-    </div>`;
-  }
-
   const isSingleCh = !rawRA || a.singleChannel;
 
-  // Custom clip gain row — bypasses aRow() to get full-width layout with no chip
-  function cgRow(sectionsHTML) {
-    return `<div style="display:grid;grid-template-columns:150px 120px 1fr;align-items:start;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);transition:background .12s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background=''">
-      <div style="font-family:'Chivo Mono',monospace;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);padding-top:12px">Clip Gain<br>Recommendation</div>
-      <div style="display:flex;flex-direction:row;gap:12px;align-items:flex-start;grid-column:2/4">${sectionsHTML}</div>
-    </div>`;
-  }
-
-  // Only show for dual character
+  // ── HPF ───────────────────────────────────────────────────
   if (!isSingleCh) {
-    const cgLeft  = clipGainSection('Left track',  rawLA ? rawLA.lufs : null, rawLA ? rawLA.peakDb : null, rawLA ? rawLA.p95PeakDb : null);
-    const cgRight = clipGainSection('Right track', rawRA ? rawRA.lufs : null, rawRA ? rawRA.peakDb : null, rawRA ? rawRA.p95PeakDb : null);
-    rows.push(cgRow(cgLeft + cgRight));
-
-    // ── HPF — moved here, below Clip Gain row ────────────
     const hpfLDet = a.hpf && a.hpf.left  && a.hpf.left.detected;
     const hpfRDet = a.hpf && a.hpf.right && a.hpf.right.detected;
     if (hpfLDet || hpfRDet) {
@@ -5951,10 +5910,6 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
         : `${bleedLabels[bleedScore]} — ${bleedDesc} · ${bleedActions[bleedScore]}`;
     rows.push(aRow('Headphone Bleed', a.singleChannel ? 'N/A' : qaChip(bleedScore), bleedDetail, a.singleChannel ? '' : bleedLevel, a.bleedClips, true));
   } else {
-    // Single character — clip gain advisory + HPF only
-    if (rawLA && rawLA.lufs != null) {
-      rows.push(cgRow(clipGainSection('Track', rawLA.lufs, rawLA.peakDb, rawLA.p95PeakDb)));
-    }
     const hpfLDet = a.hpf && a.hpf.left && a.hpf.left.detected;
     if (hpfLDet) {
       rows.push(aRow('HPF', 'DETECTED', 'Left track — stop and report · flag in Labelbox', 'fail', []));
@@ -6063,41 +6018,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     return mergeCloseSpikes(found, 1000).slice(0, 5);
   }
 
-  const PEAK_CEILING_CG = -1.0;
-  function clipGainForTrack(rawA) {
-    if (!rawA || rawA.lufs == null) return 0;
-    const lufsGain = -24 - rawA.lufs;
-    const peakRoom = rawA.peakDb != null ? PEAK_CEILING_CG - rawA.peakDb : Infinity;
-    return Math.max(0, Math.min(lufsGain, peakRoom));
-  }
-
-  const cgL = clipGainForTrack(rawLA);
-  const cgR = clipGainForTrack(rawRA);
   const fmtHz2 = f => f < 1000 ? `${Math.round(f)}Hz` : `${(f/1000).toFixed(1)}kHz`;
-
-  const gainWarnParts = [];
-  // Check first AND last take — either could be the roomtone take
-  function predictFromFirstLast(rawA, cgDb) {
-    if (!rawA || cgDb < 3) return [];
-    const candidates = [];
-    const sds = [rawA.sinrDataFirst, rawA.sinrDataLast].filter(Boolean);
-    for (const sd of sds) {
-      candidates.push(...predictGainSpikes(sd, cgDb));
-    }
-    return mergeCloseSpikes(candidates, 1000);
-  }
-
-  const psL = (cgL >= 3 && rawLA) ? predictFromFirstLast(rawLA, cgL) : [];
-  const psR = (cgR >= 3 && rawRA) ? predictFromFirstLast(rawRA, cgR) : [];
-
-  if (psL.length || psR.length) {
-    const parts = [];
-    if (psL.length) parts.push(`Left: ${psL.map(s => fmtHz2(s.freq)).join(', ')}`);
-    if (psR.length) parts.push(`Right: ${psR.map(s => fmtHz2(s.freq)).join(', ')}`);
-    humDesc += (humDesc ? ' · ' : '')
-      + `⚑ After clip gain — possible tones in roomtone: ${parts.join(' · ')} · Verify by ear`;
-    if (combinedScore === 1) combinedScore = 2;
-  }
 
   rows.push(aRow('Hum / Buzz / Interference', qaChip(combinedScore), humDesc, humLevel, a.hum.clips, true));
 
@@ -6815,25 +6736,6 @@ function buildQCQuestionnaire() {
   const ePeakLR = e && e.ch0 && e.ch1 ? `L ${fmt1(e.ch0.peakDb)} / R ${fmt1(e.ch1.peakDb)} dBFS` : (e ? fmt1(e.peakDb) + ' dBFS' : na);
   const mPeakLR = m && m.ch0 && m.ch1 ? `L ${fmt1(m.ch0.peakDb)} / R ${fmt1(m.ch1.peakDb)} dBFS` : (m ? fmt1(m.peakDb) + ' dBFS' : na);
   const q4 = `Edit: ${ePeakLR} | Mix: ${mPeakLR}`;
-
-  // Clip gain recommendation (from RAW)
-  const EDIT_TARGET = -24, EDIT_LO = -24, EDIT_HI = -21, PEAK_CEILING = -1.0, PEAK_WARN = -3.0;
-  function cgRec(rawA) {
-    if (!rawA || rawA.lufs == null) return na;
-    const lufsGain = EDIT_TARGET - rawA.lufs;
-    const peakRoom = rawA.peakDb != null ? PEAK_CEILING - rawA.peakDb : Infinity;
-    const delta    = Math.min(lufsGain, peakRoom);
-    if (rawA.lufs >= EDIT_LO && rawA.lufs <= EDIT_HI) return 'In range';
-    const dir = delta > 0 ? '↑' : '↓';
-    const p95After = rawA.p95PeakDb != null ? rawA.p95PeakDb + delta : null;
-    const warn = p95After != null && p95After > PEAK_WARN ? ' ⚠ Check peaks' : '';
-    return `${dir} ${Math.abs(delta).toFixed(1)} dB${warn}`;
-  }
-  const cgL = _rawLA ? cgRec(_rawLA) : na;
-  const cgR = _rawRA ? cgRec(_rawRA) : na;
-  const q0 = cgL !== na || cgR !== na
-    ? `L: ${cgL} | R: ${cgR}`
-    : na;
 
   // 5. Headphone Bleed — Edit score (delivered file), RAW as fallback
   let bleedScore = na;
