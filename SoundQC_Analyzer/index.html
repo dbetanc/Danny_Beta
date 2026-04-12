@@ -1773,6 +1773,7 @@ function sinrDrawSpectrum(canvas, sinrData, spikes, nfDb, lufsDb, peakDb) {
   const lufsY = refY(lufsDb);
   const peakY = refY(peakDb);
   const plotBotY = PAD_T + plotH;
+  const peakHot  = peakDb != null && peakDb > -3;
 
   // Clear
   ctx.fillStyle = isDark ? '#0f1318' : '#ffffff';
@@ -1780,10 +1781,12 @@ function sinrDrawSpectrum(canvas, sinrData, spikes, nfDb, lufsDb, peakDb) {
 
   // ── Shaded threshold bands (drawn before grid so grid sits on top) ──────
   // Above PEAK → no fill (white/transparent — headroom)
-  // Band: LUFS → PEAK — amber (PEAK zone)
+  // Band: LUFS → PEAK — red if peak > -3, amber otherwise
   if (lufsY != null && peakY != null) {
     const top = Math.min(lufsY, peakY), bot = Math.max(lufsY, peakY);
-    ctx.fillStyle = isDark ? 'rgba(245,166,35,0.09)' : 'rgba(184,108,0,0.07)';
+    ctx.fillStyle = peakHot
+      ? (isDark ? 'rgba(255,60,60,0.10)' : 'rgba(180,20,20,0.08)')
+      : (isDark ? 'rgba(245,166,35,0.09)' : 'rgba(184,108,0,0.07)');
     ctx.fillRect(PAD_L, top, plotW, bot - top);
   }
   // Band: NF → LUFS — green (SNR zone, SOBA pass color)
@@ -1851,8 +1854,11 @@ function sinrDrawSpectrum(canvas, sinrData, spikes, nfDb, lufsDb, peakDb) {
                               'rgba(160,80,255,0.92)', 'rgba(120,40,220,0.88)', 'NF');
   drawRefLine(lufsY, lufsDb, 'rgba(29,255,138,0.85)', 'rgba(0,140,74,0.80)',
                               'rgba(29,255,138,0.92)', 'rgba(0,140,74,0.88)',   'LUFS');
-  drawRefLine(peakY, peakDb, 'rgba(245,166,35,0.85)', 'rgba(184,108,0,0.80)',
-                              'rgba(245,166,35,0.92)', 'rgba(184,108,0,0.88)',  'PEAK');
+  drawRefLine(peakY, peakDb,
+    peakHot ? 'rgba(255,60,60,0.85)'  : 'rgba(245,166,35,0.85)',
+    peakHot ? 'rgba(180,20,20,0.80)'  : 'rgba(184,108,0,0.80)',
+    peakHot ? 'rgba(255,60,60,0.92)'  : 'rgba(245,166,35,0.92)',
+    peakHot ? 'rgba(180,20,20,0.88)'  : 'rgba(184,108,0,0.88)',  'PEAK');
 
   // Blue spectrum bars — entire spectrum, no red coloring here
   for (let k = 1; k < SINR_FFT_HALF; k++) {
@@ -6303,7 +6309,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     const _spikesLConfirmed = artifactData && artifactData.interference ? (Array.isArray(artifactData.interference.spikes) ? artifactData.interference.spikes : (artifactData.interference.spikes && artifactData.interference.spikes.left || [])) : [];
     const _spikesLPredicted = predictedSpikesForTrack(rawLA);
     const _spikesL = mergeCloseSpikes([..._spikesLConfirmed, ..._spikesLPredicted], 1000);
-    window._sinrDataStore['rawLSINR'] = { sinrData: rawLA.sinrData || null, spikes: _spikesL, nfDb: rawLA.noiseFloorDb, lufsDb: rawLA.lufs ?? null, peakDb: rawLA.peakDb ?? null };
+    window._sinrDataStore['rawLSINR'] = { sinrData: rawLA.sinrData || null, spikes: _spikesL, nfDb: rawLA.noiseFloorDb, lufsDb: rawLA.lufs ?? null, peakDb: rawLA.plrPeakDb ?? rawLA.peakDb ?? null };
     document.getElementById('rawLMetrics').innerHTML = buildMetrics(rawLA, false, true, 'raw', hpfLDet);
     // RAW Roomtone Spectrum combined panel
     const rawSINRPanel = document.getElementById('rawSINRPanel');
@@ -6316,7 +6322,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
       setTimeout(() => {
         const _rc = document.getElementById('rawSINRCanvas');
         if (_rc && rawLA && rawLA.sinrData) {
-          sinrDrawSpectrum(_rc, rawLA.sinrData, _spikesL, rawLA.noiseFloorDb, rawLA.lufs ?? null, rawLA.peakDb ?? null);
+          sinrDrawSpectrum(_rc, rawLA.sinrData, _spikesL, rawLA.noiseFloorDb, rawLA.lufs ?? null, rawLA.plrPeakDb ?? rawLA.peakDb ?? null);
           _rc.onclick = () => sinrOpenOverlayDirect(rawLA.sinrData, _spikesL, rawLA.noiseFloorDb, 'RAW Roomtone \u2014 L', rawLA.lufs ?? null, rawLA.peakDb ?? null);
           const _rv = document.getElementById('rawSINRVerdict');
           if (_rv) _rv.innerHTML = buildSINRVerdictHtml(rawLA.sinrData, _spikesL);
@@ -6346,7 +6352,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     const _spikesRConfirmed = artifactData && artifactData.interference && artifactData.interference.spikes && !Array.isArray(artifactData.interference.spikes) ? (artifactData.interference.spikes.right || []) : [];
     const _spikesRPredicted = predictedSpikesForTrack(rawRA);
     const _spikesR = mergeCloseSpikes([..._spikesRConfirmed, ..._spikesRPredicted], 1000);
-    window._sinrDataStore['rawRSINR'] = { sinrData: rawRA.sinrData || null, spikes: _spikesR, nfDb: rawRA.noiseFloorDb, lufsDb: rawRA.lufs ?? null, peakDb: rawRA.peakDb ?? null };
+    window._sinrDataStore['rawRSINR'] = { sinrData: rawRA.sinrData || null, spikes: _spikesR, nfDb: rawRA.noiseFloorDb, lufsDb: rawRA.lufs ?? null, peakDb: rawRA.plrPeakDb ?? rawRA.peakDb ?? null };
     document.getElementById('rawRMetrics').innerHTML = buildMetrics(rawRA, false, true, 'raw', hpfRDet);
   }
 
