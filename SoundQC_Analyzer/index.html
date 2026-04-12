@@ -948,7 +948,7 @@ h1 span { color: var(--green); }
         <div class="sinr-legend" style="border-bottom:1px solid var(--border)">
           <span style="color:var(--blue)">&#9632; Silence spectrum</span>
           <span style="color:#FF6600">&#9632; Detected tonal interference</span>
-          <span style="color:rgba(255,140,0,0.80)">&#9135;&#9135; Predicted after clip gain</span>
+          <span style="color:rgba(255,140,0,0.80)">&#9135;&#9135; Possible after clip gain</span>
           <span style="color:#a050ff">&#9632; Noise floor</span>
           <span style="color:var(--blue)">&#9135;&#9135; LUFS</span>
           <span style="color:var(--amber)">&#9135;&#9135; Peak</span>
@@ -1019,7 +1019,7 @@ h1 span { color: var(--green); }
         <div class="sinr-legend" style="border-bottom:1px solid var(--border)">
           <span style="color:var(--blue)">&#9632; Silence spectrum</span>
           <span style="color:#FF6600">&#9632; Detected tonal interference</span>
-          <span style="color:rgba(255,140,0,0.80)">&#9135;&#9135; Predicted after clip gain</span>
+          <span style="color:rgba(255,140,0,0.80)">&#9135;&#9135; Possible after clip gain</span>
           <span style="color:#a050ff">&#9632; Noise floor</span>
           <span style="color:var(--blue)">&#9135;&#9135; LUFS</span>
           <span style="color:var(--amber)">&#9135;&#9135; Peak</span>
@@ -1530,7 +1530,22 @@ async function sinrSpectrumFromFile(file) {
   }
   if (!count) return null;
   for (let k = 0; k <= SINR_FFT_HALF; k++) avgSpectrum[k] /= count;
-  return { sr, avgSpectrum, sampleCount: 1, silFrameCount: count };
+
+  // Per-window spectra: 4 quietest silence frames, for persistence gate in prediction
+  const silByRms = silIdx.slice().sort((a, b) => frameRms[a] - frameRms[b]).slice(0, 4);
+  const winSpectra = silByRms.map(f => {
+    const s = f * SINR_HOP;
+    const wr = new Float32Array(SINR_FFT_SIZE), wi = new Float32Array(SINR_FFT_SIZE);
+    for (let i = 0; i < SINR_FFT_SIZE; i++) { wr[i] = data[s+i] * SINR_HANN[i]; }
+    sinrFFT(wr, wi);
+    const spec = new Float64Array(SINR_FFT_HALF + 1);
+    spec[0] = wr[0]*wr[0] + wi[0]*wi[0];
+    for (let k = 1; k < SINR_FFT_HALF; k++) spec[k] = 2*(wr[k]*wr[k]+wi[k]*wi[k]);
+    spec[SINR_FFT_HALF] = wr[SINR_FFT_HALF]*wr[SINR_FFT_HALF]+wi[SINR_FFT_HALF]*wi[SINR_FFT_HALF];
+    return spec;
+  });
+
+  return { sr, avgSpectrum, sampleCount: 1, silFrameCount: count, winSpectra };
 }
 
 async function computeSINRData(files) {
@@ -5732,31 +5747,56 @@ function qaChip(score) {
 // Uses first + last take spectra independently; returns merged spike list
 function predictGainSpikesGlobal(sinrData, clipGainDb) {
   if (!sinrData || !sinrData.avgSpectrum || clipGainDb < 3) return [];
-  const { avgSpectrum, sr } = sinrData;
-  const CAL_LOC  = 20 * Math.log10(4096 * 0.5);
-  const n = avgSpectrum.length, hw = 48;
-  const localFloor = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    const lo = Math.max(0, i-hw), hi = Math.min(n-1, i+hw);
-    const s = [];
-    for (let k = lo; k <= hi; k++) s.push(avgSpectrum[k]);
-    s.sort((a,b) => a-b);
-    localFloor[i] = s[s.length >> 1];
-  }
+  const { avgSpectrum, sr, winSpectra } = sinrData;
+  const CAL_LOC   = 20 * Math.log10(4096 * 0.5);
   const THRESH_LIN = Math.pow(10, 16 / 10);
   const gainLin    = Math.pow(10, clipGainDb / 10);
   const binHz      = sr / 4096;
   const loScan     = Math.round(300  / binHz);
   const hiScan     = Math.round((sr / 2 - 200) / binHz);
+  const n          = avgSpectrum.length;
+  const hw         = 48;
+
+  // Persistence gate: use individual silence windows when available.
+  // A bin is only a predicted spike if it would cross the threshold in ≥2 windows —
+  // the same principle as detectInterference's per-window consistency check.
+  // This prevents speech formants averaged into sinrDataFirst/Last from being
+  // mistaken for a persistent tonal line.
+  const windows = (winSpectra && winSpectra.length >= 2) ? winSpectra : [avgSpectrum];
+  const minWin  = windows.length >= 2 ? 2 : 1;
+
+  function localFloorOf(spec) {
+    const lf = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const lo = Math.max(0, i-hw), hi = Math.min(n-1, i+hw);
+      const s = [];
+      for (let k = lo; k <= hi; k++) s.push(spec[k]);
+      s.sort((a,b) => a-b);
+      lf[i] = s[s.length >> 1];
+    }
+    return lf;
+  }
+
+  // Count how many windows each bin would cross the threshold in after gain
+  const winHits = new Int32Array(n);
+  for (const spec of windows) {
+    const lf = localFloorOf(spec);
+    for (let k = loScan; k < hiScan && k < n; k++) {
+      const fl = lf[k] || 1e-30;
+      const origRat = spec[k] / fl;
+      const adjRat  = origRat * gainLin;
+      if (origRat >= THRESH_LIN) continue; // already detectable — not a prediction
+      if (adjRat  >= THRESH_LIN) winHits[k]++;
+    }
+  }
+
+  // Only report bins that recur in ≥minWin windows, and pass the absolute dBFS gate
   const found = [];
-  for (let k = loScan; k < hiScan && k < avgSpectrum.length; k++) {
-    const fl      = localFloor[k] || 1e-30;
-    const origRat = avgSpectrum[k] / fl;
-    const adjRat  = origRat * gainLin;
-    if (origRat >= THRESH_LIN) continue;
-    if (adjRat < THRESH_LIN) continue;
+  for (let k = loScan; k < hiScan && k < n; k++) {
+    if (winHits[k] < minWin) continue;
     const absDbAfterGain = (10 * Math.log10(avgSpectrum[k] + 1e-30) - CAL_LOC) + clipGainDb;
     if (absDbAfterGain < -90) continue;
+    const adjRat = (avgSpectrum[k] / ((() => { const lo=Math.max(0,k-hw),hi=Math.min(n-1,k+hw); const s=[]; for(let j=lo;j<=hi;j++) s.push(avgSpectrum[j]); s.sort((a,b)=>a-b); return s[s.length>>1]||1e-30; })())) * gainLin;
     found.push({ freq: k * sr / 4096, ratio: 10 * Math.log10(adjRat), predicted: true });
   }
   return mergeCloseSpikes(found, 1000).slice(0, 5);
@@ -6813,7 +6853,33 @@ function buildQCQuestionnaire() {
     const maxRatio6  = allSpikes6.length ? Math.max(...allSpikes6.map(s => s.ratio)) : 0;
     const hS = !_hum.detected ? 1 : humStr < 50 ? 2 : humStr < 150 ? 3 : humStr < 300 ? 4 : 5;
     const allAudibleQ = allSpikes6.some(s => s.freq < 18000);
-    const iS = !interfDet6 ? 1 : !allAudibleQ ? 2 : maxRatio6 < 16 ? 2 : maxRatio6 < 20 ? 3 : maxRatio6 < 28 ? 4 : 5;
+    // Two-dimensional iS: ratio gate + absolute dBFS (matches Roomtone Spectrum panel)
+    const _qSinrData = (e && e.sinrDataL) ? e.sinrDataL : (_rawLA && _rawLA.sinrData) ? _rawLA.sinrData : null;
+    const _qCAL = 20 * Math.log10(4096 * 0.5);
+    function qSpikeAbsDb(s) {
+      if (!_qSinrData) return -85;
+      const bin = Math.round(s.freq * 4096 / (_qSinrData.sr || 44100));
+      const pow = _qSinrData.avgSpectrum[Math.min(bin, 2047)];
+      return pow > 0 ? 10 * Math.log10(pow) - _qCAL : -140;
+    }
+    function qSpikeVerdict(s) {
+      const abs = qSpikeAbsDb(s);
+      if (s.ratio < 16 || abs < -100) return 'trace';
+      if (abs < -90) return 'faint';
+      if (abs < -80) return 'moderate';
+      return 'severe';
+    }
+    let iS;
+    if (!interfDet6 || !allAudibleQ) {
+      iS = 1;
+    } else {
+      const audSpikes6 = allSpikes6.filter(s => s.freq < 18000);
+      const vRank = { trace: 0, faint: 1, moderate: 2, severe: 3 };
+      const worstV = audSpikes6.reduce((w, s) => { const v = qSpikeVerdict(s); return vRank[v] > vRank[w] ? v : w; }, 'trace');
+      iS = (worstV === 'trace' || worstV === 'faint') ? 2
+         : worstV === 'moderate' ? (maxRatio6 < 28 ? 3 : 4)
+         : (maxRatio6 < 20 ? 3 : maxRatio6 < 28 ? 4 : 5);
+    }
     humScore = Math.max(hS, iS);
   }
 
