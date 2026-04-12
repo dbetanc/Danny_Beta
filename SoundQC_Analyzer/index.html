@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.6.7
+  SOBA — Audio QA & QC Checker v3.6.8
   Created by: Danny Beta
   Date: April 2026
 
@@ -27,7 +27,7 @@
   gtag('js', new Date());
   gtag('config', 'G-444D9CS8EE');
 </script>
-<title>Sound Analyzer QC</title>
+<title>SOBA QA/QC + SINR Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -540,6 +540,159 @@ h1 span { color: var(--green); }
   .compare-cell:nth-child(4){border-right:none;}
 }
 [hidden]{display:none!important;}
+/* ══ ROOMTONE SPECTRUM PROTOTYPE ═════════════════════════ */
+.sinr-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 14px 6px;
+  border-top: 2px solid var(--blue);
+  margin-top: 6px;
+  font-family: 'Chivo Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+.sinr-meta {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text3);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.sinr-freq-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.sinr-freq-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.sinr-freq-tag {
+  font-family: 'Chivo Mono', monospace;
+  font-size: 10px;
+  background: rgba(255,102,0,0.14);
+  color: #CC4400;
+  border: 1px solid rgba(255,102,0,0.55);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+.sinr-spectrum-wrap {
+  padding: 0 0 0 0;
+  border-top: 1px solid var(--border);
+}
+.sinr-toggle-btn {
+  font-family: 'Chivo Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--blue);
+  background: var(--blue-dim);
+  border: 1px solid var(--blue);
+  border-radius: 4px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  letter-spacing: 0.04em;
+}
+.sinr-toggle-btn:hover { background: var(--bg3); }
+.sinr-canvas-wrap {
+  margin-top: 10px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.sinr-canvas-wrap canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--bg2);
+}
+.sinr-legend {
+  display: flex;
+  gap: 14px;
+  padding: 5px 8px;
+  font-family: 'Chivo Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  background: var(--bg3);
+}
+.sinr-canvas-wrap canvas {
+  cursor: zoom-in;
+}
+/* Spectrum overlay */
+.sinr-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.72);
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.sinr-overlay.open { display: flex; }
+.sinr-overlay-inner {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 1100px;
+  width: 100%;
+  box-shadow: 0 8px 48px rgba(0,0,0,0.55);
+  position: relative;
+}
+.sinr-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 8px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  font-family: 'Chivo Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.sinr-overlay-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--text3);
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.12s;
+}
+.sinr-overlay-close:hover { color: var(--red); }
+.sinr-overlay-canvas-wrap {
+  padding: 0;
+}
+.sinr-overlay-legend {
+  display: flex;
+  gap: 16px;
+  padding: 6px 12px;
+  font-family: 'Chivo Mono', monospace;
+  font-size: 11px;
+  color: var(--text3);
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+#sinrOverlayCanvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* ══ END ROOMTONE SPECTRUM PROTOTYPE ══════════════════════ */
 </style>
 <style>
     @media print {
@@ -568,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.6.7</div>
+            <div class="version-badge">v3.6.8</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -774,6 +927,36 @@ h1 span { color: var(--green); }
         <div class="card-body" id="rawQualityBody" style="padding:0"></div>
       </div>
 
+    <!-- RAW Roomtone Spectrum Panel -->
+    <div class="result-card" id="rawSINRPanel" hidden style="grid-column:1/-1;margin-bottom:0">
+      <div class="card-header card-header-qa">
+        <div style="min-width:0;flex:1">
+          <div class="card-type"><span class="card-type-qa">QA</span> — RAW Roomtone Spectrum</div>
+          <div class="card-meta" id="rawSINRMeta"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <div class="ch-toggle">
+              <button class="nf-chip nf-blue" id="rawSINRBtnL" onclick="rawSINRSwitch('L')" style="cursor:pointer;letter-spacing:.04em">L</button>
+              <button class="nf-chip" id="rawSINRBtnR" onclick="rawSINRSwitch('R')" style="cursor:pointer;letter-spacing:.04em;opacity:0.45;background:var(--bg3);color:var(--text3);border-color:var(--border2)">R</button>
+            </div>
+            <div id="rawSINRVerdict"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="sinr-legend" style="border-bottom:1px solid var(--border)">
+          <span style="color:var(--blue)">&#9632; Silence spectrum</span>
+          <span style="color:#FF6600">&#9632; Detected tonal interference</span>
+          <span style="color:rgba(255,140,0,0.80)">&#9135;&#9135; Predicted after clip gain</span>
+          <span style="color:#a050ff">&#9632; Noise floor</span>
+          <span style="color:var(--blue)">&#9135;&#9135; LUFS</span>
+          <span style="color:var(--amber)">&#9135;&#9135; Peak</span>
+        </div>
+        <canvas id="rawSINRCanvas" width="1200" height="220" style="display:block;width:100%;height:auto;background:var(--bg2);cursor:zoom-in"></canvas>
+      </div>
+    </div>
+
       <!-- Recording Quality full-width — dual char without stereo bounce -->
       <div id="rawPairPanel" style="display:none;grid-column:1/-1;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)">
         <div class="card-header card-header-qa">
@@ -808,6 +991,40 @@ h1 span { color: var(--green); }
           <div id="mixNFBadge"></div>
         </div>
         <div class="card-body" id="mixMetrics"></div>
+      </div>
+    </div>
+
+    <!-- Edit Roomtone Spectrum Panel -->
+    <div class="result-card" id="editSINRPanel" hidden style="margin-bottom:14px">
+      <div class="card-header card-header-qc">
+        <div style="min-width:0;flex:1">
+          <div class="card-type"><span class="card-type-qc">QC</span> — Edit / Mixed Roomtone Spectrum</div>
+          <div class="card-meta" id="editSINRMeta"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="ch-toggle">
+              <button class="nf-chip nf-blue" id="editSINRBtnEdit" onclick="editMixSINRSwitch('EDIT','L')" style="cursor:pointer;letter-spacing:.04em">EDIT</button>
+              <button class="nf-chip" id="editSINRBtnMix"  onclick="editMixSINRSwitch('MIX','L')"  style="cursor:pointer;letter-spacing:.04em;opacity:0.45;background:var(--bg3);color:var(--text3);border-color:var(--border2)">MIX</button>
+            </div>
+            <div class="ch-toggle">
+              <button class="nf-chip nf-blue" id="editSINRBtnL" onclick="editMixSINRSwitch(null,'L')" style="cursor:pointer;letter-spacing:.04em">L</button>
+              <button class="nf-chip" id="editSINRBtnR" onclick="editMixSINRSwitch(null,'R')" style="cursor:pointer;letter-spacing:.04em;opacity:0.45;background:var(--bg3);color:var(--text3);border-color:var(--border2)">R</button>
+            </div>
+          </div>
+          <div id="editSINRVerdict"></div>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div class="sinr-legend" style="border-bottom:1px solid var(--border)">
+          <span style="color:var(--blue)">&#9632; Silence spectrum</span>
+          <span style="color:#FF6600">&#9632; Detected tonal interference</span>
+          <span style="color:rgba(255,140,0,0.80)">&#9135;&#9135; Predicted after clip gain</span>
+          <span style="color:#a050ff">&#9632; Noise floor</span>
+          <span style="color:var(--blue)">&#9135;&#9135; LUFS</span>
+          <span style="color:var(--amber)">&#9135;&#9135; Peak</span>
+        </div>
+        <canvas id="editSINRCanvas" width="1200" height="220" style="display:block;width:100%;height:auto;background:var(--bg2);cursor:zoom-in"></canvas>
       </div>
     </div>
 
@@ -924,6 +1141,19 @@ function toggleTheme() {
   html.setAttribute('data-theme', next);
   document.getElementById('themeLabel').textContent = next.toUpperCase();
   localStorage.setItem('sqc-theme', next);
+  // Redraw spectrum canvases on theme change
+  setTimeout(() => {
+    for (const [cardId, store] of Object.entries(window._sinrDataStore || {})) {
+      if (!store || !store.sinrData) continue;
+      const canvas = document.getElementById(cardId + '_specCanvas');
+      if (canvas) sinrDrawSpectrum(canvas, store.sinrData, store.spikes, store.nfDb, store.lufsDb, store.peakDb);
+    }
+    // Redraw RAW combined panel
+    const rawC = document.getElementById('rawSINRCanvas');
+    if (rawC && !document.getElementById('rawSINRPanel').hasAttribute('hidden')) rawSINRSwitch(_rawSINRActive);
+    // Redraw Edit/Mixed panel
+    editMixSINRSwitch(_editMixSource, _editMixChannel);
+  }, 0);
 }
 (function(){
   const saved = localStorage.getItem('sqc-theme');
@@ -1195,6 +1425,754 @@ function refreshSlots() {
 
   document.getElementById('analyzeBtn').removeAttribute('hidden');
 }
+
+
+// ══════════════════════════════════════════════════════════════════
+//  ROOMTONE SPECTRUM PROTOTYPE — Tonal Interference Visualizer
+//  Spectrum display uses averaged silence FFT across sampled takes.
+//  Spike detection reuses SOBA's existing calibrated interference
+//  scanner (detectInterference) — no new detection logic.
+//  Sample strategy: first + last + up to 5 random middle takes.
+// ══════════════════════════════════════════════════════════════════
+
+const SINR_FFT_SIZE = 4096;
+const SINR_FFT_HALF = SINR_FFT_SIZE >> 1;
+const SINR_HOP      = 2048;
+const SINR_NF_PCT   = 0.10;
+const SINR_SIL_DB   = 20;
+const SINR_MAX_SIL  = 1000;
+
+const SINR_HANN = (() => {
+  const h = new Float32Array(SINR_FFT_SIZE);
+  for (let i = 0; i < SINR_FFT_SIZE; i++)
+    h[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (SINR_FFT_SIZE - 1)));
+  return h;
+})();
+
+function sinrFFT(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      let t = re[i]; re[i] = re[j]; re[j] = t;
+          t = im[i]; im[i] = im[j]; im[j] = t;
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len;
+    const wRe = Math.cos(ang), wIm = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let curRe = 1, curIm = 0;
+      const half = len >> 1;
+      for (let j = 0; j < half; j++) {
+        const uRe = re[i+j], uIm = im[i+j];
+        const vRe = re[i+j+half]*curRe - im[i+j+half]*curIm;
+        const vIm = re[i+j+half]*curIm + im[i+j+half]*curRe;
+        re[i+j]      = uRe + vRe; im[i+j]      = uIm + vIm;
+        re[i+j+half] = uRe - vRe; im[i+j+half] = uIm - vIm;
+        const nr = curRe*wRe - curIm*wIm;
+        curIm = curRe*wIm + curIm*wRe; curRe = nr;
+      }
+    }
+  }
+}
+
+// First + last + up to 5 random middle takes, in original order
+function sinrSelectSample(files) {
+  if (files.length <= 7) return [...files];
+  const first    = files[0];
+  const last     = files[files.length - 1];
+  const middle   = files.slice(1, files.length - 1);
+  const shuffled = [...middle].sort(() => Math.random() - 0.5);
+  const picked   = new Set([first, ...shuffled.slice(0, 5), last]);
+  return files.filter(f => picked.has(f));
+}
+
+// Compute averaged silence spectrum only — no spike detection
+// Compute silence spectrum from a single decoded file's mono channel
+// Returns { sr, avgSpectrum, silFrameCount } or null if no silence found
+async function sinrSpectrumFromFile(file) {
+  let buf;
+  try { buf = await decodeFile(file); } catch(e) { return null; }
+  const data     = buf.getChannelData(0);
+  const sr       = buf.sampleRate;
+  const nSamples = data.length;
+  const nFrames  = Math.floor((nSamples - SINR_FFT_SIZE) / SINR_HOP) + 1;
+
+  const frameRms = new Float32Array(nFrames);
+  for (let f = 0; f < nFrames; f++) {
+    const s = f * SINR_HOP; let ss = 0;
+    for (let i = 0; i < SINR_FFT_SIZE; i++) { const v = data[s+i]; ss += v*v; }
+    frameRms[f] = Math.sqrt(ss / SINR_FFT_SIZE);
+  }
+  const sorted  = Float32Array.from(frameRms).sort();
+  const nfRms   = sorted[Math.floor(nFrames * SINR_NF_PCT)] || sorted[0];
+  const silCeil = nfRms * Math.pow(10, SINR_SIL_DB / 20);
+  const silIdx  = [];
+  for (let f = 0; f < nFrames; f++) if (frameRms[f] < silCeil) silIdx.push(f);
+  if (!silIdx.length) return null;
+
+  const avgSpectrum = new Float64Array(SINR_FFT_HALF + 1);
+  const re = new Float32Array(SINR_FFT_SIZE);
+  const im = new Float32Array(SINR_FFT_SIZE);
+  const step = silIdx.length > 300 ? Math.ceil(silIdx.length / 300) : 1;
+  let count = 0;
+  for (let si = 0; si < silIdx.length; si += step) {
+    const f = silIdx[si], s = f * SINR_HOP;
+    for (let i = 0; i < SINR_FFT_SIZE; i++) { re[i] = data[s+i] * SINR_HANN[i]; im[i] = 0; }
+    sinrFFT(re, im);
+    avgSpectrum[0] += re[0]*re[0] + im[0]*im[0];
+    for (let k = 1; k < SINR_FFT_HALF; k++) avgSpectrum[k] += 2*(re[k]*re[k]+im[k]*im[k]);
+    avgSpectrum[SINR_FFT_HALF] += re[SINR_FFT_HALF]*re[SINR_FFT_HALF]+im[SINR_FFT_HALF]*im[SINR_FFT_HALF];
+    count++;
+  }
+  if (!count) return null;
+  for (let k = 0; k <= SINR_FFT_HALF; k++) avgSpectrum[k] /= count;
+  return { sr, avgSpectrum, sampleCount: 1, silFrameCount: count };
+}
+
+async function computeSINRData(files) {
+  const sample  = sinrSelectSample(files);
+  let sampleCount = 0, sr = 44100;
+
+  // Compute per-take spectra, each normalized by its own noise floor.
+  // This preserves persistent tones across takes regardless of how noisy
+  // the other takes are — a tone in the roomtone take stays visible.
+  const perTakeSpectra = [];
+  const re = new Float32Array(SINR_FFT_SIZE);
+  const im = new Float32Array(SINR_FFT_SIZE);
+
+  for (const file of sample) {
+    let buf;
+    try { buf = await decodeFile(file); } catch(e) { continue; }
+    sampleCount++;
+    const data    = buf.getChannelData(0);
+    sr            = buf.sampleRate;
+    const nFrames = Math.floor((data.length - SINR_FFT_SIZE) / SINR_HOP) + 1;
+
+    const frameRms = new Float32Array(nFrames);
+    for (let f = 0; f < nFrames; f++) {
+      const s = f * SINR_HOP; let ss = 0;
+      for (let i = 0; i < SINR_FFT_SIZE; i++) { const v = data[s+i]; ss += v*v; }
+      frameRms[f] = Math.sqrt(ss / SINR_FFT_SIZE);
+    }
+    const sorted  = Float32Array.from(frameRms).sort();
+    const nfRms   = sorted[Math.floor(nFrames * SINR_NF_PCT)] || sorted[0];
+    const silCeil = nfRms * Math.pow(10, SINR_SIL_DB / 20);
+    const silIdx  = [];
+    for (let f = 0; f < nFrames; f++) if (frameRms[f] < silCeil) silIdx.push(f);
+    if (!silIdx.length) { await new Promise(r => setTimeout(r, 0)); continue; }
+
+    // Accumulate this take's silence spectrum
+    const takeSpec = new Float64Array(SINR_FFT_HALF + 1);
+    const step = silIdx.length > SINR_MAX_SIL ? Math.ceil(silIdx.length / SINR_MAX_SIL) : 1;
+    let count = 0;
+    for (let si = 0; si < silIdx.length; si += step) {
+      const f = silIdx[si], s = f * SINR_HOP;
+      for (let i = 0; i < SINR_FFT_SIZE; i++) { re[i] = data[s+i] * SINR_HANN[i]; im[i] = 0; }
+      sinrFFT(re, im);
+      takeSpec[0] += re[0]*re[0] + im[0]*im[0];
+      for (let k = 1; k < SINR_FFT_HALF; k++) takeSpec[k] += 2*(re[k]*re[k]+im[k]*im[k]);
+      takeSpec[SINR_FFT_HALF] += re[SINR_FFT_HALF]*re[SINR_FFT_HALF]+im[SINR_FFT_HALF]*im[SINR_FFT_HALF];
+      count++;
+    }
+    if (!count) { await new Promise(r => setTimeout(r, 0)); continue; }
+    for (let k = 0; k <= SINR_FFT_HALF; k++) takeSpec[k] /= count;
+
+    // Normalize by this take's broadband noise floor (median of bins 20–200Hz range)
+    // so speech-heavy takes don't inflate the average and bury quiet room tones
+    const nfBinLo = Math.round(20  * SINR_FFT_SIZE / sr);
+    const nfBinHi = Math.round(200 * SINR_FFT_SIZE / sr);
+    let nfSum = 0, nfN = 0;
+    for (let k = nfBinLo; k <= nfBinHi && k <= SINR_FFT_HALF; k++) { nfSum += takeSpec[k]; nfN++; }
+    const takeNfPow = nfN ? nfSum / nfN : 1e-30;
+    if (takeNfPow > 0) {
+      for (let k = 0; k <= SINR_FFT_HALF; k++) takeSpec[k] /= takeNfPow;
+    }
+    perTakeSpectra.push(takeSpec);
+    await new Promise(r => setTimeout(r, 0));
+  }
+
+  if (!perTakeSpectra.length) return null;
+
+  // Average the normalized per-take spectra, then re-scale back
+  // using the first take's absolute level as reference
+  const avgSpectrum = new Float64Array(SINR_FFT_HALF + 1);
+  for (const ts of perTakeSpectra) {
+    for (let k = 0; k <= SINR_FFT_HALF; k++) avgSpectrum[k] += ts[k];
+  }
+  for (let k = 0; k <= SINR_FFT_HALF; k++) avgSpectrum[k] /= perTakeSpectra.length;
+
+  // Restore absolute scale: multiply by first take's reference noise floor
+  // so dBFS labels remain meaningful on the graph
+  const refSpec = await sinrSpectrumFromFile(sample[0]);
+  if (refSpec) {
+    const nfBinLo = Math.round(20  * SINR_FFT_SIZE / sr);
+    const nfBinHi = Math.round(200 * SINR_FFT_SIZE / sr);
+    let rSum = 0, rN = 0;
+    for (let k = nfBinLo; k <= nfBinHi && k < refSpec.avgSpectrum.length; k++) {
+      rSum += refSpec.avgSpectrum[k]; rN++;
+    }
+    const refNfPow = rN ? rSum / rN : 1;
+    for (let k = 0; k <= SINR_FFT_HALF; k++) avgSpectrum[k] *= refNfPow;
+  }
+
+  return { sr, avgSpectrum, sampleCount, silFrameCount: perTakeSpectra.length * SINR_MAX_SIL };
+}
+
+function sinrFmtFreq(hz) {
+  if (hz >= 10000) return (hz/1000).toFixed(0) + 'kHz';
+  if (hz >=  1000) return (hz/1000).toFixed(1) + 'kHz';
+  return Math.round(hz) + 'Hz';
+}
+
+// spikes = [{freq, ratio}] from SOBA's existing detectInterference
+function buildSINRSection(sinrData, cardId, spikes) {
+  if (!sinrData) return '';
+  const { sampleCount, silFrameCount } = sinrData;
+  spikes = spikes || [];
+
+  // Merge spikes within 1kHz of each other — keep highest ratio
+  spikes = mergeCloseSpikes(spikes, 1000);
+  const hasTones = spikes.length > 0;
+
+  // Two-dimensional scoring: ratio (sharpness) + absolute dBFS (audibility)
+  // Both must be significant for a spike to score high.
+  // Absolute dBFS per spike is read from avgSpectrum (same data the graph uses).
+  const CAL = 20 * Math.log10(SINR_FFT_SIZE * 0.5);  // calibration offset
+  function spikeLevelDbFs(s) {
+    const bin = Math.round(s.freq * SINR_FFT_SIZE / (sinrData.sr || 44100));
+    const pow = sinrData.avgSpectrum[Math.min(bin, SINR_FFT_HALF)];
+    return pow > 0 ? 10 * Math.log10(pow) - CAL : -140;
+  }
+
+  // Score each spike individually, take the worst
+  function spikeVerdict(s) {
+    const absDb = spikeLevelDbFs(s);
+    const ratio = s.ratio;
+    if (ratio < 16)    return 'trace';     // below detection confidence
+    if (absDb < -100)  return 'trace';     // inaudible — deep in noise
+    if (absDb < -90)   return 'faint';     // likely inaudible
+    if (absDb < -80)   return 'moderate';  // potentially audible
+    return 'severe';                       // audible — flag
+  }
+
+  const verdictRank = { clean:0, trace:1, faint:2, moderate:3, severe:4 };
+  const verdict = !hasTones ? 'clean'
+    : spikes.reduce((worst, s) => {
+        const v = spikeVerdict(s);
+        return verdictRank[v] > verdictRank[worst] ? v : worst;
+      }, 'trace');
+
+  const vCls = verdict === 'clean' || verdict === 'trace' ? 'nf-pass'
+             : verdict === 'faint'    ? 'nf-pass'
+             : verdict === 'moderate' ? 'nf-warn'
+             : 'nf-fail';
+  const vLbl = verdict === 'clean'    ? 'CLEAN'
+             : verdict === 'trace'    ? 'TRACE'
+             : verdict === 'faint'    ? 'FAINT'
+             : verdict === 'moderate' ? 'MODERATE'
+             : 'SEVERE';
+  const verdictHtml = `<span class="nf-chip ${vCls}">${vLbl}</span>`;
+
+  const freqTagsHtml = hasTones
+    ? spikes.map(s => {
+        const freq  = sinrFmtFreq(s.freq);
+        return `<span class="sinr-freq-tag">${freq}</span>`;
+      }).join('')
+    : '<span style="font-size:10px;color:var(--text3)">None detected</span>';
+
+  return `
+<div class="sinr-section-header">
+  <span>Roomtone Spectrum</span>
+  <span class="sinr-meta">${sampleCount} file${sampleCount>1?'s':''} · ${silFrameCount} silence frames</span>
+</div>
+<div class="sinr-freq-row" style="justify-content:space-between;align-items:center">
+  <div class="metric-label">Tonal Interference</div>
+  ${verdictHtml}
+</div>
+<div class="sinr-freq-row">
+  <div class="metric-label">Detected Tones</div>
+  <div class="sinr-freq-tags">${freqTagsHtml}</div>
+</div>
+<div class="sinr-spectrum-wrap">
+  <div class="sinr-canvas-wrap" id="${cardId}_specWrap">
+    <div class="sinr-legend">
+      <span style="color:var(--blue)">&#9632; Silence spectrum</span>
+      <span style="color:#FF6600">&#9632; Detected tonal interference</span>
+      <span style="color:#a050ff">&#9632; Noise floor</span>
+    </div>
+    <canvas id="${cardId}_specCanvas" width="800" height="230"></canvas>
+  </div>
+</div>`;
+}
+
+// sinrToggleSpectrum removed — graph always visible
+
+function sinrDrawSpectrum(canvas, sinrData, spikes, nfDb, lufsDb, peakDb) {
+  const ctx    = canvas.getContext('2d');
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  spikes = spikes || [];
+
+  // Render at devicePixelRatio for crisp text and lines
+  const DPR  = Math.min(window.devicePixelRatio || 1, 3);
+  const W    = 800, H = 230;   // logical dimensions
+  canvas.width  = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width  = '100%';
+  canvas.style.height = 'auto';
+  ctx.scale(DPR, DPR);
+
+  const PAD_L = 72, PAD_R = 16, PAD_T = 52, PAD_B = 30;
+  const plotW  = W - PAD_L - PAD_R;
+  const plotH  = H - PAD_T - PAD_B;
+
+  const { avgSpectrum, sr } = sinrData;
+  const fMin = 20, fMax = Math.min(24000, sr / 2);
+  const lMin = Math.log10(fMin), lMax = Math.log10(fMax);
+
+  function freqToX(f) {
+    return PAD_L + (Math.log10(Math.max(f, fMin)) - lMin) / (lMax - lMin) * plotW;
+  }
+
+  // dBFS calibration
+  const CAL_OFFSET = 20 * Math.log10(SINR_FFT_SIZE * 0.5);
+  function powToDb(p) { return p > 0 ? 10 * Math.log10(p) - CAL_OFFSET : -140; }
+
+  // Fixed dBFS axis: 0 at top, -120 at bottom
+  const dbTop  = 0;
+  const dbBot  = -120;
+  const dbSpan = dbTop - dbBot;
+  function dbToY(db) { return PAD_T + (1 - (db - dbBot) / dbSpan) * plotH; }
+
+  // Resolve reference line Y positions (clamped to plot)
+  function refY(db) {
+    if (db == null) return null;
+    if (db <= dbBot) return PAD_T + plotH;
+    if (db >= dbTop) return PAD_T;
+    return dbToY(db);
+  }
+  const nfY   = refY(nfDb);
+  const lufsY = refY(lufsDb);
+  const peakY = refY(peakDb);
+  const plotBotY = PAD_T + plotH;
+
+  // Clear
+  ctx.fillStyle = isDark ? '#0f1318' : '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Shaded threshold bands (drawn before grid so grid sits on top) ──────
+  // Above PEAK → no fill (white/transparent — headroom)
+  // Band: LUFS → PEAK — amber (PEAK zone)
+  if (lufsY != null && peakY != null) {
+    const top = Math.min(lufsY, peakY), bot = Math.max(lufsY, peakY);
+    ctx.fillStyle = isDark ? 'rgba(245,166,35,0.09)' : 'rgba(184,108,0,0.07)';
+    ctx.fillRect(PAD_L, top, plotW, bot - top);
+  }
+  // Band: NF → LUFS — green (SNR zone, SOBA pass color)
+  if (nfY != null && lufsY != null) {
+    const top = Math.min(nfY, lufsY), bot = Math.max(nfY, lufsY);
+    ctx.fillStyle = isDark ? 'rgba(29,255,138,0.08)' : 'rgba(0,140,74,0.06)';
+    ctx.fillRect(PAD_L, top, plotW, bot - top);
+  }
+  // Band: NF → plot bottom — purple (noise floor zone)
+  if (nfY != null) {
+    ctx.fillStyle = isDark ? 'rgba(160,80,255,0.10)' : 'rgba(120,40,220,0.08)';
+    ctx.fillRect(PAD_L, nfY, plotW, plotBotY - nfY);
+  }
+
+  // Grid
+  ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  ctx.lineWidth = 1;
+  [20,50,100,200,500,1000,2000,5000,10000,20000].forEach(f => {
+    if (f < fMin || f > fMax) return;
+    const x = freqToX(f);
+    ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, PAD_T + plotH); ctx.stroke();
+  });
+  for (let db = -120; db <= 0; db += 10) {
+    const y = dbToY(db);
+    ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(PAD_L + plotW, y); ctx.stroke();
+  }
+
+  // ── Reference lines with pill labels ─────────────────────────────────────
+  function drawRefLine(y, db, lineDark, lineLight, pillDark, pillLight, label) {
+    if (y == null || db == null) return;
+    const lineCol = isDark ? lineDark : lineLight;
+    const pillCol = isDark ? pillDark : pillLight;
+    ctx.save();
+
+    // Dashed line across full plot width
+    ctx.strokeStyle = lineCol;
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(PAD_L, y); ctx.lineTo(PAD_L + plotW, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Pill label — left-aligned at canvas edge
+    const text = label + ' ' + db.toFixed(1);
+    ctx.font = 'bold 9px "Chivo Mono", monospace';
+    const tw  = ctx.measureText(text).width;
+    const ph  = 13, ppad = 4;
+    const px  = 1;            // flush to left edge of canvas
+    const py  = y - ph / 2;
+
+    ctx.fillStyle = pillCol;
+    ctx.beginPath();
+    ctx.roundRect(px, py, tw + ppad * 2, ph, 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'left';
+    ctx.fillText(text, px + ppad, py + ph - 3);
+    ctx.restore();
+  }
+
+  // NF = purple, LUFS = green (SOBA pass), PEAK = amber (SOBA warn)
+  drawRefLine(nfY,   nfDb,   'rgba(160,80,255,0.85)', 'rgba(120,40,220,0.80)',
+                              'rgba(160,80,255,0.92)', 'rgba(120,40,220,0.88)', 'NF');
+  drawRefLine(lufsY, lufsDb, 'rgba(29,255,138,0.85)', 'rgba(0,140,74,0.80)',
+                              'rgba(29,255,138,0.92)', 'rgba(0,140,74,0.88)',   'LUFS');
+  drawRefLine(peakY, peakDb, 'rgba(245,166,35,0.85)', 'rgba(184,108,0,0.80)',
+                              'rgba(245,166,35,0.92)', 'rgba(184,108,0,0.88)',  'PEAK');
+
+  // Blue spectrum bars — entire spectrum, no red coloring here
+  for (let k = 1; k < SINR_FFT_HALF; k++) {
+    const fA = k     * sr / SINR_FFT_SIZE;
+    const fB = (k+1) * sr / SINR_FFT_SIZE;
+    if (fB < fMin || fA > fMax) continue;
+    const x0  = freqToX(Math.max(fA, fMin));
+    const x1  = freqToX(Math.min(fB, fMax));
+    const db  = Math.max(powToDb(avgSpectrum[k]), dbBot);  // clamp to plot floor
+    const y   = dbToY(db);
+    const yB  = dbToY(dbBot);
+    if (yB - y < 0) continue;  // skip if bar has no height
+    ctx.fillStyle = isDark ? 'rgba(77,166,255,0.35)' : 'rgba(0,98,204,0.28)';
+    ctx.fillRect(x0, y, Math.max(x1 - x0, 1), yB - y);
+  }
+
+  // Red spike markers — lines in spectrum, pills in top padding area
+  // Merge close frequencies before drawing (1kHz threshold)
+  spikes = mergeCloseSpikes(spikes, 1000);
+  // Pass 1: draw lines (weakest first so strongest sit on top)
+  const sortedSpikes = [...spikes].sort((a, b) => a.ratio - b.ratio);
+
+  sortedSpikes.forEach(spike => {
+    const x = freqToX(spike.freq);
+    if (x < PAD_L || x > PAD_L + plotW) return;
+
+    const isPredicted = !!spike.predicted;
+    const isStrong    = spike.ratio >= 20;
+
+    if (isPredicted) {
+      // Predicted (post-gain) spikes: dashed, lighter orange
+      ctx.strokeStyle = isDark ? 'rgba(255,140,0,0.70)' : 'rgba(180,80,0,0.65)';
+      ctx.lineWidth   = 3;
+      ctx.setLineDash([4, 3]);
+      if (isDark) { ctx.shadowColor = 'rgba(255,140,0,0.35)'; ctx.shadowBlur = 6; }
+    } else {
+      ctx.strokeStyle = isDark ? (isStrong ? '#FF6600' : '#FF7700') : (isStrong ? '#CC4400' : '#DD5500');
+      ctx.lineWidth   = isStrong ? 8 : 5;
+      ctx.setLineDash([]);
+      if (isDark) { ctx.shadowColor = 'rgba(255,100,0,0.65)'; ctx.shadowBlur = isStrong ? 12 : 7; }
+    }
+
+    const spikeBin = Math.round(spike.freq * SINR_FFT_SIZE / sr);
+    const binPow   = avgSpectrum[Math.min(spikeBin, SINR_FFT_HALF)];
+    const binDb    = Math.max(powToDb(binPow), dbBot);
+    const lineTop  = dbToY(binDb);
+
+    ctx.beginPath();
+    ctx.moveTo(x, PAD_T + plotH);
+    ctx.lineTo(x, lineTop);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // Reset shadow before drawing pills
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur  = 0;
+
+  // Pass 2: draw pills in top padding area — stagger rows when X positions overlap
+  ctx.font = 'bold 9px "Chivo Mono", monospace';
+  const PIL_H   = 14;   // pill height
+  const PIL_PAD = 5;    // horizontal padding inside pill
+  const PIL_GAP = 3;    // vertical gap between staggered rows
+  const ROW_Y   = [PAD_T - PIL_H - 4, PAD_T - PIL_H * 2 - PIL_GAP - 4];  // two possible rows
+
+  // Sort spikes by X for overlap detection
+  const pillSpikes = [...spikes]
+    .filter(s => { const x = freqToX(s.freq); return x >= PAD_L && x <= PAD_L + plotW; })
+    .sort((a, b) => freqToX(a.freq) - freqToX(b.freq));
+
+  // Assign row per pill to avoid horizontal overlap
+  const pillData = [];
+  pillSpikes.forEach(spike => {
+    const x      = freqToX(spike.freq);
+    const freq   = sinrFmtFreq(spike.freq);
+    const label  = spike.predicted ? freq + '*' : freq;
+    const tw     = ctx.measureText(label).width;
+    const halfW  = tw / 2 + PIL_PAD;
+    const lx     = Math.max(PAD_L + halfW + 1, Math.min(x, PAD_L + plotW - halfW - 1));
+
+    // Pick lowest row that doesn'''t overlap with previous pill
+    let row = 0;
+    for (const prev of pillData) {
+      if (prev.row === 0 && Math.abs(prev.lx - lx) < prev.halfW + halfW + 4) { row = 1; break; }
+    }
+    pillData.push({ lx, halfW, label, tw, row, isStrong: spike.ratio >= 20 });
+  });
+
+  pillData.forEach(({ lx, halfW, label, tw, row }) => {
+    const ly    = ROW_Y[row];
+    const pillY = ly - 1;
+
+    ctx.fillStyle = isDark ? '#FF6600' : '#CC4400';
+    ctx.beginPath();
+    ctx.roundRect(lx - halfW, pillY, halfW * 2, PIL_H, 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, lx, pillY + PIL_H - 4);
+  });
+
+  // Axis labels
+  const axCol = isDark ? '#7a8fa8' : '#6a7b96';
+  ctx.fillStyle  = axCol;
+  ctx.font       = '9px "Chivo Mono", monospace';
+  ctx.textAlign  = 'center';
+  [20,50,100,200,500,1000,2000,5000,10000,20000].forEach(f => {
+    if (f < fMin || f > fMax) return;
+    ctx.fillText(sinrFmtFreq(f), freqToX(f), PAD_T + plotH + 18);
+  });
+  ctx.textAlign = 'right';
+  for (let db = -120; db <= 0; db += 20)
+    ctx.fillText(db, PAD_L - 2, dbToY(db) + 3);
+
+  // Plot border
+  ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(PAD_L, PAD_T, plotW, plotH);
+}
+
+// Storage keyed by cardId — holds both sinrData and spikes for deferred draw
+window._sinrDataStore = window._sinrDataStore || {};
+
+// Compute SINR spectrum from already-decoded channel data (Float32Array)
+// Used for Edit bounce where buffer is already in memory
+async function computeSINRDataFromChannel(data, sr) {
+  const nSamples = data.length;
+  const nFrames  = Math.floor((nSamples - SINR_FFT_SIZE) / SINR_HOP) + 1;
+  if (nFrames <= 0) return null;
+
+  const frameRms = new Float32Array(nFrames);
+  for (let f = 0; f < nFrames; f++) {
+    const s = f * SINR_HOP; let ss = 0;
+    for (let i = 0; i < SINR_FFT_SIZE; i++) { const v = data[s+i]; ss += v*v; }
+    frameRms[f] = Math.sqrt(ss / SINR_FFT_SIZE);
+  }
+
+  const sorted  = Float32Array.from(frameRms).sort();
+  const nfRms   = sorted[Math.floor(nFrames * SINR_NF_PCT)] || sorted[0];
+  const silCeil = nfRms * Math.pow(10, SINR_SIL_DB / 20);
+
+  const silIdx = [];
+  for (let f = 0; f < nFrames; f++) if (frameRms[f] < silCeil) silIdx.push(f);
+
+  if (silIdx.length === 0) return null;
+
+  const avgSpectrum = new Float64Array(SINR_FFT_HALF + 1);
+  let totalSilFrames = 0;
+  let silBudget = SINR_MAX_SIL;
+  const step = silIdx.length > silBudget ? Math.ceil(silIdx.length / silBudget) : 1;
+
+  const re = new Float32Array(SINR_FFT_SIZE);
+  const im = new Float32Array(SINR_FFT_SIZE);
+
+  for (let si = 0; si < silIdx.length && silBudget > 0; si += step) {
+    const f = silIdx[si], s = f * SINR_HOP;
+    for (let i = 0; i < SINR_FFT_SIZE; i++) { re[i] = data[s+i] * SINR_HANN[i]; im[i] = 0; }
+    sinrFFT(re, im);
+    avgSpectrum[0] += re[0]*re[0] + im[0]*im[0];
+    for (let k = 1; k < SINR_FFT_HALF; k++) avgSpectrum[k] += 2*(re[k]*re[k]+im[k]*im[k]);
+    avgSpectrum[SINR_FFT_HALF] += re[SINR_FFT_HALF]*re[SINR_FFT_HALF]+im[SINR_FFT_HALF]*im[SINR_FFT_HALF];
+    totalSilFrames++;
+    silBudget--;
+  }
+
+  if (totalSilFrames === 0) return null;
+  for (let k = 0; k <= SINR_FFT_HALF; k++) avgSpectrum[k] /= totalSilFrames;
+
+  return { sr, avgSpectrum, sampleCount: 1, silFrameCount: totalSilFrames };
+}
+
+// Merge spikes closer than threshHz — keep highest ratio in each cluster
+function mergeCloseSpikes(spikes, threshHz) {
+  if (!spikes || spikes.length <= 1) return spikes || [];
+  const sorted = [...spikes].sort((a, b) => a.freq - b.freq);
+  const merged = [];
+  let i = 0;
+  while (i < sorted.length) {
+    let cluster = [sorted[i]];
+    while (i + 1 < sorted.length && sorted[i + 1].freq - sorted[i].freq <= threshHz) {
+      i++;
+      cluster.push(sorted[i]);
+    }
+    // Keep the spike with the highest ratio in this cluster
+    merged.push(cluster.reduce((best, s) => s.ratio > best.ratio ? s : best, cluster[0]));
+    i++;
+  }
+  return merged;
+}
+
+// Shared verdict HTML builder (used by both RAW and Edit sections)
+function buildSINRVerdictHtml(sinrData, spikes) {
+  if (!sinrData || !spikes) return '';
+  spikes = mergeCloseSpikes(spikes, 1000);
+  const CAL = 20 * Math.log10(SINR_FFT_SIZE * 0.5);
+  function spikeLevelDbFs(s) {
+    const bin = Math.round(s.freq * SINR_FFT_SIZE / (sinrData.sr || 44100));
+    const pow = sinrData.avgSpectrum[Math.min(bin, SINR_FFT_HALF)];
+    return pow > 0 ? 10 * Math.log10(pow) - CAL : -140;
+  }
+  function spikeVerdict(s) {
+    const absDb = spikeLevelDbFs(s);
+    if (s.ratio < 16)   return 0;
+    if (absDb < -100)   return 1;
+    if (absDb < -90)    return 2;
+    if (absDb < -80)    return 3;
+    return 4;
+  }
+  const rank = spikes.length > 0 ? Math.max(...spikes.map(spikeVerdict)) : 0;
+  const labels = ['CLEAN','TRACE','FAINT','MODERATE','SEVERE'];
+  const classes = ['nf-pass','nf-pass','nf-pass','nf-warn','nf-fail'];
+  return `<span class="nf-chip ${classes[rank]}">${labels[rank]}</span>`;
+}
+
+// Open overlay with explicit data (no cardId lookup needed)
+function sinrOpenOverlayDirect(sinrData, spikes, nfDb, title, lufsDb, peakDb) {
+  const overlay = document.getElementById('sinrOverlay');
+  const canvas  = document.getElementById('sinrOverlayCanvas');
+  const titleEl = document.getElementById('sinrOverlayTitle');
+  if (!overlay || !canvas || !sinrData) return;
+  titleEl.textContent = title || 'Roomtone Spectrum';
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  sinrDrawSpectrum(canvas, sinrData, spikes, nfDb, lufsDb, peakDb);
+}
+
+// RAW Roomtone Spectrum L/R talent switch
+let _rawSINRActive = 'L';
+function rawSINRSwitch(side) {
+  const storeKey = side === 'L' ? 'rawLSINR' : 'rawRSINR';
+  const store = window._sinrDataStore[storeKey];
+  if (!store || !store.sinrData) return;
+  _rawSINRActive = side;
+  const canvas = document.getElementById('rawSINRCanvas');
+  if (!canvas) return;
+  const _rl = document.getElementById('rawSINRBtnL');
+  const _rr = document.getElementById('rawSINRBtnR');
+  _rl.className = side === 'L' ? 'nf-chip nf-blue' : 'nf-chip';
+  _rl.style.cssText = side === 'L' ? 'cursor:pointer;letter-spacing:.04em' : 'cursor:pointer;letter-spacing:.04em;opacity:0.45;background:var(--bg3);color:var(--text3);border-color:var(--border2)';
+  _rr.className = side === 'R' ? 'nf-chip nf-blue' : 'nf-chip';
+  _rr.style.cssText = side === 'R' ? 'cursor:pointer;letter-spacing:.04em' : 'cursor:pointer;letter-spacing:.04em;opacity:0.45;background:var(--bg3);color:var(--text3);border-color:var(--border2)';
+  const meta = document.getElementById('rawSINRMeta');
+  if (meta) meta.textContent = (side === 'L' ? (window._rawLFilename||'Left') : (window._rawRFilename||'Right')) + ' talent shown';
+  sinrDrawSpectrum(canvas, store.sinrData, store.spikes, store.nfDb, store.lufsDb, store.peakDb);
+  canvas.onclick = () => sinrOpenOverlayDirect(store.sinrData, store.spikes, store.nfDb,
+    'RAW Roomtone — ' + side, store.lufsDb, store.peakDb);
+}
+
+// Edit/Mixed Roomtone Spectrum source + channel switch
+let _editMixSource  = 'EDIT';
+let _editMixChannel = 'L';
+function editMixSINRSwitch(source, channel) {
+  if (source  !== null) _editMixSource  = source;
+  if (channel !== null) _editMixChannel = channel;
+  const src = _editMixSource, ch = _editMixChannel;
+  const storeKey = src === 'EDIT'
+    ? (ch === 'L' ? 'editSINRL' : 'editSINRR')
+    : (ch === 'L' ? 'mixSINRL'  : 'mixSINRR');
+  const store = window._sinrDataStore[storeKey];
+  if (!store || !store.sinrData) return;
+  // Update button states
+  ['editSINRBtnEdit','editSINRBtnMix','editSINRBtnL','editSINRBtnR'].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    const active = (id === 'editSINRBtnEdit' && src === 'EDIT') ||
+                   (id === 'editSINRBtnMix'  && src === 'MIX')  ||
+                   (id === 'editSINRBtnL'    && ch  === 'L')     ||
+                   (id === 'editSINRBtnR'    && ch  === 'R');
+    b.className = active ? 'nf-chip nf-blue' : 'nf-chip';
+    b.style.cssText = active ? 'cursor:pointer;letter-spacing:.04em'
+      : 'cursor:pointer;letter-spacing:.04em;opacity:0.45;background:var(--bg3);color:var(--text3);border-color:var(--border2)';
+  });
+  const meta = document.getElementById('editSINRMeta');
+  if (meta) meta.textContent = (src === 'EDIT' ? (window._editFilename||'Edit') : (window._mixFilename||'Mixed')) + ' — ' + ch + ' channel';
+  const canvas = document.getElementById('editSINRCanvas');
+  if (!canvas) return;
+  sinrDrawSpectrum(canvas, store.sinrData, store.spikes, store.nfDb, store.lufsDb, store.peakDb);
+  canvas.onclick = () => sinrOpenOverlayDirect(store.sinrData, store.spikes, store.nfDb,
+    src + ' Roomtone — ' + ch, store.lufsDb, store.peakDb);
+  // Update verdict
+  const allSpikes = [...(store.spikes||[])];
+  document.getElementById('editSINRVerdict').innerHTML = buildSINRVerdictHtml(store.sinrData, allSpikes);
+}
+
+// Edit SINR L/R channel switch (legacy — replaced by editMixSINRSwitch)
+function editSINRSwitch(side) {
+  const storeKey = side === 'L' ? 'editSINRL' : 'editSINRR';
+  const store = window._sinrDataStore[storeKey];
+  if (!store || !store.sinrData) return;
+  const canvas = document.getElementById('editSINRCanvas');
+  if (!canvas) return;
+  const btnL = document.getElementById('editSINRBtnL');
+  const btnR = document.getElementById('editSINRBtnR');
+  btnL.style.opacity = side === 'L' ? '1' : '0.45';
+  btnR.style.opacity = side === 'R' ? '1' : '0.45';
+  sinrDrawSpectrum(canvas, store.sinrData, store.spikes, store.nfDb, store.lufsDb, store.peakDb);
+  canvas.onclick = () => sinrOpenOverlayDirect(store.sinrData, store.spikes, store.nfDb,
+    document.getElementById('editCardName').textContent + ' — ' + side, store.lufsDb, store.peakDb);
+}
+
+// ── Overlay open/close ────────────────────────────────────────────
+function sinrOpenOverlay(cardId) {
+  const store = window._sinrDataStore[cardId];
+  if (!store || !store.sinrData) return;
+  const overlay = document.getElementById('sinrOverlay');
+  const canvas  = document.getElementById('sinrOverlayCanvas');
+  const title   = document.getElementById('sinrOverlayTitle');
+  if (!overlay || !canvas) return;
+
+  // Set title from card header
+  const hdr = document.getElementById(cardId.replace('SINR','') + '_header') ||
+              document.getElementById(cardId === 'rawLSINR' ? 'rawLCardName' : 'rawRCardName');
+  title.textContent = (hdr ? hdr.textContent : 'Roomtone Spectrum') + ' — Roomtone Spectrum';
+
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  // Draw large version on overlay canvas
+  sinrDrawSpectrum(canvas, store.sinrData, store.spikes, store.nfDb, store.lufsDb, store.peakDb);
+}
+
+function sinrOverlayClose(e) {
+  // Close on backdrop click or explicit call
+  if (e && e.target !== document.getElementById('sinrOverlay')) return;
+  const overlay = document.getElementById('sinrOverlay');
+  if (overlay) overlay.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') sinrOverlayClose(null);
+});
+
+// ══ END SINR PROTOTYPE ═══════════════════════════════════════════
 
 // ── Audio ────────────────────────────────────────────────────
 function toDB(lin) { return 20 * Math.log10(Math.max(lin, 1e-10)); }
@@ -1822,7 +2800,25 @@ async function runAnalysis() {
 
     if (rawStereoFile) { setProgress('Analyzing RAW Stereo…', 10); rawStereoA = await analyzeRawStereo(rawStereoFile); }
     if (rawLeftFiles.length)  { setProgress('Analyzing RAW Left…',  25); rawLA = await analyzeGroup(rawLeftFiles); }
+    if (rawLA && rawLeftFiles.length) {
+      setProgress('SINR — RAW Left…', 32);
+      rawLA.sinrData = await computeSINRData(rawLeftFiles);
+      const _sortedL = [...rawLeftFiles].sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true}));
+      rawLA.sinrDataFirst = await sinrSpectrumFromFile(_sortedL[0]);
+      rawLA.sinrDataLast  = _sortedL.length > 1
+        ? await sinrSpectrumFromFile(_sortedL[_sortedL.length - 1])
+        : rawLA.sinrDataFirst;
+      }
     if (rawRightFiles.length) { setProgress('Analyzing RAW Right…', 40); rawRA = await analyzeGroup(rawRightFiles); }
+    if (rawRA && rawRightFiles.length) {
+      setProgress('SINR — RAW Right…', 47);
+      rawRA.sinrData = await computeSINRData(rawRightFiles);
+      const _sortedR = [...rawRightFiles].sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true}));
+      rawRA.sinrDataFirst = await sinrSpectrumFromFile(_sortedR[0]);
+      rawRA.sinrDataLast  = _sortedR.length > 1
+        ? await sinrSpectrumFromFile(_sortedR[_sortedR.length - 1])
+        : rawRA.sinrDataFirst;
+      }
 
     // Artifact scan — dual character needs both tracks, single character just needs one
     let artifactData = null;
@@ -1957,6 +2953,12 @@ async function runAnalysis() {
         eA.editHum = (ehL.detected || ehR.detected)
           ? { detected: true, freq: ehL.detected ? ehL.freq : ehR.freq, strength: Math.max(ehL.strength||0, ehR.strength||0) }
           : { detected: false };
+        // Compute silence spectrum for edit SINR panel
+        setProgress('Edit silence spectrum…', 73);
+        eA.sinrDataL = await computeSINRDataFromChannel(eBuf.getChannelData(0), eBuf.sampleRate);
+        eA.sinrDataR = eBuf.numberOfChannels > 1
+          ? await computeSINRDataFromChannel(eBuf.getChannelData(1), eBuf.sampleRate)
+          : null;
       }
     }
     if (mFile) {
@@ -2033,6 +3035,21 @@ async function runAnalysis() {
       const mss = computeSignalSilence(mBuf);
       mA.signalPct = mss.signalPct; mA.silencePct = mss.silencePct;
       mA.signalDur = mss.signalDur; mA.silenceDur = mss.silenceDur;
+      // Mixed silence spectrum + interference detection
+      if (mBuf.numberOfChannels >= 2) {
+        setProgress('Mixed silence spectrum…', 90);
+        const mSr = mBuf.sampleRate;
+        const mNfL = mA.ch0 ? mA.ch0.noiseFloorDb : mA.noiseFloorDb;
+        const mNfR = mA.ch1 ? mA.ch1.noiseFloorDb : mA.noiseFloorDb;
+        mA.sinrDataL = await computeSINRDataFromChannel(mBuf.getChannelData(0), mSr);
+        mA.sinrDataR = await computeSINRDataFromChannel(mBuf.getChannelData(1), mSr);
+        const miL = detectInterference(mBuf.getChannelData(0), mSr, mNfL);
+        const miR = detectInterference(mBuf.getChannelData(1), mSr, mNfR);
+        mA.mixInterference = {
+          detected: miL.detected || miR.detected,
+          spikes: { left: miL.detected ? miL.spikes : [], right: miR.detected ? miR.spikes : [] }
+        };
+      }
     }
 
     // Load markers .txt if present
@@ -2103,7 +3120,7 @@ function nfBarHTML(nf, rms, peak) {
   const MIN = -100, RANGE = 100, W = 1400;
   const px = db => Math.max(0, Math.min(W, (db - MIN) / RANGE * W));
 
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
   const nfCol  = nf >= -50  ? (isDark ? '#ff4060' : '#d4001a')
                : nf > -57  ? (isDark ? '#ff7800' : '#cc5500')
@@ -2224,7 +3241,7 @@ function nfBarHTML(nf, rms, peak) {
 }
 function lrBalanceBarHTML(lrDelta, ch0rms, ch1rms) {
   if (lrDelta === null) return '';
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const linL = Math.pow(10, ch0rms / 20);
   const linR = Math.pow(10, ch1rms / 20);
   const position = linR / (linL + linR) * 100;
@@ -2259,7 +3276,7 @@ function nfPct(db) {
 }
 
 function dbBarHTML(db, type) {
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const lblCol = isDark ? 'var(--text2)' : 'var(--text3)';
 
   if (type === 'nf') {
@@ -2526,7 +3543,7 @@ function lufsBarHTML(lufs, target) {
 function snrDrBarHTML(nf, rms, peak) {
   const MIN = -80, RANGE = 80;
   const linPct = v => Math.max(0, Math.min(100, (v - MIN) / RANGE * 100));
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const lblCol = isDark ? 'var(--text2)' : 'var(--text3)';
 
   // All three values use the same linear -80 to 0 scale for correct relative positioning
@@ -2927,11 +3944,46 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     // Show alert if serious audible spikes — also list any ultrasonic present
     if (isSeriousE) {
       const fmtHz = f => f < 1000 ? `${Math.round(f)}Hz` : `${(f/1000).toFixed(1)}kHz`;
-      const audibleDesc   = audibleESpikes.slice(0,3).map(s => fmtHz(s.freq)).join(', ');
-      const ultraDesc     = ultraESpikes.length ? `, ${ultraESpikes.slice(0,2).map(s => fmtHz(s.freq)).join(', ')}` : '';
-      editInterfRow = `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
-        ⚠ Signal interference in Edit — ${audibleDesc}${ultraDesc} · Check by ear in silence regions
-      </div>`;
+      // Use two-dimensional scoring for display severity
+      // Absolute dBFS per spike from editA sinrDataL if available
+      function editSpikeAbsDb(s) {
+        const sd = editA && editA.sinrDataL;
+        if (!sd) return -80; // assume moderate if no spectrum data
+        const CAL = 20 * Math.log10(4096 * 0.5);
+        const bin = Math.round(s.freq * 4096 / (sd.sr || 44100));
+        const pow = sd.avgSpectrum[Math.min(bin, 2047)];
+        return pow > 0 ? 10 * Math.log10(pow) - CAL : -140;
+      }
+      function editSpikeVerdict(s) {
+        const abs = editSpikeAbsDb(s);
+        if (s.ratio < 16 || abs < -100) return 'trace';
+        if (abs < -90) return 'faint';
+        if (abs < -80) return 'moderate';
+        return 'severe';
+      }
+      // Merge close spikes before display
+      const mergedAudible = mergeCloseSpikes(audibleESpikes, 1000);
+      const mergedUltra   = mergeCloseSpikes(ultraESpikes,   1000);
+      const worstVerdict  = mergedAudible.concat(mergedUltra).reduce((w, s) => {
+        const rank = { trace:0, faint:1, moderate:2, severe:3 };
+        const v = editSpikeVerdict(s);
+        return rank[v] > rank[w] ? v : w;
+      }, 'trace');
+
+      const audibleDesc = mergedAudible.slice(0,3).map(s => fmtHz(s.freq)).join(', ');
+      const ultraDesc   = mergedUltra.length ? ` · Ultrasonic: ${mergedUltra.slice(0,2).map(s => fmtHz(s.freq)).join(', ')}` : '';
+      const allDesc     = [audibleDesc, ultraDesc].filter(Boolean).join('');
+
+      if (worstVerdict === 'severe' || worstVerdict === 'moderate') {
+        editInterfRow = `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
+          ⚠ Tonal interference in Edit — ${allDesc}
+        </div>`;
+      } else {
+        // Trace or faint — neutral observation, no alarm color
+        editInterfRow = `<div style="margin:8px 20px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--text3)">
+          Spectral tone detected in Edit — ${allDesc}${ultraDesc}
+        </div>`;
+      }
     }
   }
   if (editA && editA.editHum && editA.editHum.detected && (editA.editHum.strength||0) >= 150) {
@@ -4676,8 +5728,55 @@ function qaChip(score) {
   return `<span style="${base} var(--qa-serious-border);background:var(--qa-serious-bg);color:var(--qa-serious-text)">Serious</span>`;
 }
 
+// Global helper — predict spikes that would cross detection gate after clip gain
+// Uses first + last take spectra independently; returns merged spike list
+function predictGainSpikesGlobal(sinrData, clipGainDb) {
+  if (!sinrData || !sinrData.avgSpectrum || clipGainDb < 3) return [];
+  const { avgSpectrum, sr } = sinrData;
+  const CAL_LOC  = 20 * Math.log10(4096 * 0.5);
+  const n = avgSpectrum.length, hw = 48;
+  const localFloor = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const lo = Math.max(0, i-hw), hi = Math.min(n-1, i+hw);
+    const s = [];
+    for (let k = lo; k <= hi; k++) s.push(avgSpectrum[k]);
+    s.sort((a,b) => a-b);
+    localFloor[i] = s[s.length >> 1];
+  }
+  const THRESH_LIN = Math.pow(10, 16 / 10);
+  const gainLin    = Math.pow(10, clipGainDb / 10);
+  const binHz      = sr / 4096;
+  const loScan     = Math.round(300  / binHz);
+  const hiScan     = Math.round((sr / 2 - 200) / binHz);
+  const found = [];
+  for (let k = loScan; k < hiScan && k < avgSpectrum.length; k++) {
+    const fl      = localFloor[k] || 1e-30;
+    const origRat = avgSpectrum[k] / fl;
+    const adjRat  = origRat * gainLin;
+    if (origRat >= THRESH_LIN) continue;
+    if (adjRat < THRESH_LIN) continue;
+    const absDbAfterGain = (10 * Math.log10(avgSpectrum[k] + 1e-30) - CAL_LOC) + clipGainDb;
+    if (absDbAfterGain < -90) continue;
+    found.push({ freq: k * sr / 4096, ratio: 10 * Math.log10(adjRat), predicted: true });
+  }
+  return mergeCloseSpikes(found, 1000).slice(0, 5);
+}
+
+function predictedSpikesForTrack(rawA) {
+  if (!rawA || rawA.lufs == null) return [];
+  const lufsGain = -24 - rawA.lufs;
+  const peakRoom = rawA.peakDb != null ? -1.0 - rawA.peakDb : Infinity;
+  const cg = Math.max(0, Math.min(lufsGain, peakRoom));
+  if (cg < 3) return [];
+  const candidates = [];
+  for (const sd of [rawA.sinrDataFirst, rawA.sinrDataLast].filter(Boolean)) {
+    candidates.push(...predictGainSpikesGlobal(sd, cg));
+  }
+  return mergeCloseSpikes(candidates, 1000);
+}
+
 function renderQualityCard(rawLA, rawRA, artifactData) {
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
   // ── Collapsible clip list ──────────────────────────────
   let _collapseId = 0;
@@ -4879,10 +5978,87 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
       }
     }
     if (combinedScore >= 3) {
-      parts.push('⚠ Check by ear in silence regions — if hum or tone is audible, fail QA and report');
+      parts.push('Verify by ear in silence regions');
     }
     humDesc = parts.join(' · ');
   }
+  // ── Clip-gain-adjusted interference prediction ──────────────
+  // Scans first + last take spectra for sub-threshold tones that would cross 16dB
+  // after clip gain. Guards with absolute dBFS check to suppress deep-noise tones.
+  function predictGainSpikes(sinrData, clipGainDb) {
+    if (!sinrData || !sinrData.avgSpectrum || clipGainDb < 3) return [];
+    const { avgSpectrum, sr } = sinrData;
+    const CAL_LOC  = 20 * Math.log10(4096 * 0.5);
+    // Inline sliding median (±48 bins)
+    const localFloor = (() => {
+      const n = avgSpectrum.length, hw = 48, out = new Float64Array(n);
+      for (let i = 0; i < n; i++) {
+        const lo = Math.max(0, i-hw), hi = Math.min(n-1, i+hw);
+        const s = [];
+        for (let k = lo; k <= hi; k++) s.push(avgSpectrum[k]);
+        s.sort((a,b) => a-b);
+        out[i] = s[s.length >> 1];
+      }
+      return out;
+    })();
+    const THRESH_LIN = Math.pow(10, 16 / 10);
+    const gainLin    = Math.pow(10, clipGainDb / 10);
+    const binHz      = sr / 4096;
+    const loScan     = Math.round(300  / binHz);
+    const hiScan     = Math.round((sr / 2 - 200) / binHz);
+    const found = [];
+    for (let k = loScan; k < hiScan && k < avgSpectrum.length; k++) {
+      const fl      = localFloor[k] || 1e-30;
+      const origRat = avgSpectrum[k] / fl;
+      const adjRat  = origRat * gainLin;
+      if (origRat >= THRESH_LIN) continue;  // already detected by existing scan
+      if (adjRat < THRESH_LIN) continue;    // still below gate after gain
+
+      // Absolute dBFS guardrail — tone must be audible after gain (> −90 dBFS)
+      const absDbAfterGain = (10 * Math.log10(avgSpectrum[k] + 1e-30) - CAL_LOC) + clipGainDb;
+      if (absDbAfterGain < -90) continue;   // too faint even after gain — skip
+
+      found.push({ freq: k * sr / 4096, ratio: 10 * Math.log10(adjRat) });
+    }
+    return mergeCloseSpikes(found, 1000).slice(0, 5);
+  }
+
+  const PEAK_CEILING_CG = -1.0;
+  function clipGainForTrack(rawA) {
+    if (!rawA || rawA.lufs == null) return 0;
+    const lufsGain = -24 - rawA.lufs;
+    const peakRoom = rawA.peakDb != null ? PEAK_CEILING_CG - rawA.peakDb : Infinity;
+    return Math.max(0, Math.min(lufsGain, peakRoom));
+  }
+
+  const cgL = clipGainForTrack(rawLA);
+  const cgR = clipGainForTrack(rawRA);
+  const fmtHz2 = f => f < 1000 ? `${Math.round(f)}Hz` : `${(f/1000).toFixed(1)}kHz`;
+
+  const gainWarnParts = [];
+  // Check first AND last take — either could be the roomtone take
+  function predictFromFirstLast(rawA, cgDb) {
+    if (!rawA || cgDb < 3) return [];
+    const candidates = [];
+    const sds = [rawA.sinrDataFirst, rawA.sinrDataLast].filter(Boolean);
+    for (const sd of sds) {
+      candidates.push(...predictGainSpikes(sd, cgDb));
+    }
+    return mergeCloseSpikes(candidates, 1000);
+  }
+
+  const psL = (cgL >= 3 && rawLA) ? predictFromFirstLast(rawLA, cgL) : [];
+  const psR = (cgR >= 3 && rawRA) ? predictFromFirstLast(rawRA, cgR) : [];
+
+  if (psL.length || psR.length) {
+    const parts = [];
+    if (psL.length) parts.push(`Left: ${psL.map(s => fmtHz2(s.freq)).join(', ')}`);
+    if (psR.length) parts.push(`Right: ${psR.map(s => fmtHz2(s.freq)).join(', ')}`);
+    humDesc += (humDesc ? ' · ' : '')
+      + `⚑ After clip gain — possible tones in roomtone: ${parts.join(' · ')} · Verify by ear`;
+    if (combinedScore === 1) combinedScore = 2;
+  }
+
   rows.push(aRow('Hum / Buzz / Interference', qaChip(combinedScore), humDesc, humLevel, a.hum.clips, true));
 
   // ── Mic Pops score 1–5 ────────────────────────────────
@@ -4993,22 +6169,84 @@ function buildRecommendations(rawLA, rawRA, eA, mA, artifactData) {
     const allSpikes = interfDet ? (Array.isArray(_recInterfSrc.spikes)
       ? _recInterfSrc.spikes
       : [...(_recInterfSrc.spikes?.left||[]), ...(_recInterfSrc.spikes?.right||[])]) : [];
-    const audibleSpikes = allSpikes.filter(s => s.freq < 18000);
-    const maxRatio = audibleSpikes.length ? Math.max(...audibleSpikes.map(s => s.ratio)) : 0;
-    const humStr   = humDet ? (_recHumSrc.strength || 0) : 0;
+    const audibleSpikes = mergeCloseSpikes(allSpikes.filter(s => s.freq < 18000), 1000);
+    const humStr = humDet ? (_recHumSrc.strength || 0) : 0;
     const hS = !humDet ? 1 : humStr < 50 ? 2 : humStr < 150 ? 3 : humStr < 300 ? 4 : 5;
-    const iS = !interfDet ? 1 : !audibleSpikes.length ? 2 : maxRatio < 16 ? 2 : maxRatio < 20 ? 3 : maxRatio < 28 ? 4 : 5;
+
+    // Two-dimensional interference scoring — matches Roomtone Spectrum panel
+    // Uses sinrDataL from edit or rawLA for absolute dBFS lookup
+    const _recSinrData = (eA && eA.sinrDataL) ? eA.sinrDataL
+      : (rawLA && rawLA.sinrData) ? rawLA.sinrData : null;
+    function recSpikeAbsDb(s) {
+      if (!_recSinrData) return -85; // conservative default
+      const CAL = 20 * Math.log10(4096 * 0.5);
+      const bin = Math.round(s.freq * 4096 / (_recSinrData.sr || 44100));
+      const pow = _recSinrData.avgSpectrum[Math.min(bin, 2047)];
+      return pow > 0 ? 10 * Math.log10(pow) - CAL : -140;
+    }
+    function recSpikeVerdict(s) {
+      const abs = recSpikeAbsDb(s);
+      if (s.ratio < 16 || abs < -100) return 'trace';
+      if (abs < -90) return 'faint';
+      if (abs < -80) return 'moderate';
+      return 'severe';
+    }
+    const worstVerdict = audibleSpikes.reduce((w, s) => {
+      const rank = { trace:0, faint:1, moderate:2, severe:3 };
+      const v = recSpikeVerdict(s);
+      return rank[v] > rank[w] ? v : w;
+    }, 'trace');
 
     if (humDet && hS >= 4)
       rec('fail', `${_recLabel} — Hum Detected`, `${(_recHumSrc.freq || 60)}Hz hum present. Do not proceed.`);
     else if (humDet && hS === 3)
       rec('warn', `${_recLabel} — Hum Detected`, `${(_recHumSrc.freq || 60)}Hz hum present. Check by ear or request reviewer approval before editing.`);
 
-    if (interfDet && audibleSpikes.length) {
-      if (iS >= 4)
-        rec('fail', `${_recLabel} — Signal Interference`, 'Strong interference detected. Do not proceed.');
-      else if (iS === 3)
-        rec('warn', `${_recLabel} — Signal Interference`, 'Interference detected. Check by ear or request reviewer approval before editing.');
+    // Only recommend action if spike is genuinely SEVERE (audible level + strong ratio)
+    if (interfDet && audibleSpikes.length && worstVerdict === 'severe')
+      rec('fail', `${_recLabel} — Signal Interference`, 'Strong audible interference detected. Do not proceed.');
+
+    // ── Room tone substitution recommendation ─────────────────────────────
+    // If one track has interference and the other is clean, and LUFS within ±3 LU
+    if (rawLA && rawRA && rawLA.lufs != null && rawRA.lufs != null &&
+        artifactData && artifactData.interference) {
+      const spL = artifactData.interference.spikes?.left  || [];
+      const spR = artifactData.interference.spikes?.right || [];
+
+      // Two-dimensional verdict per track — same logic as Roomtone Spectrum
+      function trackHasAudibleInterf(spikes, sinrData) {
+        const merged = mergeCloseSpikes(spikes.filter(s => s.freq < 18000), 1000);
+        if (!merged.length) return false;
+        const CAL = 20 * Math.log10(4096 * 0.5);
+        return merged.some(s => {
+          if (s.ratio < 16) return false;
+          if (!sinrData) return true; // conservative
+          const bin = Math.round(s.freq * 4096 / (sinrData.sr || 44100));
+          const pow = sinrData.avgSpectrum[Math.min(bin, 2047)];
+          const abs = pow > 0 ? 10 * Math.log10(pow) - CAL : -140;
+          return abs > -90; // faint or worse
+        });
+      }
+
+      const lHasInterf = trackHasAudibleInterf(spL, rawLA.sinrData);
+      const rHasInterf = trackHasAudibleInterf(spR, rawRA.sinrData);
+      const lufsDiff   = Math.abs(rawLA.lufs - rawRA.lufs);
+
+      if (lufsDiff <= 3) {
+        if (lHasInterf && !rHasInterf) {
+          const fmtSpikes = mergeCloseSpikes(spL.filter(s=>s.freq<18000),1000)
+            .map(s => s.freq < 1000 ? Math.round(s.freq)+'Hz' : (s.freq/1000).toFixed(1)+'kHz').join(', ');
+          rec('warn',
+            'Left Track — Room Tone Substitution',
+            `Tonal interference at ${fmtSpikes} on Left track. Right track is clean and within ${lufsDiff.toFixed(1)} LU — use Right track's room tone to cover Left track's silence gaps.`);
+        } else if (rHasInterf && !lHasInterf) {
+          const fmtSpikes = mergeCloseSpikes(spR.filter(s=>s.freq<18000),1000)
+            .map(s => s.freq < 1000 ? Math.round(s.freq)+'Hz' : (s.freq/1000).toFixed(1)+'kHz').join(', ');
+          rec('warn',
+            'Right Track — Room Tone Substitution',
+            `Tonal interference at ${fmtSpikes} on Right track. Left track is clean and within ${lufsDiff.toFixed(1)} LU — use Left track's room tone to cover Right track's silence gaps.`);
+        }
+      }
     }
   }
 
@@ -5080,6 +6318,10 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   const hasQC   = hasEdit  || hasMix;
   const hasStereoRaw = !!rawStereoA;
 
+  // Reset spectrum panels — explicitly hide so stale state from prior analysis is cleared
+  document.getElementById('rawSINRPanel').setAttribute('hidden','');
+  document.getElementById('editSINRPanel').setAttribute('hidden','');
+
   // Always 2-column grid when more than one card type present
   const visibleCount = [hasStereoRaw, hasRawL, hasRawR, hasEdit, hasMix].filter(Boolean).length;
   const grid = document.getElementById('cardsGrid');
@@ -5097,7 +6339,33 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('rawLNFBadge').innerHTML = hpfLDet
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
       : nfBadgeHTML(rawLA.noiseFloorDb, false);
+    const _spikesLConfirmed = artifactData && artifactData.interference ? (Array.isArray(artifactData.interference.spikes) ? artifactData.interference.spikes : (artifactData.interference.spikes && artifactData.interference.spikes.left || [])) : [];
+    const _spikesLPredicted = predictedSpikesForTrack(rawLA);
+    const _spikesL = mergeCloseSpikes([..._spikesLConfirmed, ..._spikesLPredicted], 1000);
+    window._sinrDataStore['rawLSINR'] = { sinrData: rawLA.sinrData || null, spikes: _spikesL, nfDb: rawLA.noiseFloorDb, lufsDb: rawLA.lufs ?? null, peakDb: rawLA.peakDb ?? null };
     document.getElementById('rawLMetrics').innerHTML = buildMetrics(rawLA, false, true, 'raw', hpfLDet);
+    // RAW Roomtone Spectrum combined panel
+    const rawSINRPanel = document.getElementById('rawSINRPanel');
+    if (rawSINRPanel) {
+      window._rawLFilename = rawLA ? rawLA._talentCode : 'L';
+      window._rawRFilename = rawRA ? rawRA._talentCode : 'R';
+      const _hasRawR = !!(rawRA && rawRA.sinrData);
+      document.getElementById('rawSINRBtnR').style.display = _hasRawR ? '' : 'none';
+      rawSINRPanel.removeAttribute('hidden');
+      setTimeout(() => {
+        const _rc = document.getElementById('rawSINRCanvas');
+        if (_rc && rawLA && rawLA.sinrData) {
+          sinrDrawSpectrum(_rc, rawLA.sinrData, _spikesL, rawLA.noiseFloorDb, rawLA.lufs ?? null, rawLA.peakDb ?? null);
+          _rc.onclick = () => sinrOpenOverlayDirect(rawLA.sinrData, _spikesL, rawLA.noiseFloorDb, 'RAW Roomtone \u2014 L', rawLA.lufs ?? null, rawLA.peakDb ?? null);
+          const _rv = document.getElementById('rawSINRVerdict');
+          if (_rv) _rv.innerHTML = buildSINRVerdictHtml(rawLA.sinrData, _spikesL);
+          const _rm = document.getElementById('rawSINRMeta');
+          if (_rm) _rm.textContent = (rawLA._talentCode||'Left') + ' talent shown';
+          rawSINRSwitch('L');
+          _rawSINRActive = 'L';
+        }
+      }, 10);
+    }
   }
 
   // Single character QA card — full-width below RAW (same panel as dual char)
@@ -5114,6 +6382,10 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('rawRNFBadge').innerHTML = hpfRDet
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
       : nfBadgeHTML(rawRA.noiseFloorDb, false);
+    const _spikesRConfirmed = artifactData && artifactData.interference && artifactData.interference.spikes && !Array.isArray(artifactData.interference.spikes) ? (artifactData.interference.spikes.right || []) : [];
+    const _spikesRPredicted = predictedSpikesForTrack(rawRA);
+    const _spikesR = mergeCloseSpikes([..._spikesRConfirmed, ..._spikesRPredicted], 1000);
+    window._sinrDataStore['rawRSINR'] = { sinrData: rawRA.sinrData || null, spikes: _spikesR, nfDb: rawRA.noiseFloorDb, lufsDb: rawRA.lufs ?? null, peakDb: rawRA.peakDb ?? null };
     document.getElementById('rawRMetrics').innerHTML = buildMetrics(rawRA, false, true, 'raw', hpfRDet);
   }
 
@@ -5168,6 +6440,35 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
       : nfBadgeHTML(eA.noiseFloorDb);
     document.getElementById('editMetrics').innerHTML    = buildMetrics(eA, false, false, 'edit');
+    // Edit SINR panel
+    const editSINRPanel = document.getElementById('editSINRPanel');
+    if (eA.sinrDataL && eA.editInterference) {
+      const _eSpikesL = eA.editInterference.spikes && eA.editInterference.spikes.left  || [];
+      const _eSpikesR = eA.editInterference.spikes && eA.editInterference.spikes.right || [];
+      window._sinrDataStore['editSINRL'] = { sinrData: eA.sinrDataL, spikes: _eSpikesL, nfDb: eA.ch0 ? eA.ch0.noiseFloorDb : eA.noiseFloorDb, lufsDb: eA.lufsL ?? eA.lufs ?? null, peakDb: eA.ch0 ? eA.ch0.peakDb : eA.peakDb };
+      window._sinrDataStore['editSINRR'] = { sinrData: eA.sinrDataR, spikes: _eSpikesR, nfDb: eA.ch1 ? eA.ch1.noiseFloorDb : eA.noiseFloorDb, lufsDb: eA.lufsR ?? eA.lufs ?? null, peakDb: eA.ch1 ? eA.ch1.peakDb : eA.peakDb };
+      // Verdict from worst spike across both channels
+      const _eAllSpikes = [..._eSpikesL, ..._eSpikesR];
+      const _eVerd = buildSINRVerdictHtml(eA.sinrDataL, _eAllSpikes);
+      document.getElementById('editSINRVerdict').innerHTML = _eVerd;
+      window._editFilename = eFile.name;
+      window._sinrDataStore['mixSINRL'] = null;
+      window._sinrDataStore['mixSINRR'] = null;
+      _editMixSource  = 'EDIT';
+      _editMixChannel = 'L';
+      document.getElementById('editSINRMeta').textContent = eFile.name + ' — L channel';
+      editMixSINRSwitch('EDIT', 'L');
+      editSINRPanel.removeAttribute('hidden');
+      setTimeout(() => {
+        const _ec = document.getElementById('editSINRCanvas');
+        if (_ec) {
+          sinrDrawSpectrum(_ec, eA.sinrDataL, _eSpikesL, eA.ch0 ? eA.ch0.noiseFloorDb : eA.noiseFloorDb, eA.lufsL ?? eA.lufs ?? null, eA.ch0 ? eA.ch0.peakDb : eA.peakDb);
+          _ec.onclick = () => sinrOpenOverlayDirect(eA.sinrDataL, _eSpikesL, eA.ch0 ? eA.ch0.noiseFloorDb : eA.noiseFloorDb, eFile.name + ' — L');
+        }
+      }, 0);
+    } else {
+      editSINRPanel.setAttribute('hidden','');
+    }
   }
 
   document.getElementById('mixCard').style.display = hasMix ? '' : 'none';
@@ -5176,6 +6477,17 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     document.getElementById('mixCardMeta').innerHTML = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · 24-Bit · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration)+(mFile.size > 500*1024*1024 ? ' <span style="color:var(--amber);font-size:10px">(5 min slice)</span>' : '')+' · '+fmtBounceDate(mFile);
     document.getElementById('mixNFBadge').innerHTML    = nfBadgeHTML(mA.noiseFloorDb);
     document.getElementById('mixMetrics').innerHTML    = buildMetrics(mA, false, false, 'mixed');
+    // Store Mixed sinr data for Edit/Mixed panel
+    if (mA.sinrDataL) {
+      const _mSpikesL = mA.mixInterference && mA.mixInterference.spikes ? (mA.mixInterference.spikes.left  || []) : [];
+      const _mSpikesR = mA.mixInterference && mA.mixInterference.spikes ? (mA.mixInterference.spikes.right || []) : [];
+      window._mixFilename = mFile.name;
+      window._sinrDataStore['mixSINRL'] = { sinrData: mA.sinrDataL, spikes: _mSpikesL, nfDb: mA.ch0 ? mA.ch0.noiseFloorDb : mA.noiseFloorDb, lufsDb: mA.lufsL ?? mA.lufs ?? null, peakDb: mA.ch0 ? mA.ch0.peakDb : mA.peakDb };
+      window._sinrDataStore['mixSINRR'] = { sinrData: mA.sinrDataR, spikes: _mSpikesR, nfDb: mA.ch1 ? mA.ch1.noiseFloorDb : mA.noiseFloorDb, lufsDb: mA.lufsR ?? mA.lufs ?? null, peakDb: mA.ch1 ? mA.ch1.peakDb : mA.peakDb };
+      // Enable MIX button in edit panel if it's visible
+      const _mixBtn = document.getElementById('editSINRBtnMix');
+      if (_mixBtn) _mixBtn.style.opacity = '0.45';
+    }
   }
 
   // Compare panel — Edit vs Mixed
@@ -5405,7 +6717,7 @@ function copyAllQFields(btn) {
 function buildQCQuestionnaire() {
   const e  = _eA,  m  = _mA,  a  = _artifactData;
   const ec = e && e.editChecks;
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
   const na = 'N/A';
   const fmt1 = v => v != null ? v.toFixed(1) : na;
@@ -5575,15 +6887,17 @@ function buildQCQuestionnaire() {
     const hS6 = !humDet ? 1 : humStr6 < 50 ? 2 : humStr6 < 150 ? 3 : humStr6 < 300 ? 4 : 5;
     const audibleSpikes = allSpikes.some(s => s.freq < 18000);
     const iS6 = !interfDet ? 1 : !audibleSpikes ? 2 : maxRatio6 < 16 ? 2 : maxRatio6 < 20 ? 3 : maxRatio6 < 28 ? 4 : 5;
-    const audibleSpikesSorted = allSpikes.filter(s => s.freq < 18000).sort((a,b) => b.ratio - a.ratio);
-    const ultrasonicSpikes    = allSpikes.filter(s => s.freq >= 18000);
-    const allUltrasonic = allSpikes.length > 0 && allSpikes.every(s => s.freq >= 18000);
+    // Merge close spikes before questionnaire text
+    const mergedAllSpikes     = mergeCloseSpikes(allSpikes, 1000);
+    const audibleSpikesSorted = mergeCloseSpikes(mergedAllSpikes.filter(s => s.freq < 18000), 1000).sort((a,b) => b.ratio - a.ratio);
+    const ultrasonicSpikes    = mergeCloseSpikes(mergedAllSpikes.filter(s => s.freq >= 18000), 1000);
+    const allUltrasonic = mergedAllSpikes.length > 0 && mergedAllSpikes.every(s => s.freq >= 18000);
     // Build frequency lists for sentence
     const fmtF = f => f < 1000 ? `${Math.round(f)}Hz` : `${(f/1000).toFixed(1)}kHz`;
     const audibleFreqs    = audibleSpikesSorted.map(s => fmtF(s.freq));
     const ultrasonicFreqs = ultrasonicSpikes.map(s => fmtF(s.freq));
     const audibleStr   = audibleFreqs.length ? audibleFreqs.join(', ') : '';
-    const ultraStr     = ultrasonicFreqs.length ? `Spectral spike at ${ultrasonicFreqs.join(', ')}.` : '';
+    const ultraStr     = ultrasonicFreqs.length ? `Spectral tone at ${ultrasonicFreqs.join(', ')}.` : '';
     const humFreqStr   = _qh.freq || 60;
 
     if (!humDet && !interfDet) {
@@ -5605,11 +6919,11 @@ function buildQCQuestionnaire() {
         `Spectral spike detected at ${ultrasonicFreqs.join(', ')}.`
       ]);
     } else if (!humDet && interfDet) {
-      const audiblePart = audibleStr ? `Signal interference at ${audibleStr}.` : '';
+      const audiblePart = audibleStr ? `Tonal interference at ${audibleStr}.` : '';
       q6 = `${audiblePart}${audiblePart && ultraStr ? ' ' : ''}${ultraStr}`.trim();
       if (!q6) q6 = 'Interference detected in the session.';
     } else {
-      const audiblePart = audibleStr ? `Signal interference at ${audibleStr}.` : '';
+      const audiblePart = audibleStr ? `Tonal interference at ${audibleStr}.` : '';
       q6 = `${humFreqStr}Hz hum present. ${audiblePart}${audiblePart && ultraStr ? ' ' : ''}${ultraStr}`.trim();
     }
   }
@@ -5871,6 +7185,24 @@ function buildQCQuestionnaire() {
   <footer style="text-align:center;padding:32px 0 20px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--text3);letter-spacing:.8px;border-top:1px solid var(--border2);margin-top:40px">
     Created by Danny Beta
   </footer>
+
+<!-- SINR Spectrum Overlay -->
+<div class="sinr-overlay" id="sinrOverlay" onclick="sinrOverlayClose(event)">
+  <div class="sinr-overlay-inner">
+    <div class="sinr-overlay-header">
+      <span id="sinrOverlayTitle">Roomtone Spectrum</span>
+      <button class="sinr-overlay-close" onclick="sinrOverlayClose(null)">&times;</button>
+    </div>
+    <div class="sinr-overlay-legend">
+      <span style="color:var(--blue)">&#9632; Silence spectrum</span>
+      <span style="color:#FF6600">&#9632; Detected tonal interference</span>
+      <span style="color:#a050ff">&#9632; Noise floor</span>
+    </div>
+    <div class="sinr-overlay-canvas-wrap">
+      <canvas id="sinrOverlayCanvas" width="1600" height="460"></canvas>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
