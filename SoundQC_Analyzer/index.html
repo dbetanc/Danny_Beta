@@ -1362,6 +1362,7 @@ function processFiles(files, autoRun) {
 
 function fmtSize(b) { return b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(1)+' MB'; }
 function fmtDur(s)  { const m = Math.floor(s/60), sc = Math.floor(s%60); return m+':'+String(sc).padStart(2,'0'); }
+function fmtHrMin(s) { const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sc = Math.floor(s%60); return h+':'+String(m).padStart(2,'0')+':'+String(sc).padStart(2,'0'); }
 function fmtCardName(name) { return name.replace(/(_t[12][lr])/, '<br>$1'); }
 
 // Extract MMDD recording date from RAW filename (e.g. engblykbar_1117_ → Nov 17)
@@ -2634,7 +2635,8 @@ async function scanFullFileLUFS(file, onProgress) {
     return -0.691 + 10*Math.log10(g2.reduce((s,v)=>s+v,0)/g2.length);
   }
 
-  return { lufs: integrate(bmSt), lufsL: integrate(bmL), lufsR: nc>=2 ? integrate(bmR) : integrate(bmL) };
+  const fileDuration = dataSize > 0 ? (dataSize / bpf) / sr : null;
+  return { lufs: integrate(bmSt), lufsL: integrate(bmL), lufsR: nc>=2 ? integrate(bmR) : integrate(bmL), fileDuration };
 }
 
 async function analyzeRawStereo(file) {
@@ -2939,6 +2941,7 @@ async function runAnalysis() {
           eA.ch1.rmsDb = eFullLufs.lufsR;
           eA.lrDelta   = Math.abs(eFullLufs.lufsL - eFullLufs.lufsR);
         }
+        if (eFullLufs.fileDuration != null) eA.fileDuration = eFullLufs.fileDuration;
       }
       await new Promise(r => setTimeout(r, 0));
       const ss = computeSignalSilence(eBuf);
@@ -3065,6 +3068,7 @@ async function runAnalysis() {
           mA.ch1.rmsDb = mFullLufs.lufsR;
           mA.lrDelta   = Math.abs(mFullLufs.lufsL - mFullLufs.lufsR);
         }
+        if (mFullLufs.fileDuration != null) mA.fileDuration = mFullLufs.fileDuration;
       }
       await new Promise(r => setTimeout(r, 0));
       const mss = computeSignalSilence(mBuf);
@@ -3851,12 +3855,12 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">BILLABLE TIME</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--blue)">${fmtDur(correctedNet)}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--blue)">${fmtHrMin(correctedNet)}</div>
           <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${mSpeechPct.toFixed(1)}% of session</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SESSION TOTAL</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${fmtDur(markersData.grossSeconds)}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${fmtHrMin(markersData.grossSeconds)}</div>
           <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${markersData.pairs} pairs</div>
         </div>
       </div>
@@ -6402,7 +6406,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   if (hasEdit) {
     document.getElementById('editCardType').innerHTML = '<span class="card-type-qc">QC</span> — Edit WAV';
     document.getElementById('editCardName').textContent = eFile.name;
-    document.getElementById('editCardMeta').innerHTML = fmtSize(eFile.size)+' · '+eA.sampleRate/1000+' kHz · 24-Bit · '+(eA.channels===1?'Mono':'Stereo')+' · '+fmtDur(eA.duration)+(eFile.size > 500*1024*1024 ? ' <span style="color:var(--amber);font-size:10px">(5 min slice)</span>' : '')+' · '+fmtBounceDate(eFile);
+    document.getElementById('editCardMeta').innerHTML = fmtSize(eFile.size)+' · '+eA.sampleRate/1000+' kHz · 24-Bit · '+(eA.channels===1?'Mono':'Stereo')+' · '+fmtHrMin(eA.fileDuration ?? eA.duration)+(eFile.size > 500*1024*1024 && !eA.fileDuration ? ' <span style="color:var(--amber);font-size:10px">(5 min slice)</span>' : '')+' · '+fmtBounceDate(eFile);
     document.getElementById('editNFBadge').innerHTML = (eA.hpf && eA.hpf.detected)
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
       : nfBadgeHTML(eA.noiseFloorDb);
@@ -6441,7 +6445,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   document.getElementById('mixCard').style.display = hasMix ? '' : 'none';
   if (hasMix) {
     document.getElementById('mixCardName').textContent = mFile.name;
-    document.getElementById('mixCardMeta').innerHTML = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · 24-Bit · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtDur(mA.duration)+(mFile.size > 500*1024*1024 ? ' <span style="color:var(--amber);font-size:10px">(5 min slice)</span>' : '')+' · '+fmtBounceDate(mFile);
+    document.getElementById('mixCardMeta').innerHTML = fmtSize(mFile.size)+' · '+mA.sampleRate/1000+' kHz · 24-Bit · '+(mA.channels===1?'Mono':'Stereo')+' · '+fmtHrMin(mA.fileDuration ?? mA.duration)+(mFile.size > 500*1024*1024 && !mA.fileDuration ? ' <span style="color:var(--amber);font-size:10px">(5 min slice)</span>' : '')+' · '+fmtBounceDate(mFile);
     document.getElementById('mixNFBadge').innerHTML    = nfBadgeHTML(mA.noiseFloorDb);
     document.getElementById('mixMetrics').innerHTML    = buildMetrics(mA, false, false, 'mixed');
     // Store Mixed sinr data for Edit/Mixed panel
@@ -6487,7 +6491,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
   if (hasEdit && eA.signalPct !== undefined) {
     sac.style.display = '';
     document.getElementById('sessionAnalysisMeta').textContent =
-      'Based on Edit WAV · ' + fmtDur(eA.duration);
+      'Based on Edit WAV · ' + fmtHrMin(eA.fileDuration ?? eA.duration);
     document.getElementById('sessionAnalysisMetrics').innerHTML =
       buildSpeechBlock(eA, (hasRawL && !hasRawR) ? null : (eA.editChecks || null), eA, mA);
   } else if (!hasEdit && hasMix && mA.signalPct !== undefined) {
