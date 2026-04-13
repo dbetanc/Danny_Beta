@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================
-  SOBA - Session Pre-checker v2.8
+  SOBA - Session Pre-checker v2.9
   Created by: Danny Beta
   Date: March 2026
   
@@ -14,7 +14,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="author" content="Danny Beta"/>
-<title>SOBA - Session Pre-checker v2.8</title>
+<title>SOBA - Session Pre-checker v2.9</title>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-444D9CS8EE"></script>
 <script>
@@ -781,7 +781,7 @@ input[type=file] {
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.8</div>
+      <div class="version-badge">v2.9</div>
       <button class="theme-toggle" id="themeToggle" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">LIGHT</span>
@@ -2561,8 +2561,8 @@ const tracks = parseTracks(lines);
 
         output.innerHTML =
           renderFolderNameSection(sessionName, folderCheck) +
-          renderAudioFilesSection(online, audioCheck, missingOnlineFiles) +
           renderTracksSection(tracks, expectedList, missingTrackListing, trackNamesFromMarkersErrors) +
+          renderAudioFilesSection(online, audioCheck, missingOnlineFiles) +
           renderMarkersReport(markerErrors) +
           renderBouncedSection(sessionName, online, bounced);
 
