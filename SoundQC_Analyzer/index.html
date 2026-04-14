@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.6.9
+  SOBA — Audio QA & QC Checker v3.7
   Created by: Danny Beta
   Date: April 2026
 
@@ -27,7 +27,7 @@
   gtag('js', new Date());
   gtag('config', 'G-444D9CS8EE');
 </script>
-<title>SOBA — Audio QA & QC v3.6.9</title>
+<title>SOBA — Audio QA & QC v3.7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -721,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.6.9</div>
+            <div class="version-badge">v3.7</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -2428,19 +2428,20 @@ async function decodeFileSlice(file, maxSeconds) {
 
 // Full-file peak scan — reads raw WAV bytes in chunks, no full decode.
 // Returns { peakDb, ch0PeakDb, ch1PeakDb, rmsDb, ch0RmsDb, ch1RmsDb } or null on unsupported format.
-async function scanFullFilePeak(file) {
+async function scanFullFilePeak(file, nfDb) {
   const headAB = await file.slice(0, 8192).arrayBuffer();
   const hv = new DataView(headAB);
   const riff = String.fromCharCode(hv.getUint8(0),hv.getUint8(1),hv.getUint8(2),hv.getUint8(3));
   const wave = String.fromCharCode(hv.getUint8(8),hv.getUint8(9),hv.getUint8(10),hv.getUint8(11));
   if (riff !== 'RIFF' || wave !== 'WAVE') return null;
-  let pos = 12, numChannels = 2, bitsPerSample = 24, audioFormat = 1, dataStart = -1, dataSize = -1;
+  let pos = 12, numChannels = 2, bitsPerSample = 24, audioFormat = 1, sampleRate = 48000, dataStart = -1, dataSize = -1;
   while (pos < headAB.byteLength - 8) {
     const id   = String.fromCharCode(hv.getUint8(pos),hv.getUint8(pos+1),hv.getUint8(pos+2),hv.getUint8(pos+3));
     const size = hv.getUint32(pos+4, true);
     if (id === 'fmt ') {
       audioFormat   = hv.getUint16(pos+8,  true);
       numChannels   = hv.getUint16(pos+10, true);
+      sampleRate    = hv.getUint32(pos+12, true);
       bitsPerSample = hv.getUint16(pos+22, true);
     }
     if (id === 'data') { dataStart = pos + 8; dataSize = size; break; }
@@ -2454,6 +2455,13 @@ async function scanFullFilePeak(file) {
   const chPeaks = new Float32Array(numChannels);
   const chSumSq = new Float64Array(numChannels); // accumulate squared samples for RMS
   let totalFrames = 0;
+
+  // Speech/silence accumulator — piggybacked on existing chunk loop
+  const winSz     = Math.floor(sampleRate * 0.05); // 50ms windows
+  const threshLin = nfDb != null ? Math.pow(10, (nfDb + 12) / 20) : Math.pow(10, -40 / 20);
+  let winSumSq0 = 0, winSumSq1 = 0, winFrameCount = 0;
+  let sigWin = 0, totWin = 0;
+
   let offset = dataStart;
   while (offset < dataEnd) {
     const raw = Math.min(CHUNK, dataEnd - offset);
@@ -2464,36 +2472,76 @@ async function scanFullFilePeak(file) {
     const frames = aligned / bytesPerFrame;
     totalFrames += frames;
     if (bitsPerSample === 16 && audioFormat === 1) {
-      for (let f = 0; f < frames; f++) for (let c = 0; c < numChannels; c++) {
-        const s = dv.getInt16((f * numChannels + c) * 2, true) / 32768;
-        const a = Math.abs(s);
-        if (a > chPeaks[c]) chPeaks[c] = a;
-        chSumSq[c] += s * s;
+      for (let f = 0; f < frames; f++) {
+        for (let c = 0; c < numChannels; c++) {
+          const s = dv.getInt16((f * numChannels + c) * 2, true) / 32768;
+          const a = Math.abs(s);
+          if (a > chPeaks[c]) chPeaks[c] = a;
+          chSumSq[c] += s * s;
+          if (c === 0) winSumSq0 += s * s;
+          else if (c === 1) winSumSq1 += s * s;
+        }
+        winFrameCount++;
+        if (winFrameCount >= winSz) {
+          const rms0 = Math.sqrt(winSumSq0 / winSz), rms1 = Math.sqrt(winSumSq1 / winSz);
+          if (rms0 > threshLin || rms1 > threshLin) sigWin++;
+          totWin++; winSumSq0 = 0; winSumSq1 = 0; winFrameCount = 0;
+        }
       }
     } else if (bitsPerSample === 24 && audioFormat === 1) {
       const bytes = new Uint8Array(ab);
-      for (let f = 0; f < frames; f++) for (let c = 0; c < numChannels; c++) {
-        const bp = (f * numChannels + c) * 3;
-        let v = (bytes[bp+2] << 16) | (bytes[bp+1] << 8) | bytes[bp];
-        if (v & 0x800000) v |= ~0xFFFFFF;
-        const s = v / 8388608;
-        const a = Math.abs(s);
-        if (a > chPeaks[c]) chPeaks[c] = a;
-        chSumSq[c] += s * s;
+      for (let f = 0; f < frames; f++) {
+        for (let c = 0; c < numChannels; c++) {
+          const bp = (f * numChannels + c) * 3;
+          let v = (bytes[bp+2] << 16) | (bytes[bp+1] << 8) | bytes[bp];
+          if (v & 0x800000) v |= ~0xFFFFFF;
+          const s = v / 8388608;
+          const a = Math.abs(s);
+          if (a > chPeaks[c]) chPeaks[c] = a;
+          chSumSq[c] += s * s;
+          if (c === 0) winSumSq0 += s * s;
+          else if (c === 1) winSumSq1 += s * s;
+        }
+        winFrameCount++;
+        if (winFrameCount >= winSz) {
+          const rms0 = Math.sqrt(winSumSq0 / winSz), rms1 = Math.sqrt(winSumSq1 / winSz);
+          if (rms0 > threshLin || rms1 > threshLin) sigWin++;
+          totWin++; winSumSq0 = 0; winSumSq1 = 0; winFrameCount = 0;
+        }
       }
     } else if (bitsPerSample === 32 && audioFormat === 3) {
-      for (let f = 0; f < frames; f++) for (let c = 0; c < numChannels; c++) {
-        const s = dv.getFloat32((f * numChannels + c) * 4, true);
-        const a = Math.abs(s);
-        if (a > chPeaks[c]) chPeaks[c] = a;
-        chSumSq[c] += s * s;
+      for (let f = 0; f < frames; f++) {
+        for (let c = 0; c < numChannels; c++) {
+          const s = dv.getFloat32((f * numChannels + c) * 4, true);
+          const a = Math.abs(s);
+          if (a > chPeaks[c]) chPeaks[c] = a;
+          chSumSq[c] += s * s;
+          if (c === 0) winSumSq0 += s * s;
+          else if (c === 1) winSumSq1 += s * s;
+        }
+        winFrameCount++;
+        if (winFrameCount >= winSz) {
+          const rms0 = Math.sqrt(winSumSq0 / winSz), rms1 = Math.sqrt(winSumSq1 / winSz);
+          if (rms0 > threshLin || rms1 > threshLin) sigWin++;
+          totWin++; winSumSq0 = 0; winSumSq1 = 0; winFrameCount = 0;
+        }
       }
     } else if (bitsPerSample === 32 && audioFormat === 1) {
-      for (let f = 0; f < frames; f++) for (let c = 0; c < numChannels; c++) {
-        const s = dv.getInt32((f * numChannels + c) * 4, true) / 2147483648;
-        const a = Math.abs(s);
-        if (a > chPeaks[c]) chPeaks[c] = a;
-        chSumSq[c] += s * s;
+      for (let f = 0; f < frames; f++) {
+        for (let c = 0; c < numChannels; c++) {
+          const s = dv.getInt32((f * numChannels + c) * 4, true) / 2147483648;
+          const a = Math.abs(s);
+          if (a > chPeaks[c]) chPeaks[c] = a;
+          chSumSq[c] += s * s;
+          if (c === 0) winSumSq0 += s * s;
+          else if (c === 1) winSumSq1 += s * s;
+        }
+        winFrameCount++;
+        if (winFrameCount >= winSz) {
+          const rms0 = Math.sqrt(winSumSq0 / winSz), rms1 = Math.sqrt(winSumSq1 / winSz);
+          if (rms0 > threshLin || rms1 > threshLin) sigWin++;
+          totWin++; winSumSq0 = 0; winSumSq1 = 0; winFrameCount = 0;
+        }
       }
     }
     offset += aligned;
@@ -2505,7 +2553,16 @@ async function scanFullFilePeak(file) {
   const ch0RmsDb  = toDB(Math.sqrt(chSumSq[0] / totalFrames));
   const ch1RmsDb  = numChannels >= 2 ? toDB(Math.sqrt(chSumSq[1] / totalFrames)) : ch0RmsDb;
   const rmsDb     = toDB(Math.sqrt((chSumSq[0] + (numChannels >= 2 ? chSumSq[1] : chSumSq[0])) / (totalFrames * (numChannels >= 2 ? 2 : 1))));
-  return { peakDb: Math.max(ch0PeakDb, ch1PeakDb), ch0PeakDb, ch1PeakDb, rmsDb, ch0RmsDb, ch1RmsDb };
+  const fileDuration = totalFrames / sampleRate;
+  const signalPct  = totWin > 0 ? sigWin / totWin * 100 : 0;
+  const silencePct = 100 - signalPct;
+  return {
+    peakDb: Math.max(ch0PeakDb, ch1PeakDb), ch0PeakDb, ch1PeakDb, rmsDb, ch0RmsDb, ch1RmsDb,
+    fileDuration,
+    signalPct, silencePct,
+    signalDur: fileDuration * signalPct / 100,
+    silenceDur: fileDuration * silencePct / 100,
+  };
 }
 
 // Full-file integrated LUFS scan (ITU-R BS.1770-4) — chunked, no full decode.
@@ -2872,7 +2929,7 @@ async function runAnalysis() {
       eA = analyzeBuffer(eBuf);
       // Full-file peak scan — overrides 5-min slice peak with true session max.
       setProgress('Scanning Edit peak (full file)…', 61);
-      const ePeakFull = await scanFullFilePeak(eFile);
+      const ePeakFull = await scanFullFilePeak(eFile, eA.noiseFloorDb);
       if (ePeakFull) {
         eA.peakDb = ePeakFull.peakDb;
         if (eA.ch0) eA.ch0.peakDb = ePeakFull.ch0PeakDb;
@@ -2880,6 +2937,13 @@ async function runAnalysis() {
         eA.rmsDb = ePeakFull.rmsDb;
         if (eA.ch0) eA.ch0.rmsDb = ePeakFull.ch0RmsDb;
         if (eA.ch1) eA.ch1.rmsDb = ePeakFull.ch1RmsDb;
+        // Full-file speech/silence — overrides 5-min slice estimate
+        if (ePeakFull.signalPct != null) {
+          eA.signalPct  = ePeakFull.signalPct;
+          eA.silencePct = ePeakFull.silencePct;
+          eA.signalDur  = ePeakFull.signalDur;
+          eA.silenceDur = ePeakFull.silenceDur;
+        }
       }
       // Override noise floor with first 10s silence window.
       // Both channels are guaranteed silent at the start of every Edit bounce.
@@ -2945,9 +3009,12 @@ async function runAnalysis() {
       }
       await new Promise(r => setTimeout(r, 0));
       const ss = computeSignalSilence(eBuf);
-      eA.signalPct  = ss.signalPct;  eA.silencePct  = ss.silencePct;
-      eA.signalDur  = ss.signalDur;  eA.silenceDur  = ss.silenceDur;
       eA.thresholdDb = ss.thresholdDb;
+      // Only use 5-min slice speech/silence if full-file scan didn't provide it
+      if (eA.signalPct == null) {
+        eA.signalPct  = ss.signalPct;  eA.silencePct  = ss.silencePct;
+        eA.signalDur  = ss.signalDur;  eA.silenceDur  = ss.silenceDur;
+      }
       eA.stereo = computeStereoRawAnalysis(eBuf, true);
       // QC Edit checks — bleed/panning on 5-min slice, overlaps on full file
       setProgress('Scanning Edit WAV…', 70);
@@ -3005,7 +3072,7 @@ async function runAnalysis() {
       mA = analyzeBuffer(mBuf);
       // Full-file peak scan — overrides 5-min slice peak with true session max.
       setProgress('Scanning Mixed peak (full file)…', 81);
-      const mPeakFull = await scanFullFilePeak(mFile);
+      const mPeakFull = await scanFullFilePeak(mFile, mA.noiseFloorDb);
       if (mPeakFull) {
         mA.peakDb = mPeakFull.peakDb;
         if (mA.ch0) mA.ch0.peakDb = mPeakFull.ch0PeakDb;
@@ -3013,6 +3080,12 @@ async function runAnalysis() {
         mA.rmsDb = mPeakFull.rmsDb;
         if (mA.ch0) mA.ch0.rmsDb = mPeakFull.ch0RmsDb;
         if (mA.ch1) mA.ch1.rmsDb = mPeakFull.ch1RmsDb;
+        if (mPeakFull.signalPct != null) {
+          mA.signalPct  = mPeakFull.signalPct;
+          mA.silencePct = mPeakFull.silencePct;
+          mA.signalDur  = mPeakFull.signalDur;
+          mA.silenceDur = mPeakFull.silenceDur;
+        }
       }
       // Override noise floor with first 10s silence window — same logic as Edit.
       if (mBuf.numberOfChannels >= 2) {
@@ -3072,8 +3145,10 @@ async function runAnalysis() {
       }
       await new Promise(r => setTimeout(r, 0));
       const mss = computeSignalSilence(mBuf);
-      mA.signalPct = mss.signalPct; mA.silencePct = mss.silencePct;
-      mA.signalDur = mss.signalDur; mA.silenceDur = mss.silenceDur;
+      if (mA.signalPct == null) {
+        mA.signalPct = mss.signalPct; mA.silencePct = mss.silencePct;
+        mA.signalDur = mss.signalDur; mA.silenceDur = mss.silenceDur;
+      }
       // Mixed silence spectrum + interference detection
       if (mBuf.numberOfChannels >= 2) {
         setProgress('Mixed silence spectrum…', 90);
@@ -3717,17 +3792,17 @@ function buildQASessionAnalysis(a) {
   const speechL = s ? s.speechL.toFixed(1) : null;
   const speechR = s ? s.speechR.toFixed(1) : null;
 
-  const speechCol = `<div style="flex:1;min-width:0;padding-right:14px">
+  const speechCol = `<div style="flex:1;min-width:160px;padding-right:14px">
     <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
       <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
         <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
-        <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
         <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.signalDur)}</div>
       </div>
       <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
         <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
-        <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
+        <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
         <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
       </div>
     </div>
@@ -3745,17 +3820,17 @@ function buildQASessionAnalysis(a) {
   if (s) {
     const oc = s.overlapPct < 5 ? 'var(--green)' : s.overlapPct < 15 ? 'var(--amber)' : 'var(--red)';
     const or = s.overlapPct < 5 ? 'Low' : s.overlapPct < 15 ? 'Moderate' : 'High';
-    overlapCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
+    overlapCol = `<div style="flex:1;min-width:160px;padding:0 14px;border-left:1px solid var(--border)">
       <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(simultaneous only)</span></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OVERLAPS</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
           <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(s.overlapDur)}</div>
         </div>
         <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
           <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${or}</div>
+          <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:${oc}">${or}</div>
         </div>
       </div>
       <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
@@ -3764,7 +3839,7 @@ function buildQASessionAnalysis(a) {
     </div>`;
   }
 
-  return `<div style="padding:12px 20px;display:flex;gap:0;align-items:flex-start">
+  return `<div style="padding:12px 20px;display:flex;flex-wrap:wrap;gap:0;align-items:flex-start">
     ${speechCol}
     ${overlapCol}
   </div>`;
@@ -3822,24 +3897,11 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     const metricLabel = usesDelta ? `ΔPLR vs Edit` : `PLR`;
     const chNote = worstCh ? ` <span style="font-size:9px;color:var(--text3)">(${worstCh} ch)</span>` : '';
 
-    compressionCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Mixed WAV Compression</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">${metricLabel}${chNote}</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${crestCol}">${usesDelta ? '+' : ''}${mixCrest.toFixed(1)} dB</div>
-        </div>
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:14px;font-weight:700;color:${crestCol};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${crestLabel}</div>
-        </div>
-      </div>
-      <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:4px">
-        <div style="height:100%;width:${mixCrest >= 25 ? '0' : mixPct.toFixed(1)}%;background:${crestCol};border-radius:3px"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3)">
-        <span>Light Touch</span><span>Processed</span><span>Compressed</span>
-      </div>
+    compressionCol = `
+    <div style="padding:12px 16px;border-left:1px solid var(--border);min-width:110px">
+      <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Compression</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:${crestCol}">${usesDelta ? '+' : ''}${mixCrest.toFixed(1)} dB</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:${crestCol};margin-top:2px">${crestLabel}</div>
     </div>`;
   }
 
@@ -3850,23 +3912,16 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     const mSpeechPct = correctedNet / markersData.grossSeconds * 100;
     const diff = a.signalPct - mSpeechPct;
     const diffCol = Math.abs(diff) < 3 ? 'var(--green)' : Math.abs(diff) < 8 ? 'var(--amber)' : 'var(--red)';
-    markersCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Markers Analysis <span style="font-weight:400;font-size:9px">(${markersData.pairs} pairs)</span></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">BILLABLE TIME</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:var(--blue)">${fmtHrMin(correctedNet)}</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${mSpeechPct.toFixed(1)}% of session</div>
-        </div>
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SESSION TOTAL</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${fmtHrMin(markersData.grossSeconds)}</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${markersData.pairs} pairs</div>
-        </div>
-      </div>
-      <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border);margin-bottom:5px">
-        <div style="height:100%;width:${mSpeechPct.toFixed(1)}%;background:#2080ff;border-radius:3px"></div>
-      </div>
+    markersCol = `
+    <div style="padding:12px 16px;border-left:1px solid var(--border);min-width:120px">
+      <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Billable time</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:var(--blue)">${fmtHrMin(correctedNet)}</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);margin-top:2px">${mSpeechPct.toFixed(1)}% · ${markersData.pairs} pairs</div>
+    </div>
+    <div style="padding:12px 16px;border-left:1px solid var(--border);min-width:110px">
+      <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Session total</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${fmtHrMin(markersData.grossSeconds)}</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);margin-top:2px">${markersData.pairs} pairs</div>
     </div>`;
   }
 
@@ -3918,41 +3973,23 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
         </div>`
       : '';
 
-    overlapCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps <span style="font-weight:400;font-size:9px">(&lt;400ms gap)</span></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">VIOLATIONS</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${ov}</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text3);margin-top:2px">${ov === 0 ? 'Clean' : ov <= 3 ? 'Minor' : 'Flag session'}</div>
-        </div>
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OF TRANSITIONS</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${editChecks.overlapPct != null ? editChecks.overlapPct + '%' : '—'}</div>
-          ${warn > 0 ? `<div style="font-family:'Chivo Mono',monospace;font-size:9px;color:${wc};margin-top:2px">${warn} tight (400–425ms)</div>` : ''}
-        </div>
-      </div>
-      ${timestamps}
-      ${warnTimestamps}
-      ${offsetNote}
+    overlapCol = `
+    <div style="padding:12px 16px;border-left:1px solid var(--border);min-width:100px">
+      <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Overlaps</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:${oc}">${ov}</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);margin-top:2px">${editChecks.overlapPct != null ? editChecks.overlapPct + '% of transitions' : ''} · ${ov === 0 ? 'Clean' : ov <= 3 ? 'Minor' : 'Flag session'}${warn > 0 ? ' · ' + warn + ' tight' : ''}</div>
+      ${timestamps}${warnTimestamps}${offsetNote}
     </div>`;
   } else if (a.stereo) {
     // Fallback to old stereo overlap display if no editChecks overlap data
     const s = a.stereo;
     const oc = s.overlapPct < 5 ? 'var(--green)' : s.overlapPct < 15 ? 'var(--amber)' : 'var(--red)';
     const or = s.overlapPct < 5 ? 'Low' : s.overlapPct < 15 ? 'Moderate' : 'High';
-    overlapCol = `<div style="flex:1;min-width:0;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Overlaps</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">OVERLAPS</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
-        </div>
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">LEVEL</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${oc}">${or}</div>
-        </div>
-      </div>
+    overlapCol = `
+    <div style="padding:12px 16px;border-left:1px solid var(--border);min-width:100px">
+      <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Overlaps</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:${oc}">${s.overlapPct.toFixed(1)}%</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);margin-top:2px">${or}</div>
     </div>`;
   }
 
@@ -3961,14 +3998,11 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
   if (editChecks) {
     const bs = editChecks.bleedScore || 1;
 
-    bleedCol = `<div style="flex:0 0 auto;width:110px;padding:0 14px;border-left:1px solid var(--border)">
-      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Edit Bleed</div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:4px">SCORE</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:${(6-bs)>=4?'var(--green)':(6-bs)>=3?'var(--amber)':'var(--red)'}">${6-bs}<span style="font-size:20px;font-weight:400;color:var(--text3)"> /5</span></div>
-        </div>
-      </div>
+    bleedCol = `
+    <div style="padding:12px 16px;border-left:1px solid var(--border);min-width:90px">
+      <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Edit bleed</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:${(6-bs)>=4?'var(--green)':(6-bs)>=3?'var(--amber)':'var(--red)'}">${6-bs}<span style="font-size:12px;font-weight:400;color:var(--text3)"> /5</span></div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);margin-top:2px">${(6-bs)>=4?'Clean':(6-bs)>=3?'Borderline':'Flag'}</div>
     </div>`;
   }
 
@@ -4031,26 +4065,20 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     </div>`;
   }
 
-  return `<div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:0;align-items:flex-start">
-    <!-- Speech vs Silence column -->
-    <div style="flex:1;min-width:0;padding-right:14px">
-      <div style="font-family:'Chivo Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:8px">Speech vs Silence <span style="font-weight:400;font-size:9px">(NF+12dB)</span></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SPEECH</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.signalDur)}</div>
-        </div>
-        <div style="background:var(--bg3);border-radius:6px;padding:6px 10px">
-          <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">SILENCE</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:20px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
-          <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2)">${fmtDur(a.silenceDur)}</div>
-        </div>
-      </div>
-      <div style="height:6px;background:var(--bar-track);border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--bar-border)">
-        <div style="height:100%;width:${a.signalPct.toFixed(1)}%;background:#00ff88;border-radius:3px"></div>
-      </div>
+  return `<div style="border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:stretch;gap:0">
+
+    <div style="padding:12px 16px;min-width:100px">
+      <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Speech</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);margin-top:2px">${fmtDur(a.signalDur)} active</div>
     </div>
+
+    <div style="padding:12px 16px;border-left:1px solid var(--border);min-width:100px">
+      <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Silence</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:var(--text2)">${a.silencePct.toFixed(1)}%</div>
+      <div style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);margin-top:2px">${fmtDur(a.silenceDur)}</div>
+    </div>
+
     ${markersCol}
     ${overlapCol}
     ${bleedCol}
@@ -5641,7 +5669,7 @@ async function computeOverlapsFromFile(file) {
   const chunkBytes = chunkFrames * bpFrame;
   const scale      = bps === 16 ? 32768 : bps === 24 ? 8388608 : 1;
 
-  const OV_THRESH  = Math.pow(10, -35/20);
+  const OV_THRESH  = Math.pow(10, -26/20);
   const allSpL = [], allSpR = [];
 
   let dataPos = dataStart;
@@ -5683,7 +5711,7 @@ async function computeOverlapsFromFile(file) {
 
   const n = allSpL.length;
   const OV_FILL  = Math.floor(0.4/0.05);
-  const OV_TIGHT = 0.40, OV_WARN = 0.425, OV_SIMUL = 2;
+  const OV_TIGHT = 0.40, OV_WARN = 0.425, OV_SIMUL = 4;
 
   function fillCh(arr, fw) {
     const out = arr.slice(); let i = 0;
