@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.7
+  SOBA — Audio QA & QC Checker v3.7.1
   Created by: Danny Beta
   Date: April 2026
 
@@ -27,7 +27,7 @@
   gtag('js', new Date());
   gtag('config', 'G-444D9CS8EE');
 </script>
-<title>SOBA — Audio QA & QC v3.7</title>
+<title>SOBA — Audio QA & QC v3.7.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -721,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.7</div>
+            <div class="version-badge">v3.7.1</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -948,7 +948,6 @@ h1 span { color: var(--green); }
         <div class="rts-legend" style="border-bottom:1px solid var(--border)">
           <span style="color:var(--blue)">&#9632; Silence spectrum</span>
           <span style="color:#FF6600">&#9632; Detected tonal interference</span>
-          <span style="color:rgba(255,140,0,0.80)">&#9135;&#9135; Possible after clip gain</span>
           <span style="color:#a050ff">&#9632; Noise floor</span>
           <span style="color:var(--blue)">&#9135;&#9135; LUFS</span>
           <span style="color:var(--amber)">&#9135;&#9135; Peak</span>
@@ -1019,7 +1018,6 @@ h1 span { color: var(--green); }
         <div class="rts-legend" style="border-bottom:1px solid var(--border)">
           <span style="color:var(--blue)">&#9632; Silence spectrum</span>
           <span style="color:#FF6600">&#9632; Detected tonal interference</span>
-          <span style="color:rgba(255,140,0,0.80)">&#9135;&#9135; Possible after clip gain</span>
           <span style="color:#a050ff">&#9632; Noise floor</span>
           <span style="color:var(--blue)">&#9135;&#9135; LUFS</span>
           <span style="color:var(--amber)">&#9135;&#9135; Peak</span>
@@ -5797,76 +5795,6 @@ function qaChip(score) {
 
 // Global helper — predict spikes that would cross detection gate after clip gain
 // Uses first + last take spectra independently; returns merged spike list
-function predictGainSpikesGlobal(rtSpecData, clipGainDb) {
-  if (!rtSpecData || !rtSpecData.avgSpectrum || clipGainDb < 3) return [];
-  const { avgSpectrum, sr, winSpectra } = rtSpecData;
-  const CAL_LOC   = 20 * Math.log10(4096 * 0.5);
-  const THRESH_LIN = Math.pow(10, 16 / 10);
-  const gainLin    = Math.pow(10, clipGainDb / 10);
-  const binHz      = sr / 4096;
-  const loScan     = Math.round(300  / binHz);
-  const hiScan     = Math.round((sr / 2 - 200) / binHz);
-  const n          = avgSpectrum.length;
-  const hw         = 48;
-
-  // Persistence gate: use individual silence windows when available.
-  // A bin is only a predicted spike if it would cross the threshold in ≥2 windows —
-  // the same principle as detectInterference's per-window consistency check.
-  // This prevents speech formants averaged into rtSpecDataFirst/Last from being
-  // mistaken for a persistent tonal line.
-  const windows = (winSpectra && winSpectra.length >= 2) ? winSpectra : [avgSpectrum];
-  const minWin  = windows.length >= 2 ? 2 : 1;
-
-  function localFloorOf(spec) {
-    const lf = new Float64Array(n);
-    for (let i = 0; i < n; i++) {
-      const lo = Math.max(0, i-hw), hi = Math.min(n-1, i+hw);
-      const s = [];
-      for (let k = lo; k <= hi; k++) s.push(spec[k]);
-      s.sort((a,b) => a-b);
-      lf[i] = s[s.length >> 1];
-    }
-    return lf;
-  }
-
-  // Count how many windows each bin would cross the threshold in after gain
-  const winHits = new Int32Array(n);
-  for (const spec of windows) {
-    const lf = localFloorOf(spec);
-    for (let k = loScan; k < hiScan && k < n; k++) {
-      const fl = lf[k] || 1e-30;
-      const origRat = spec[k] / fl;
-      const adjRat  = origRat * gainLin;
-      if (origRat >= THRESH_LIN) continue; // already detectable — not a prediction
-      if (adjRat  >= THRESH_LIN) winHits[k]++;
-    }
-  }
-
-  // Only report bins that recur in ≥minWin windows, and pass the absolute dBFS gate
-  const found = [];
-  for (let k = loScan; k < hiScan && k < n; k++) {
-    if (winHits[k] < minWin) continue;
-    const absDbAfterGain = (10 * Math.log10(avgSpectrum[k] + 1e-30) - CAL_LOC) + clipGainDb;
-    if (absDbAfterGain < -90) continue;
-    const adjRat = (avgSpectrum[k] / ((() => { const lo=Math.max(0,k-hw),hi=Math.min(n-1,k+hw); const s=[]; for(let j=lo;j<=hi;j++) s.push(avgSpectrum[j]); s.sort((a,b)=>a-b); return s[s.length>>1]||1e-30; })())) * gainLin;
-    found.push({ freq: k * sr / 4096, ratio: 10 * Math.log10(adjRat), predicted: true });
-  }
-  return mergeCloseSpikes(found, 1000).slice(0, 5);
-}
-
-function predictedSpikesForTrack(rawA) {
-  if (!rawA || rawA.lufs == null) return [];
-  const lufsGain = -24 - rawA.lufs;
-  const peakRoom = rawA.peakDb != null ? -1.0 - rawA.peakDb : Infinity;
-  const cg = Math.max(0, Math.min(lufsGain, peakRoom));
-  if (cg < 3) return [];
-  const candidates = [];
-  for (const sd of [rawA.rtSpecDataFirst, rawA.rtSpecDataLast].filter(Boolean)) {
-    candidates.push(...predictGainSpikesGlobal(sd, cg));
-  }
-  return mergeCloseSpikes(candidates, 1000);
-}
-
 function renderQualityCard(rawLA, rawRA, artifactData) {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
@@ -6339,8 +6267,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
       : nfBadgeHTML(rawLA.noiseFloorDb, false);
     const _spikesLConfirmed = artifactData && artifactData.interference ? (Array.isArray(artifactData.interference.spikes) ? artifactData.interference.spikes : (artifactData.interference.spikes && artifactData.interference.spikes.left || [])) : [];
-    const _spikesLPredicted = predictedSpikesForTrack(rawLA);
-    const _spikesL = mergeCloseSpikes([..._spikesLConfirmed, ..._spikesLPredicted], 1000);
+    const _spikesL = mergeCloseSpikes(_spikesLConfirmed, 1000);
     window._rtSpecStore['rtSpecRawL'] = { rtSpecData: rawLA.rtSpecData || null, spikes: _spikesL, nfDb: rawLA.noiseFloorDb, lufsDb: rawLA.lufs ?? null, peakDb: rawLA.plrPeakDb ?? rawLA.peakDb ?? null };
     document.getElementById('rawLMetrics').innerHTML = buildMetrics(rawLA, false, true, 'raw', hpfLDet);
     // RAW Roomtone Spectrum combined panel
@@ -6382,8 +6309,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
       : nfBadgeHTML(rawRA.noiseFloorDb, false);
     const _spikesRConfirmed = artifactData && artifactData.interference && artifactData.interference.spikes && !Array.isArray(artifactData.interference.spikes) ? (artifactData.interference.spikes.right || []) : [];
-    const _spikesRPredicted = predictedSpikesForTrack(rawRA);
-    const _spikesR = mergeCloseSpikes([..._spikesRConfirmed, ..._spikesRPredicted], 1000);
+    const _spikesR = mergeCloseSpikes(_spikesRConfirmed, 1000);
     window._rtSpecStore['rtSpecRawR'] = { rtSpecData: rawRA.rtSpecData || null, spikes: _spikesR, nfDb: rawRA.noiseFloorDb, lufsDb: rawRA.lufs ?? null, peakDb: rawRA.plrPeakDb ?? rawRA.peakDb ?? null };
     document.getElementById('rawRMetrics').innerHTML = buildMetrics(rawRA, false, true, 'raw', hpfRDet);
   }
