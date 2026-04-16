@@ -1932,15 +1932,40 @@ function rtSpecDraw(canvas, rtSpecData, spikes, nfDb, lufsDb, peakDb) {
       ctx.setLineDash([]);
       if (isDark) { ctx.shadowColor = 'rgba(255,100,0,0.50)'; ctx.shadowBlur = 5; }
     } else {
-      ctx.strokeStyle = isDark ? (isStrong ? '#FF6600' : '#FF7700') : (isStrong ? '#CC4400' : '#DD5500');
-      ctx.lineWidth   = isStrong ? 8 : 5;
+      // Interference spikes: visual weight proportional to speech-relative verdict
+      // Compute delta vs speech (lufsDb) to determine visual weight
+      const spikeAbsDb = (() => {
+        const bin = Math.round(spike.freq * RTS_FFT_SIZE / sr);
+        const pow = avgSpectrum[Math.min(bin, RTS_FFT_HALF)];
+        return pow > 0 ? 10 * Math.log10(pow) - (20 * Math.log10(RTS_FFT_SIZE * 0.5)) : -140;
+      })();
+      const delta = (lufsDb != null && isFinite(lufsDb)) ? (lufsDb - spikeAbsDb) : 0;
+      // delta < 20 → severe, 20-35 → moderate, 35-50 → faint, >50 → trace
+      const isSevere   = delta < 20;
+      const isModerate = delta >= 20 && delta < 35;
+      const isFaint    = delta >= 35 && delta < 50;
+      // width and opacity scale with severity
+      const lw   = isSevere ? 8 : isModerate ? 5 : isFaint ? 3 : 1.5;
+      const op   = isSevere ? 0.95 : isModerate ? 0.80 : isFaint ? 0.55 : 0.30;
+      const blur = isSevere ? 12 : isModerate ? 7 : isFaint ? 4 : 2;
+      ctx.strokeStyle = isDark
+        ? `rgba(255,${isSevere?80:100},0,${op})`
+        : `rgba(${isSevere?180:200},${isSevere?40:60},0,${op})`;
+      ctx.lineWidth   = lw;
       ctx.setLineDash([]);
-      if (isDark) { ctx.shadowColor = 'rgba(255,100,0,0.65)'; ctx.shadowBlur = isStrong ? 12 : 7; }
+      if (isDark) { ctx.shadowColor = `rgba(255,100,0,${op*0.6})`; ctx.shadowBlur = blur; }
     }
 
-    const spikeBin = Math.round(spike.freq * RTS_FFT_SIZE / sr);
-    const binPow   = avgSpectrum[Math.min(spikeBin, RTS_FFT_HALF)];
-    const binDb    = Math.max(powToDb(binPow), dbBot);
+    // Line height: use spike's own absDb when available (accurate power),
+    // fall back to spectrum background level (4096-pt) if not stored.
+    let binDb;
+    if (spike.absDb != null) {
+      binDb = Math.max(spike.absDb, dbBot);
+    } else {
+      const spikeBin = Math.round(spike.freq * RTS_FFT_SIZE / sr);
+      const binPow   = avgSpectrum[Math.min(spikeBin, RTS_FFT_HALF)];
+      binDb = Math.max(powToDb(binPow), dbBot);
+    }
     const lineTop  = dbToY(binDb);
 
     ctx.beginPath();
@@ -2103,14 +2128,16 @@ function buildRtSpecVerdictHtml(rtSpecData, spikes, lufsDb) {
   }
   function spikeVerdict(s) {
     const absDb = spikeLevelDbFs(s);
-    // Hum spikes: use speech-relative scoring if lufsDb available
-    if (s.hum && lufsDb != null && isFinite(lufsDb)) {
-      const delta = lufsDb - absDb; // positive = hum is quieter than speech
-      if (delta < 20) return 4;
-      if (delta < 35) return 3;
-      if (delta < 50) return 2;
-      return 1;
+    // Speech-relative scoring when lufsDb available — applies to all spikes
+    if (lufsDb != null && isFinite(lufsDb)) {
+      const delta = lufsDb - absDb;
+      if (s.ratio < 16)   return 0; // below detection confidence regardless
+      if (delta < 20) return 4;     // within 20dB of speech — clearly audible
+      if (delta < 35) return 3;     // 20–35dB — likely audible in silence
+      if (delta < 50) return 2;     // 35–50dB — faint
+      return 1;                     // >50dB below speech — trace
     }
+    // Fallback: absolute dBFS thresholds when no speech reference
     if (s.ratio < 16)   return 0;
     if (absDb < -100)   return 1;
     if (absDb < -90)    return 2;
@@ -5086,7 +5113,8 @@ function detectInterference(data, sr, nfDb, winSecs = 2) {
         const ls = (mag[Math.max(0, b-6)] + mag[Math.max(0, b-7)] + mag[Math.max(0, b-8)]) / 3;
         const rs = (mag[Math.min(maxBin, b+6)] + mag[Math.min(maxBin, b+7)] + mag[Math.min(maxBin, b+8)]) / 3;
         if (peak > ls * 1.5 && peak > rs * 1.5) {
-          thisWinSpikes.push({ freq: b * binHz, ratio: ratioDb });
+          const absDbSp = 20 * Math.log10((peak + 1e-12) / (N / 2 + 1e-12));
+          thisWinSpikes.push({ freq: b * binHz, ratio: ratioDb, absDb: absDbSp });
         }
       }
     }
@@ -5692,7 +5720,7 @@ function detectLFInterferenceFromSpectrum(avgSpectrum, sr) {
       const rs = (avgSpectrum[Math.min(avgSpectrum.length-1, b+6)] + avgSpectrum[Math.min(avgSpectrum.length-1, b+7)] + avgSpectrum[Math.min(avgSpectrum.length-1, b+8)]) / 3;
       if (peak > ls * 1.5 && peak > rs * 1.5) {
         const absDb = 10 * Math.log10(peak + 1e-30) - CAL;
-        if (absDb > -100) found.push({ freq: b * binHz, ratio: ratioDb });
+        if (absDb > -100) found.push({ freq: b * binHz, ratio: ratioDb, absDb });
       }
     }
   }
@@ -6405,9 +6433,10 @@ function buildRecommendations(rawLA, rawRA, eA, mA, artifactData) {
         rec('warn', `RAW — Hum Detected`, `${(_recHumSrc.freq || 60)}Hz hum present. Check by ear or request reviewer approval before editing.`);
     }
 
-    // Only recommend action if spike is genuinely SEVERE (audible level + strong ratio)
-    if (interfDet && audibleSpikes.length && worstVerdict === 'severe')
-      rec('fail', `${_recLabel} — Signal Interference`, 'Strong audible interference detected. Do not proceed.');
+    // Only recommend action if spike is genuinely SEVERE — RAW only.
+    // Edit interference is already shown in the Session Analysis card.
+    if (interfDet && audibleSpikes.length && worstVerdict === 'severe' && _recLabel === 'RAW')
+      rec('fail', `RAW — Signal Interference`, 'Strong audible interference detected. Do not proceed.');
 
     // ── Room tone substitution recommendation ─────────────────────────────
     // If one track has interference and the other is clean, and LUFS within ±3 LU
@@ -6683,7 +6712,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
         const _ec = document.getElementById('editrtSpecCanvas');
         if (_ec) {
           rtSpecDraw(_ec, eA.rtSpecDataL, _eSpikesL, eA.ch0 ? eA.ch0.noiseFloorDb : eA.noiseFloorDb, eA.lufsL ?? eA.lufs ?? null, eA.ch0 ? eA.ch0.peakDb : eA.peakDb);
-          _ec.onclick = () => rtSpecOpenOverlayDirect(eA.rtSpecDataL, _eSpikesL, eA.ch0 ? eA.ch0.noiseFloorDb : eA.noiseFloorDb, eFile.name + ' — L');
+          _ec.onclick = () => rtSpecOpenOverlayDirect(eA.rtSpecDataL, _eSpikesL, eA.ch0 ? eA.ch0.noiseFloorDb : eA.noiseFloorDb, eFile.name + ' — L', eA.lufsL ?? eA.lufs ?? null, eA.ch0 ? eA.ch0.peakDb : eA.peakDb);
         }
       }, 0);
     } else {
