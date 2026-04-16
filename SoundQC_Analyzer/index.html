@@ -5643,7 +5643,7 @@ function detectHumFromSpectrum(rtSpecData) {
       const shoulderAvg = shoulders.reduce((s, v) => s + v, 0) / (shoulders.length || 1);
       const ratioDb  = 10 * Math.log10((peak + 1e-30) / (lf + 1e-30));
       const absDb    = 10 * Math.log10(peak + 1e-30) - CAL;
-      const passes   = peak > shoulderAvg * 3 && peak > lf * 10;
+      const passes   = peak > shoulderAvg * 3 && peak > lf * 6.3; // 8 dB above local floor
       harmonics.push({ freq: targetHz, ratioDb, absDb, passes });
       if (passes) { score += peak / lf; hits++; }
     }
