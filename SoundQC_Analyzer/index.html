@@ -1565,7 +1565,13 @@ async function rtSpecFromFile(file) {
   }
   if (humCount) for (let k = 0; k <= HUM_HALF; k++) humSpectrum[k] /= humCount;
 
-  return { sr, avgSpectrum, sampleCount: 1, silFrameCount: count, winSpectra, nfDb: 20 * Math.log10(nfRms + 1e-12), humSpectrum, humN: HUM_N };
+  // Speech ratio: fraction of frames above NF+24dB — near 0 = room tone take, high = speech take
+  const speechThresh = nfRms * Math.pow(10, 24 / 20);
+  let speechFrames = 0;
+  for (let f = 0; f < nFrames; f++) if (frameRms[f] > speechThresh) speechFrames++;
+  const speechRatio = nFrames > 0 ? speechFrames / nFrames : 1;
+
+  return { sr, avgSpectrum, sampleCount: 1, silFrameCount: count, winSpectra, nfDb: 20 * Math.log10(nfRms + 1e-12), humSpectrum, humN: HUM_N, speechRatio };
 }
 
 async function computeRtSpecData(files) {
@@ -2944,18 +2950,16 @@ async function runAnalysis() {
       rawLA.rtSpecDataLast  = _sortedL.length > 1
         ? await rtSpecFromFile(_sortedL[_sortedL.length - 1])
         : rawLA.rtSpecDataFirst;
-      // Use the quieter of first/last as NF — that take is the room tone take
-      const _nfFirst = rawLA.rtSpecDataFirst ? rawLA.rtSpecDataFirst.nfDb : null;
-      const _nfLast  = rawLA.rtSpecDataLast  ? rawLA.rtSpecDataLast.nfDb  : null;
-      if (_nfFirst != null || _nfLast != null) {
-        const _rtNf = (_nfFirst != null && _nfLast != null)
-          ? Math.min(_nfFirst, _nfLast)
-          : (_nfFirst ?? _nfLast);
-        rawLA.noiseFloorDb = _rtNf;
-        if (rawLA.ch0) rawLA.ch0.noiseFloorDb = _rtNf;
-        // Use the quieter take's spectrum for the Roomtone Spectrum graph
-        rawLA.rtSpecData = (_nfFirst != null && _nfLast != null && _nfFirst <= _nfLast)
-          ? rawLA.rtSpecDataFirst : rawLA.rtSpecDataLast;
+      // Pick the room tone take: lowest speech ratio (fewest frames above NF+24dB).
+      // A pure room tone take has near 0% speech; a speech take has 30-70%+.
+      // Falls back to lowest NF if speechRatio not available.
+      const _srFirst = rawLA.rtSpecDataFirst ? (rawLA.rtSpecDataFirst.speechRatio ?? 1) : 1;
+      const _srLast  = rawLA.rtSpecDataLast  ? (rawLA.rtSpecDataLast.speechRatio  ?? 1) : 1;
+      const _rtTakeL = (_srFirst <= _srLast) ? rawLA.rtSpecDataFirst : rawLA.rtSpecDataLast;
+      if (_rtTakeL) {
+        rawLA.noiseFloorDb = _rtTakeL.nfDb;
+        if (rawLA.ch0) rawLA.ch0.noiseFloorDb = _rtTakeL.nfDb;
+        rawLA.rtSpecData = _rtTakeL;
       }
     }
     if (rawRightFiles.length) { setProgress('Analyzing RAW Right…', 40); rawRA = await analyzeGroup(rawRightFiles); }
@@ -2967,17 +2971,13 @@ async function runAnalysis() {
       rawRA.rtSpecDataLast  = _sortedR.length > 1
         ? await rtSpecFromFile(_sortedR[_sortedR.length - 1])
         : rawRA.rtSpecDataFirst;
-      // Use the quieter of first/last as NF — that take is the room tone take
-      const _nfFirstR = rawRA.rtSpecDataFirst ? rawRA.rtSpecDataFirst.nfDb : null;
-      const _nfLastR  = rawRA.rtSpecDataLast  ? rawRA.rtSpecDataLast.nfDb  : null;
-      if (_nfFirstR != null || _nfLastR != null) {
-        const _rtNfR = (_nfFirstR != null && _nfLastR != null)
-          ? Math.min(_nfFirstR, _nfLastR)
-          : (_nfFirstR ?? _nfLastR);
-        rawRA.noiseFloorDb = _rtNfR;
-        if (rawRA.ch0) rawRA.ch0.noiseFloorDb = _rtNfR;
-        rawRA.rtSpecData = (_nfFirstR != null && _nfLastR != null && _nfFirstR <= _nfLastR)
-          ? rawRA.rtSpecDataFirst : rawRA.rtSpecDataLast;
+      const _srFirstR = rawRA.rtSpecDataFirst ? (rawRA.rtSpecDataFirst.speechRatio ?? 1) : 1;
+      const _srLastR  = rawRA.rtSpecDataLast  ? (rawRA.rtSpecDataLast.speechRatio  ?? 1) : 1;
+      const _rtTakeR = (_srFirstR <= _srLastR) ? rawRA.rtSpecDataFirst : rawRA.rtSpecDataLast;
+      if (_rtTakeR) {
+        rawRA.noiseFloorDb = _rtTakeR.nfDb;
+        if (rawRA.ch0) rawRA.ch0.noiseFloorDb = _rtTakeR.nfDb;
+        rawRA.rtSpecData = _rtTakeR;
       }
     }
 
