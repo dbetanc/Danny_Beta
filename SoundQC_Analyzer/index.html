@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.7.3
+  SOBA — Audio QA & QC Checker v3.7.4
   Created by: Danny Beta
   Date: April 2026
 
@@ -27,7 +27,7 @@
   gtag('js', new Date());
   gtag('config', 'G-444D9CS8EE');
 </script>
-<title>SOBA — Audio QA & QC v3.7.3</title>
+<title>SOBA — Audio QA & QC v3.7.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -721,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.7.3</div>
+            <div class="version-badge">v3.7.4</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -822,28 +822,28 @@ h1 span { color: var(--green); }
     </button>
     <div hidden style="margin-top:4px;padding:16px 20px;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--text2);line-height:1.7">
 
-      <div style="display:grid;grid-template-columns:120px 1fr;gap:6px 16px;align-items:baseline">
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:6px 16px;align-items:baseline">
 
         <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">Noise Floor</span>
         <div>
-          <div><span style="color:var(--blue)">RAW</span> · 8th percentile of 50ms RMS windows across the full file. Skips digital silence gaps.</div>
-          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · 8th percentile of the first 10s opening silence. Both channels simultaneously quiet.</div>
+          <div><span style="color:var(--blue)">RAW</span> · 8th percentile of 20ms RMS windows. Source: the first or last take with the lowest speech ratio (closest to pure room tone). Skips digital silence gaps.</div>
+          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · 8th percentile of 20ms windows across the first 10s opening silence. Both channels simultaneously quiet.</div>
         </div>
 
         <span style="color:var(--border2);grid-column:1/-1;border-top:1px solid var(--border);margin:6px 0"></span>
 
         <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">Integrated LUFS</span>
         <div>
-          <div><span style="color:var(--blue)">RAW</span> · ITU-R BS.1770-4, K-weighted, gated. Measured per take, averaged across all takes. Used for clip gain recommendation.</div>
-          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · Same method. Full-file chunked scan — K-weighted, gated across the entire session.</div>
+          <div><span style="color:var(--blue)">RAW</span> · ITU-R BS.1770-4, K-weighted, gated. Measured per take, averaged across all takes.</div>
+          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · Full-file chunked scan — K-weighted, gated across the entire session.</div>
         </div>
 
         <span style="color:var(--border2);grid-column:1/-1;border-top:1px solid var(--border);margin:6px 0"></span>
 
         <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">Sample Peak</span>
         <div>
-          <div><span style="color:var(--blue)">RAW</span> · Highest absolute sample value in dBFS, full file.</div>
-          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · Full-file scan — reads raw bytes in chunks, no decode limit. Not true peak (dBTP) — inter-sample peaks measured by RX or Youlean will read higher.</div>
+          <div><span style="color:var(--blue)">RAW</span> · Highest absolute sample value across the full file.</div>
+          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · Full-file byte scan, no decode limit. Not true peak (dBTP) — inter-sample peaks measured by RX will read higher.</div>
         </div>
 
         <span style="color:var(--border2);grid-column:1/-1;border-top:1px solid var(--border);margin:6px 0"></span>
@@ -859,6 +859,41 @@ h1 span { color: var(--green); }
         <div>
           <div><span style="color:var(--blue)">RAW</span> · Full-file average RMS.</div>
           <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · Full-file stereo average RMS including silence. Not comparable to LUFS or to RX Min/Max RMS.</div>
+        </div>
+
+        <span style="color:var(--border2);grid-column:1/-1;border-top:1px solid var(--border);margin:6px 0"></span>
+
+        <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">Speech vs Silence</span>
+        <div>
+          <div><span style="color:var(--amber)">Edit / Mixed</span> · Full-file scan piggybacked on peak scan. Windows above NF+12dB counted as speech. Detects unusually padded sessions.</div>
+        </div>
+
+        <span style="color:var(--border2);grid-column:1/-1;border-top:1px solid var(--border);margin:6px 0"></span>
+
+        <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">Roomtone Spectrum</span>
+        <div>
+          <div><span style="color:var(--blue)">RAW</span> · Averaged FFT of silence windows from the room tone take (lowest speech ratio of first/last). Per-take normalised spectra pooled across all takes for spike confirmation.</div>
+          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · Averaged FFT of silence windows from the 5-min decoded slice. Displays the spectral noise floor and any persistent tonal interference.</div>
+          <div style="margin-top:3px">Spike markers show detected tones above the local spectral floor. Line height = spike's measured power. Line weight and opacity scale with severity relative to speech level.</div>
+        </div>
+
+        <span style="color:var(--border2);grid-column:1/-1;border-top:1px solid var(--border);margin:6px 0"></span>
+
+        <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">Hum Detection</span>
+        <div>
+          <div><span style="color:var(--blue)">RAW</span> · 16384-point FFT (2.9 Hz/bin) on the room tone take silence windows. Scores 50 Hz and 60 Hz harmonic series (up to 5 harmonics). Requires ≥3 harmonics to pass sharpness and ratio gates.</div>
+          <div style="margin-top:3px"><span style="color:var(--amber)">Edit</span> · Same method applied to the first 10s opening silence of the bounce.</div>
+          <div style="margin-top:3px">Severity scored relative to speech LUFS: within 20 dB = Severe · 20–35 dB = Moderate · 35–50 dB = Faint · &gt;50 dB = Trace.</div>
+        </div>
+
+        <span style="color:var(--border2);grid-column:1/-1;border-top:1px solid var(--border);margin:6px 0"></span>
+
+        <span style="color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding-top:2px">Tonal Interference</span>
+        <div>
+          <div><span style="color:var(--blue)">RAW sub-500 Hz</span> · Scanned from the room tone take spectrum. Detects narrow spikes ≥16 dB above local floor (80–500 Hz).</div>
+          <div style="margin-top:3px"><span style="color:var(--blue)">RAW 500 Hz+</span> · Per-take silence windows across up to 5 sampled takes. Spike must recur in ≥2 windows to confirm persistence.</div>
+          <div style="margin-top:3px"><span style="color:var(--amber)">Edit / Mixed</span> · Same as RAW 500 Hz+ applied to the 5-min decoded slice silence windows.</div>
+          <div style="margin-top:3px">Two-dimensional scoring: ratio gate (16 dB sub-8kHz / 12 dB above 8kHz) AND absolute dBFS check. Severity relative to speech LUFS — same scale as hum.</div>
         </div>
 
       </div>
