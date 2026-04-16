@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.7.1
+  SOBA — Audio QA & QC Checker v3.7.2
   Created by: Danny Beta
   Date: April 2026
 
@@ -27,7 +27,7 @@
   gtag('js', new Date());
   gtag('config', 'G-444D9CS8EE');
 </script>
-<title>SOBA — Audio QA & QC v3.7.1</title>
+<title>SOBA — Audio QA & QC v3.7.2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -721,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.7.1</div>
+            <div class="version-badge">v3.7.2</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -2202,7 +2202,7 @@ function analyzeChannel(data, sr) {
   let sumSq = 0, peak = 0;
   for (let i = 0; i < N; i++) { const s = data[i]; sumSq += s*s; const a = Math.abs(s); if (a > peak) peak = a; }
   const rmsLin = Math.sqrt(sumSq/N);
-  const cSz = Math.floor(sr * 0.1), cRms = [];
+  const cSz = Math.floor(sr * 0.02), cRms = [];
   for (let i = 0; i+cSz <= N; i += cSz) {
     let sq = 0;
     for (let j = i; j < i+cSz; j++) sq += data[j]*data[j];
