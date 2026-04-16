@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.7.2
+  SOBA — Audio QA & QC Checker v3.7.3
   Created by: Danny Beta
   Date: April 2026
 
@@ -27,7 +27,7 @@
   gtag('js', new Date());
   gtag('config', 'G-444D9CS8EE');
 </script>
-<title>SOBA — Audio QA & QC v3.7.2</title>
+<title>SOBA — Audio QA & QC v3.7.3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -721,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.7.2</div>
+            <div class="version-badge">v3.7.3</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -1544,7 +1544,28 @@ async function rtSpecFromFile(file) {
     return spec;
   });
 
-  return { sr, avgSpectrum, sampleCount: 1, silFrameCount: count, winSpectra };
+  // High-resolution spectrum for hum detection — 16384-point FFT = 2.9 Hz/bin at 48kHz
+  // Makes 60/120/180 Hz harmonics sharply resolvable.
+  const HUM_N    = 16384;
+  const HUM_HALF = HUM_N >> 1;
+  const humHann  = new Float32Array(HUM_N);
+  for (let i = 0; i < HUM_N; i++) humHann[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (HUM_N - 1)));
+  const humSpectrum = new Float64Array(HUM_HALF + 1);
+  let humCount = 0;
+  for (const f of silByRms) {
+    const s = f * RTS_HOP;
+    if (s + HUM_N > nSamples) continue;
+    const hr = new Float32Array(HUM_N), hi2 = new Float32Array(HUM_N);
+    for (let i = 0; i < HUM_N; i++) hr[i] = data[s + i] * humHann[i];
+    rtSpecFFT(hr, hi2);
+    humSpectrum[0] += hr[0]*hr[0] + hi2[0]*hi2[0];
+    for (let k = 1; k < HUM_HALF; k++) humSpectrum[k] += 2*(hr[k]*hr[k]+hi2[k]*hi2[k]);
+    humSpectrum[HUM_HALF] += hr[HUM_HALF]*hr[HUM_HALF]+hi2[HUM_HALF]*hi2[HUM_HALF];
+    humCount++;
+  }
+  if (humCount) for (let k = 0; k <= HUM_HALF; k++) humSpectrum[k] /= humCount;
+
+  return { sr, avgSpectrum, sampleCount: 1, silFrameCount: count, winSpectra, nfDb: 20 * Math.log10(nfRms + 1e-12), humSpectrum, humN: HUM_N };
 }
 
 async function computeRtSpecData(files) {
@@ -1657,6 +1678,7 @@ function buildRtSpecSection(rtSpecData, cardId, spikes) {
   // Absolute dBFS per spike is read from avgSpectrum (same data the graph uses).
   const CAL = 20 * Math.log10(RTS_FFT_SIZE * 0.5);  // calibration offset
   function spikeLevelDbFs(s) {
+    if (s.hum && s.absDb != null) return s.absDb; // hum spikes carry their own absDb
     const bin = Math.round(s.freq * RTS_FFT_SIZE / (rtSpecData.sr || 44100));
     const pow = rtSpecData.avgSpectrum[Math.min(bin, RTS_FFT_HALF)];
     return pow > 0 ? 10 * Math.log10(pow) - CAL : -140;
@@ -1875,8 +1897,10 @@ function rtSpecDraw(canvas, rtSpecData, spikes, nfDb, lufsDb, peakDb) {
   }
 
   // Red spike markers — lines in spectrum, pills in top padding area
-  // Merge close frequencies before drawing (1kHz threshold)
-  spikes = mergeCloseSpikes(spikes, 1000);
+  // Merge close frequencies before drawing (1kHz threshold) — but never merge hum harmonics
+  const humSpikesDraw = spikes.filter(s => s.hum);
+  const nonHumSpikesDraw = mergeCloseSpikes(spikes.filter(s => !s.hum), 1000);
+  spikes = [...nonHumSpikesDraw, ...humSpikesDraw];
   // Pass 1: draw lines (weakest first so strongest sit on top)
   const sortedSpikes = [...spikes].sort((a, b) => a.ratio - b.ratio);
 
@@ -1885,6 +1909,7 @@ function rtSpecDraw(canvas, rtSpecData, spikes, nfDb, lufsDb, peakDb) {
     if (x < PAD_L || x > PAD_L + plotW) return;
 
     const isPredicted = !!spike.predicted;
+    const isHum       = !!spike.hum;
     const isStrong    = spike.ratio >= 20;
 
     if (isPredicted) {
@@ -1893,6 +1918,13 @@ function rtSpecDraw(canvas, rtSpecData, spikes, nfDb, lufsDb, peakDb) {
       ctx.lineWidth   = 3;
       ctx.setLineDash([4, 3]);
       if (isDark) { ctx.shadowColor = 'rgba(255,140,0,0.35)'; ctx.shadowBlur = 6; }
+    } else if (isHum) {
+      // Hum harmonics: thin lines, width proportional to ratio (fundamental thickest)
+      const humWidth = Math.max(1.5, Math.min(4, spike.ratio / 10));
+      ctx.strokeStyle = isDark ? 'rgba(255,102,0,0.85)' : 'rgba(180,50,0,0.80)';
+      ctx.lineWidth   = humWidth;
+      ctx.setLineDash([]);
+      if (isDark) { ctx.shadowColor = 'rgba(255,100,0,0.50)'; ctx.shadowBlur = 5; }
     } else {
       ctx.strokeStyle = isDark ? (isStrong ? '#FF6600' : '#FF7700') : (isStrong ? '#CC4400' : '#DD5500');
       ctx.lineWidth   = isStrong ? 8 : 5;
@@ -2050,24 +2082,36 @@ function mergeCloseSpikes(spikes, threshHz) {
 }
 
 // Shared verdict HTML builder (used by both RAW and Edit sections)
-function buildRtSpecVerdictHtml(rtSpecData, spikes) {
+function buildRtSpecVerdictHtml(rtSpecData, spikes, lufsDb) {
   if (!rtSpecData || !spikes) return '';
-  spikes = mergeCloseSpikes(spikes, 1000);
+  // Don't merge hum spikes — they are already at distinct harmonic frequencies
+  const humSpikes  = spikes.filter(s => s.hum);
+  const nonHum     = mergeCloseSpikes(spikes.filter(s => !s.hum), 1000);
+  const allSpikes  = [...nonHum, ...humSpikes];
   const CAL = 20 * Math.log10(RTS_FFT_SIZE * 0.5);
   function spikeLevelDbFs(s) {
+    if (s.hum && s.absDb != null) return s.absDb; // hum spikes carry their own absDb
     const bin = Math.round(s.freq * RTS_FFT_SIZE / (rtSpecData.sr || 44100));
     const pow = rtSpecData.avgSpectrum[Math.min(bin, RTS_FFT_HALF)];
     return pow > 0 ? 10 * Math.log10(pow) - CAL : -140;
   }
   function spikeVerdict(s) {
     const absDb = spikeLevelDbFs(s);
+    // Hum spikes: use speech-relative scoring if lufsDb available
+    if (s.hum && lufsDb != null && isFinite(lufsDb)) {
+      const delta = lufsDb - absDb; // positive = hum is quieter than speech
+      if (delta < 20) return 4;
+      if (delta < 35) return 3;
+      if (delta < 50) return 2;
+      return 1;
+    }
     if (s.ratio < 16)   return 0;
     if (absDb < -100)   return 1;
     if (absDb < -90)    return 2;
     if (absDb < -80)    return 3;
     return 4;
   }
-  const rank = spikes.length > 0 ? Math.max(...spikes.map(spikeVerdict)) : 0;
+  const rank = allSpikes.length > 0 ? Math.max(...allSpikes.map(spikeVerdict)) : 0;
   const labels = ['CLEAN','TRACE','FAINT','MODERATE','SEVERE'];
   const classes = ['nf-pass','nf-pass','nf-pass','nf-warn','nf-fail'];
   return `<span class="nf-chip ${classes[rank]}">${labels[rank]}</span>`;
@@ -2140,7 +2184,7 @@ function editMixRtSpecSwitch(source, channel) {
     src + ' Roomtone — ' + ch, store.lufsDb, store.peakDb);
   // Update verdict
   const allSpikes = [...(store.spikes||[])];
-  document.getElementById('editrtSpecVerdict').innerHTML = buildRtSpecVerdictHtml(store.rtSpecData, allSpikes);
+  document.getElementById('editrtSpecVerdict').innerHTML = buildRtSpecVerdictHtml(store.rtSpecData, allSpikes, store.lufsDb ?? null);
 }
 
 // Edit SINR L/R channel switch (legacy — replaced by editMixRtSpecSwitch)
@@ -2900,7 +2944,20 @@ async function runAnalysis() {
       rawLA.rtSpecDataLast  = _sortedL.length > 1
         ? await rtSpecFromFile(_sortedL[_sortedL.length - 1])
         : rawLA.rtSpecDataFirst;
+      // Use the quieter of first/last as NF — that take is the room tone take
+      const _nfFirst = rawLA.rtSpecDataFirst ? rawLA.rtSpecDataFirst.nfDb : null;
+      const _nfLast  = rawLA.rtSpecDataLast  ? rawLA.rtSpecDataLast.nfDb  : null;
+      if (_nfFirst != null || _nfLast != null) {
+        const _rtNf = (_nfFirst != null && _nfLast != null)
+          ? Math.min(_nfFirst, _nfLast)
+          : (_nfFirst ?? _nfLast);
+        rawLA.noiseFloorDb = _rtNf;
+        if (rawLA.ch0) rawLA.ch0.noiseFloorDb = _rtNf;
+        // Use the quieter take's spectrum for the Roomtone Spectrum graph
+        rawLA.rtSpecData = (_nfFirst != null && _nfLast != null && _nfFirst <= _nfLast)
+          ? rawLA.rtSpecDataFirst : rawLA.rtSpecDataLast;
       }
+    }
     if (rawRightFiles.length) { setProgress('Analyzing RAW Right…', 40); rawRA = await analyzeGroup(rawRightFiles); }
     if (rawRA && rawRightFiles.length) {
       setProgress('Roomtone Spectrum — RAW Right…', 47);
@@ -2910,7 +2967,19 @@ async function runAnalysis() {
       rawRA.rtSpecDataLast  = _sortedR.length > 1
         ? await rtSpecFromFile(_sortedR[_sortedR.length - 1])
         : rawRA.rtSpecDataFirst;
+      // Use the quieter of first/last as NF — that take is the room tone take
+      const _nfFirstR = rawRA.rtSpecDataFirst ? rawRA.rtSpecDataFirst.nfDb : null;
+      const _nfLastR  = rawRA.rtSpecDataLast  ? rawRA.rtSpecDataLast.nfDb  : null;
+      if (_nfFirstR != null || _nfLastR != null) {
+        const _rtNfR = (_nfFirstR != null && _nfLastR != null)
+          ? Math.min(_nfFirstR, _nfLastR)
+          : (_nfFirstR ?? _nfLastR);
+        rawRA.noiseFloorDb = _rtNfR;
+        if (rawRA.ch0) rawRA.ch0.noiseFloorDb = _rtNfR;
+        rawRA.rtSpecData = (_nfFirstR != null && _nfLastR != null && _nfFirstR <= _nfLastR)
+          ? rawRA.rtSpecDataFirst : rawRA.rtSpecDataLast;
       }
+    }
 
     // Artifact scan — dual character needs both tracks, single character just needs one
     let artifactData = null;
@@ -2920,6 +2989,51 @@ async function runAnalysis() {
     } else if (rawLeftFiles.length && !rawRightFiles.length) {
       setProgress('Scanning for artifacts…', 50);
       artifactData = await runSingleArtifactScan(rawLeftFiles);
+    }
+
+    // ── LF hum + sub-500 Hz interference from room tone take spectrum ─────
+    // More reliable than per-take detection for LF because the room tone take
+    // has no speech contamination. Override/merge results into artifactData.
+    if (artifactData) {
+      const _rtL = rawLA && rawLA.rtSpecData;
+      const _rtR = rawRA && rawRA.rtSpecData;
+      // Hum: use left room tone take (or right if left unavailable)
+      const _rtHum = _rtL || _rtR;
+      if (_rtHum && _rtHum.avgSpectrum) {
+        const humResult = detectHumFromSpectrum(_rtHum);
+        if (humResult.detected) {
+          // Room tone take result overrides if stronger or original not detected
+          // Always prefer spectrum-based result — it uses the clean room tone take
+          artifactData.hum = { ...artifactData.hum, detected: true, freq: humResult.freq, strength: humResult.strength, harmonics: humResult.harmonics, fundamentalDb: humResult.fundamentalDb };
+        }
+      }
+      // Sub-500 Hz interference: run per channel, merge into existing spikes
+      if (_rtL && _rtL.avgSpectrum) {
+        const lfL = detectLFInterferenceFromSpectrum(_rtL.avgSpectrum, _rtL.sr || 48000);
+        if (lfL.length) {
+          const existingSpikes = artifactData.interference.spikes;
+          const existingL = Array.isArray(existingSpikes) ? existingSpikes : (existingSpikes?.left || []);
+          const merged = mergeCloseSpikes([...existingL, ...lfL], 500);
+          if (!Array.isArray(artifactData.interference.spikes)) {
+            artifactData.interference.spikes = { ...artifactData.interference.spikes, left: merged };
+          } else {
+            artifactData.interference.spikes = merged;
+          }
+          if (merged.length) artifactData.interference.detected = true;
+        }
+      }
+      if (_rtR && _rtR.avgSpectrum) {
+        const lfR = detectLFInterferenceFromSpectrum(_rtR.avgSpectrum, _rtR.sr || 48000);
+        if (lfR.length) {
+          const existingSpikes = artifactData.interference.spikes;
+          const existingR = Array.isArray(existingSpikes) ? [] : (existingSpikes?.right || []);
+          const merged = mergeCloseSpikes([...existingR, ...lfR], 500);
+          if (!Array.isArray(artifactData.interference.spikes)) {
+            artifactData.interference.spikes = { ...artifactData.interference.spikes, right: merged };
+          }
+          if (merged.length) artifactData.interference.detected = true;
+        }
+      }
     }
     if (eFile) {
       setProgress('Decoding Edit WAV…',  60);
@@ -3053,9 +3167,52 @@ async function runAnalysis() {
           detected: eiL.detected || eiR.detected,
           spikes: { left: editSpikesL, right: editSpikesR }
         };
-        eA.editHum = (ehL.detected || ehR.detected)
+        // Edit hum: use detectHumFromSpectrum on the first 10s opening silence
+        // (guaranteed silence in every Edit bounce — no speech contamination)
+        let editHumResult = (ehL.detected || ehR.detected)
           ? { detected: true, freq: ehL.detected ? ehL.freq : ehR.freq, strength: Math.max(ehL.strength||0, ehR.strength||0) }
           : { detected: false };
+        // Build humSpectrum directly from first 10s slice silence frames
+        {
+          const eHumSlice = eBuf.getChannelData(0).subarray(0, Math.min(eBuf.getChannelData(0).length, editSr * 10));
+          const HUM_N = 16384, HUM_HALF = HUM_N >> 1;
+          const eHumHann = new Float32Array(HUM_N);
+          for (let i = 0; i < HUM_N; i++) eHumHann[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (HUM_N - 1)));
+          const eHumHop = HUM_N >> 1;
+          const eHumFrames = Math.floor((eHumSlice.length - HUM_N) / eHumHop) + 1;
+          const eHumRms = new Float32Array(Math.max(eHumFrames, 1));
+          for (let f = 0; f < eHumFrames; f++) {
+            let sq = 0; const s = f * eHumHop;
+            for (let i = 0; i < HUM_N; i++) sq += eHumSlice[s+i]**2;
+            eHumRms[f] = Math.sqrt(sq / HUM_N);
+          }
+          const eHumSorted = Float32Array.from(eHumRms).sort();
+          const eHumNfRms  = eHumSorted[Math.floor(eHumFrames * 0.10)] || eHumSorted[0];
+          const eHumCeil   = eHumNfRms * Math.pow(10, 20/20);
+          const eHumSilIdx = [];
+          for (let f = 0; f < eHumFrames; f++) if (eHumRms[f] < eHumCeil) eHumSilIdx.push(f);
+          const eHumBest = eHumSilIdx.slice().sort((a,b) => eHumRms[a]-eHumRms[b]).slice(0,4);
+          const eHumSpec = new Float64Array(HUM_HALF + 1);
+          let eHumCnt = 0;
+          for (const f of eHumBest) {
+            const s = f * eHumHop;
+            if (s + HUM_N > eHumSlice.length) continue;
+            const hr = new Float32Array(HUM_N), hi = new Float32Array(HUM_N);
+            for (let i = 0; i < HUM_N; i++) hr[i] = eHumSlice[s+i] * eHumHann[i];
+            rtSpecFFT(hr, hi);
+            eHumSpec[0] += hr[0]*hr[0]+hi[0]*hi[0];
+            for (let k = 1; k < HUM_HALF; k++) eHumSpec[k] += 2*(hr[k]*hr[k]+hi[k]*hi[k]);
+            eHumSpec[HUM_HALF] += hr[HUM_HALF]*hr[HUM_HALF]+hi[HUM_HALF]*hi[HUM_HALF];
+            eHumCnt++;
+          }
+          if (eHumCnt) {
+            for (let k = 0; k <= HUM_HALF; k++) eHumSpec[k] /= eHumCnt;
+            const eHumRtSpecData = { sr: editSr, humSpectrum: eHumSpec, humN: HUM_N, avgSpectrum: eHumSpec };
+            const specHum = detectHumFromSpectrum(eHumRtSpecData);
+            if (specHum.detected) editHumResult = specHum;
+          }
+        }
+        eA.editHum = editHumResult;
         // Compute silence spectrum for edit SINR panel
         setProgress('Edit silence spectrum…', 73);
         eA.rtSpecDataL = await computeRtSpecDataFromChannel(eBuf.getChannelData(0), eBuf.sampleRate);
@@ -4057,7 +4214,7 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
       }
     }
   }
-  if (editA && editA.editHum && editA.editHum.detected && (editA.editHum.strength||0) >= 150) {
+  if (editA && editA.editHum && editA.editHum.detected) {
     editInterfRow += `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
       ⚠ ${editA.editHum.freq||50}Hz hum in Edit · Check by ear
     </div>`;
@@ -4867,10 +5024,9 @@ function detectInterference(data, sr, nfDb, winSecs = 2) {
   const excl       = Math.round(30  / binHz);
   const maxBin     = N / 2;
   const MERGE_HZ   = 500;
-  // Scan from 300 Hz — below this the broadband room tone slope causes
-  // false positives (room resonances look like sharp spikes against the
-  // rolling LF floor). Sub-300 Hz tones are detectHum's domain.
-  const loScan = Math.round(300 / binHz);
+  // Scan from 500 Hz — below this handled by detectHumFromSpectrum / detectLFInterferenceFromSpectrum
+  // using the clean room tone take spectrum which is more reliable for LF.
+  const loScan = Math.round(500 / binHz);
   const hiScan = Math.round((sr / 2 - 200) / binHz);
 
   // Per-window spike lists — index matches silWins index
@@ -5444,6 +5600,105 @@ async function runSingleArtifactScan(files) {
   };
 }
 
+// ── Spectrum-based hum detection (50/60 Hz harmonics) ─────────────────────
+// Operates on the pre-averaged silence spectrum from the room tone take.
+// Same harmonic scoring logic as detectHum but no FFT re-computation needed.
+function detectHumFromSpectrum(rtSpecData) {
+  // Use high-resolution humSpectrum when available (16384-point FFT = 2.9 Hz/bin)
+  // Falls back to avgSpectrum (4096-point) if not present.
+  const avgSpectrum = rtSpecData.humSpectrum || rtSpecData.avgSpectrum;
+  const N   = rtSpecData.humN || RTS_FFT_SIZE;
+  const sr  = rtSpecData.sr;
+  const binHz = sr / N;
+  const CAL   = 20 * Math.log10(N * 0.5);
+
+  function analyzeHarmonics(fundamental) {
+    let score = 0, hits = 0;
+    const harmonics = [];
+    for (let h = 1; h <= 5; h++) {
+      const targetHz  = fundamental * h;
+      const centerBin = Math.round(targetHz / binHz);
+      if (centerBin >= avgSpectrum.length) break;
+      // Peak within ±2 bins
+      let peak = 0, peakBin = centerBin;
+      for (let b = Math.max(0, centerBin - 2); b <= Math.min(avgSpectrum.length - 1, centerBin + 2); b++) {
+        if (avgSpectrum[b] > peak) { peak = avgSpectrum[b]; peakBin = b; }
+      }
+      // Local floor: median of ±25 bins, excluding ±2 around peak
+      const ctx = [];
+      for (let b = peakBin - 25; b <= peakBin + 25; b++) {
+        if (b < 0 || b >= avgSpectrum.length) continue;
+        if (Math.abs(b - peakBin) < 3) continue;
+        ctx.push(avgSpectrum[b]);
+      }
+      if (!ctx.length) continue;
+      ctx.sort((a, b) => a - b);
+      const lf = ctx[Math.floor(ctx.length * 0.5)] || 1e-30;
+      // Sharpness: ±3..6 bins vs peak
+      const shoulders = [];
+      for (let b = peakBin - 6; b <= peakBin + 6; b++) {
+        if (b < 0 || b >= avgSpectrum.length) continue;
+        if (Math.abs(b - peakBin) >= 3) shoulders.push(avgSpectrum[b]);
+      }
+      const shoulderAvg = shoulders.reduce((s, v) => s + v, 0) / (shoulders.length || 1);
+      const ratioDb  = 10 * Math.log10((peak + 1e-30) / (lf + 1e-30));
+      const absDb    = 10 * Math.log10(peak + 1e-30) - CAL;
+      const passes   = peak > shoulderAvg * 3 && peak > lf * 10;
+      harmonics.push({ freq: targetHz, ratioDb, absDb, passes });
+      if (passes) { score += peak / lf; hits++; }
+    }
+    return { score: hits >= 3 ? score : 0, hits, harmonics };
+  }
+
+  const r50 = analyzeHarmonics(50);
+  const r60 = analyzeHarmonics(60);
+  if (r50.score === 0 && r60.score === 0) return { detected: false, freq: null, strength: 0, harmonics: [] };
+  // One mains frequency must clearly dominate
+  if (r50.score > 0 && r60.score > 0 && Math.max(r50.score, r60.score) < Math.min(r50.score, r60.score) * 2)
+    return { detected: false, freq: null, strength: 0, harmonics: [] };
+  const winner   = r50.score >= r60.score ? r50 : r60;
+  const freq     = r50.score >= r60.score ? 50 : 60;
+  // fundamentalDb: absolute dBFS of the fundamental bin
+  const fundamentalDb = winner.harmonics[0] ? winner.harmonics[0].absDb : -100;
+  return { detected: true, freq, strength: winner.score, harmonics: winner.harmonics, fundamentalDb };
+}
+
+// ── Spectrum-based sub-500 Hz interference detection ──────────────────────
+// Finds tonal spikes below 500 Hz in the room tone take spectrum.
+// Uses same 16 dB ratio gate as detectInterference but scans 80–500 Hz only.
+function detectLFInterferenceFromSpectrum(avgSpectrum, sr) {
+  const N     = (avgSpectrum.length - 1) * 2;
+  const binHz = sr / N;
+  const CAL   = 20 * Math.log10(N * 0.5);
+  const LOCAL_BINS = Math.round(200 / binHz);
+  const excl       = Math.round(30  / binHz);
+  const loScan = Math.round(80  / binHz);
+  const hiScan = Math.round(500 / binHz);
+  const TONAL_DB   = 16.0;
+  const found = [];
+  for (let b = loScan; b < hiScan && b < avgSpectrum.length; b++) {
+    const peak = avgSpectrum[b];
+    const ctx = [];
+    for (let k = Math.max(0, b - LOCAL_BINS); k <= Math.min(avgSpectrum.length - 1, b + LOCAL_BINS); k++) {
+      if (Math.abs(k - b) > excl) ctx.push(avgSpectrum[k]);
+    }
+    if (!ctx.length) continue;
+    ctx.sort((a, c) => a - c);
+    const lf = ctx[Math.floor(ctx.length / 2)] || 1e-12;
+    const ratioDb = 10 * Math.log10((peak + 1e-30) / (lf + 1e-30));
+    if (ratioDb > TONAL_DB) {
+      // Sharpness check
+      const ls = (avgSpectrum[Math.max(0, b-6)] + avgSpectrum[Math.max(0, b-7)] + avgSpectrum[Math.max(0, b-8)]) / 3;
+      const rs = (avgSpectrum[Math.min(avgSpectrum.length-1, b+6)] + avgSpectrum[Math.min(avgSpectrum.length-1, b+7)] + avgSpectrum[Math.min(avgSpectrum.length-1, b+8)]) / 3;
+      if (peak > ls * 1.5 && peak > rs * 1.5) {
+        const absDb = 10 * Math.log10(peak + 1e-30) - CAL;
+        if (absDb > -100) found.push({ freq: b * binHz, ratio: ratioDb });
+      }
+    }
+  }
+  return mergeCloseSpikes(found, 500).slice(0, 5);
+}
+
 async function runArtifactScan(leftFiles, rightFiles) {
   // const TAKES = 5, SECS = 10; // ← restore this line (and remove the next) to revert to 5-take sampling
   const TAKES = Infinity, SECS = 10;
@@ -5788,8 +6043,10 @@ function qaChip(score) {
   const base = `display:inline-block;padding:3px 10px;border-radius:4px;font-family:'Chivo Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.4px;border:1.5px solid`;
   if (score <= 1)
     return `<span style="${base} var(--qa-clean-border);background:var(--qa-clean-bg);color:var(--qa-clean-text)">Clean</span>`;
-  if (score <= 3)
+  if (score <= 2)
     return `<span style="${base} var(--qa-minor-border);background:var(--qa-minor-bg);color:var(--qa-minor-text)">Minor</span>`;
+  if (score <= 3)
+    return `<span style="${base} var(--qa-minor-border);background:var(--qa-minor-bg);color:var(--qa-minor-text)">Moderate</span>`;
   return `<span style="${base} var(--qa-serious-border);background:var(--qa-serious-bg);color:var(--qa-serious-text)">Serious</span>`;
 }
 
@@ -5885,8 +6142,18 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
   }
 
   // ── Hum / Buzz / Interference score 1–5 ──────────────────
-  const humStrength = a.hum.strength || 0;
-  const humScore  = !a.hum.detected ? 1 : humStrength < 50 ? 2 : humStrength < 150 ? 3 : humStrength < 300 ? 4 : 5;
+  // Hum: scored by how close the fundamental is to speech level (rawLA.lufs)
+  // Delta = speechLufs - fundamentalDb (larger = hum is quieter relative to speech)
+  let humScore = 1;
+  if (a.hum.detected) {
+    const speechRef   = (rawLA && rawLA.lufs != null) ? rawLA.lufs : (rawLA && rawLA.rmsDb != null ? rawLA.rmsDb : -20);
+    const fundamentalDb = a.hum.fundamentalDb != null ? a.hum.fundamentalDb : -80;
+    const delta = speechRef - fundamentalDb; // positive = hum is quieter than speech
+    humScore = delta < 20 ? 5   // within 20dB of speech — clearly audible
+             : delta < 35 ? 3   // 20–35dB below speech — moderate (matches graph badge)
+             : delta < 50 ? 2   // 35–50dB below speech — minor/faint
+             : 2;               // >50dB below speech — trace, probably inaudible
+  }
   const interfDet    = a.interference && a.interference.detected;
   const interfSpikeL = interfDet ? (Array.isArray(a.interference.spikes) ? a.interference.spikes : ((a.interference.spikes && a.interference.spikes.left)  || [])) : [];
   const interfSpikeR = interfDet ? (Array.isArray(a.interference.spikes) ? [] :                    ((a.interference.spikes && a.interference.spikes.right) || [])) : [];
@@ -5921,7 +6188,7 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     humDesc = 'No interference detected';
   } else {
     const parts = [];
-    if (a.hum.detected && a.hum.freq) parts.push(`${a.hum.freq}Hz hum · stop and report · flag in Labelbox`);
+    if (a.hum.detected && a.hum.freq) parts.push(`${a.hum.freq}Hz hum detected`);
     if (interfDet) {
       if (interfSpikeL.length && interfSpikeR.length) {
         parts.push(`Tonal interference — Left track: ${spikeListStr(interfSpikeL)} · Right track: ${spikeListStr(interfSpikeR)}`);
@@ -6098,7 +6365,13 @@ function buildRecommendations(rawLA, rawRA, eA, mA, artifactData) {
       : [...(_recInterfSrc.spikes?.left||[]), ...(_recInterfSrc.spikes?.right||[])]) : [];
     const audibleSpikes = mergeCloseSpikes(allSpikes.filter(s => s.freq < 18000), 1000);
     const humStr = humDet ? (_recHumSrc.strength || 0) : 0;
-    const hS = !humDet ? 1 : humStr < 50 ? 2 : humStr < 150 ? 3 : humStr < 300 ? 4 : 5;
+    let hS = 1;
+    if (humDet) {
+      const speechRef3    = (rawLA && rawLA.lufs != null) ? rawLA.lufs : (rawLA && rawLA.rmsDb != null ? rawLA.rmsDb : -20);
+      const fundamentalDb3 = _recHumSrc.fundamentalDb != null ? _recHumSrc.fundamentalDb : -80;
+      const delta3 = speechRef3 - fundamentalDb3;
+      hS = delta3 < 20 ? 5 : delta3 < 35 ? 3 : delta3 < 50 ? 2 : 2;
+    }
 
     // Two-dimensional interference scoring — matches Roomtone Spectrum panel
     // Uses rtSpecDataL from edit or rawLA for absolute dBFS lookup
@@ -6267,7 +6540,15 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
       : nfBadgeHTML(rawLA.noiseFloorDb, false);
     const _spikesLConfirmed = artifactData && artifactData.interference ? (Array.isArray(artifactData.interference.spikes) ? artifactData.interference.spikes : (artifactData.interference.spikes && artifactData.interference.spikes.left || [])) : [];
-    const _spikesL = mergeCloseSpikes(_spikesLConfirmed, 1000);
+    // Inject hum harmonics as spike markers if hum detected
+    const _humSpikesL = (artifactData && artifactData.hum && artifactData.hum.detected && artifactData.hum.freq)
+      ? (artifactData.hum.harmonics && artifactData.hum.harmonics.length
+          ? artifactData.hum.harmonics.filter(h => h.passes).map(h => ({ freq: h.freq, ratio: h.ratioDb, absDb: h.absDb, hum: true }))
+          : [1,2,3,4,5].map(h => ({ freq: artifactData.hum.freq * h, ratio: 20, hum: true }))
+        ).filter(s => s.freq < (rawLA && rawLA.rtSpecData ? rawLA.rtSpecData.sr / 2 : 24000))
+      : [];
+    // Hum spikes added after merge — never merged with each other or with interference spikes
+    const _spikesL = [...mergeCloseSpikes(_spikesLConfirmed, 1000), ..._humSpikesL];
     window._rtSpecStore['rtSpecRawL'] = { rtSpecData: rawLA.rtSpecData || null, spikes: _spikesL, nfDb: rawLA.noiseFloorDb, lufsDb: rawLA.lufs ?? null, peakDb: rawLA.plrPeakDb ?? rawLA.peakDb ?? null };
     document.getElementById('rawLMetrics').innerHTML = buildMetrics(rawLA, false, true, 'raw', hpfLDet);
     // RAW Roomtone Spectrum combined panel
@@ -6284,7 +6565,7 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
           rtSpecDraw(_rc, rawLA.rtSpecData, _spikesL, rawLA.noiseFloorDb, rawLA.lufs ?? null, rawLA.plrPeakDb ?? rawLA.peakDb ?? null);
           _rc.onclick = () => rtSpecOpenOverlayDirect(rawLA.rtSpecData, _spikesL, rawLA.noiseFloorDb, 'RAW Roomtone \u2014 L', rawLA.lufs ?? null, rawLA.peakDb ?? null);
           const _rv = document.getElementById('rawrtSpecVerdict');
-          if (_rv) _rv.innerHTML = buildRtSpecVerdictHtml(rawLA.rtSpecData, _spikesL);
+          if (_rv) _rv.innerHTML = buildRtSpecVerdictHtml(rawLA.rtSpecData, _spikesL, rawLA.lufs ?? null);
           const _rm = document.getElementById('rawrtSpecMeta');
           if (_rm) _rm.textContent = (rawLA._talentCode||'Left') + ' talent shown';
           rawrtSpecSwitch('L');
@@ -6309,7 +6590,13 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
       ? '<span class="nf-badge nf-fail">FAIL — HPF</span>'
       : nfBadgeHTML(rawRA.noiseFloorDb, false);
     const _spikesRConfirmed = artifactData && artifactData.interference && artifactData.interference.spikes && !Array.isArray(artifactData.interference.spikes) ? (artifactData.interference.spikes.right || []) : [];
-    const _spikesR = mergeCloseSpikes(_spikesRConfirmed, 1000);
+    const _humSpikesR = (artifactData && artifactData.hum && artifactData.hum.detected && artifactData.hum.freq)
+      ? (artifactData.hum.harmonics && artifactData.hum.harmonics.length
+          ? artifactData.hum.harmonics.filter(h => h.passes).map(h => ({ freq: h.freq, ratio: h.ratioDb, absDb: h.absDb, hum: true }))
+          : [1,2,3,4,5].map(h => ({ freq: artifactData.hum.freq * h, ratio: 20, hum: true }))
+        ).filter(s => s.freq < (rawRA && rawRA.rtSpecData ? rawRA.rtSpecData.sr / 2 : 24000))
+      : [];
+    const _spikesR = [...mergeCloseSpikes(_spikesRConfirmed, 1000), ..._humSpikesR];
     window._rtSpecStore['rtSpecRawR'] = { rtSpecData: rawRA.rtSpecData || null, spikes: _spikesR, nfDb: rawRA.noiseFloorDb, lufsDb: rawRA.lufs ?? null, peakDb: rawRA.plrPeakDb ?? rawRA.peakDb ?? null };
     document.getElementById('rawRMetrics').innerHTML = buildMetrics(rawRA, false, true, 'raw', hpfRDet);
   }
@@ -6368,13 +6655,18 @@ function renderResults(rawLA, rawRA, eA, mA, rawStereoA, artifactData) {
     // Edit SINR panel
     const editrtSpecPanel = document.getElementById('editrtSpecPanel');
     if (eA.rtSpecDataL && eA.editInterference) {
-      const _eSpikesL = eA.editInterference.spikes && eA.editInterference.spikes.left  || [];
-      const _eSpikesR = eA.editInterference.spikes && eA.editInterference.spikes.right || [];
+      const _eHumSpikes = (eA.editHum && eA.editHum.detected && eA.editHum.harmonics && eA.editHum.harmonics.length)
+        ? eA.editHum.harmonics.filter(h => h.passes).map(h => ({ freq: h.freq, ratio: h.ratioDb, absDb: h.absDb, hum: true }))
+        : (eA.editHum && eA.editHum.detected && eA.editHum.freq)
+          ? [1,2,3,4,5].map(h => ({ freq: eA.editHum.freq * h, ratio: 20, hum: true }))
+          : [];
+      const _eSpikesL = [...(eA.editInterference.spikes && eA.editInterference.spikes.left  || []), ..._eHumSpikes];
+      const _eSpikesR = [...(eA.editInterference.spikes && eA.editInterference.spikes.right || []), ..._eHumSpikes];
       window._rtSpecStore['rtSpecEditL'] = { rtSpecData: eA.rtSpecDataL, spikes: _eSpikesL, nfDb: eA.ch0 ? eA.ch0.noiseFloorDb : eA.noiseFloorDb, lufsDb: eA.lufsL ?? eA.lufs ?? null, peakDb: eA.ch0 ? eA.ch0.peakDb : eA.peakDb };
       window._rtSpecStore['rtSpecEditR'] = { rtSpecData: eA.rtSpecDataR, spikes: _eSpikesR, nfDb: eA.ch1 ? eA.ch1.noiseFloorDb : eA.noiseFloorDb, lufsDb: eA.lufsR ?? eA.lufs ?? null, peakDb: eA.ch1 ? eA.ch1.peakDb : eA.peakDb };
       // Verdict from worst spike across both channels
       const _eAllSpikes = [..._eSpikesL, ..._eSpikesR];
-      const _eVerd = buildRtSpecVerdictHtml(eA.rtSpecDataL, _eAllSpikes);
+      const _eVerd = buildRtSpecVerdictHtml(eA.rtSpecDataL, _eAllSpikes, eA.lufs ?? null);
       document.getElementById('editrtSpecVerdict').innerHTML = _eVerd;
       window._editFilename = eFile.name;
       window._rtSpecStore['rtSpecMixL'] = null;
@@ -6717,7 +7009,14 @@ function buildQCQuestionnaire() {
     const interfDet6 = _interf.detected;
     const allSpikes6 = interfDet6 ? (Array.isArray(_interf.spikes) ? _interf.spikes : [...(_interf.spikes?.left||[]), ...(_interf.spikes?.right||[])]) : [];
     const maxRatio6  = allSpikes6.length ? Math.max(...allSpikes6.map(s => s.ratio)) : 0;
-    const hS = !_hum.detected ? 1 : humStr < 50 ? 2 : humStr < 150 ? 3 : humStr < 300 ? 4 : 5;
+    // Hum: speech-relative scoring using fundamentalDb vs speech LUFS
+    let hS = 1;
+    if (_hum.detected) {
+      const speechRef6    = (_rawLA && _rawLA.lufs != null) ? _rawLA.lufs : (_rawLA && _rawLA.rmsDb != null ? _rawLA.rmsDb : -20);
+      const fundamentalDb6 = _hum.fundamentalDb != null ? _hum.fundamentalDb : -80;
+      const delta6 = speechRef6 - fundamentalDb6;
+      hS = delta6 < 20 ? 5 : delta6 < 35 ? 3 : delta6 < 50 ? 2 : 2;
+    }
     const allAudibleQ = allSpikes6.some(s => s.freq < 18000);
     // Two-dimensional iS: ratio gate + absolute dBFS (matches Roomtone Spectrum panel)
     const _qRtSpecData = (e && e.rtSpecDataL) ? e.rtSpecDataL : (_rawLA && _rawLA.rtSpecData) ? _rawLA.rtSpecData : null;
