@@ -6397,10 +6397,13 @@ function buildRecommendations(rawLA, rawRA, eA, mA, artifactData) {
       return rank[v] > rank[w] ? v : w;
     }, 'trace');
 
-    if (humDet && hS >= 4)
-      rec('fail', `${_recLabel} — Hum Detected`, `${(_recHumSrc.freq || 60)}Hz hum present. Do not proceed.`);
-    else if (humDet && hS === 3)
-      rec('warn', `${_recLabel} — Hum Detected`, `${(_recHumSrc.freq || 60)}Hz hum present. Check by ear or request reviewer approval before editing.`);
+    // Hum recommendation — RAW only. Edit hum is already shown in the Session Analysis card.
+    if (humDet && _recLabel === 'RAW') {
+      if (hS >= 4)
+        rec('fail', `RAW — Hum Detected`, `${(_recHumSrc.freq || 60)}Hz hum present. Do not proceed.`);
+      else if (hS === 3)
+        rec('warn', `RAW — Hum Detected`, `${(_recHumSrc.freq || 60)}Hz hum present. Check by ear or request reviewer approval before editing.`);
+    }
 
     // Only recommend action if spike is genuinely SEVERE (audible level + strong ratio)
     if (interfDet && audibleSpikes.length && worstVerdict === 'severe')
