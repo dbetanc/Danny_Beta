@@ -3967,9 +3967,9 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
       (a.maxPeakDb != null && a.maxPeakDb >= -0.1)
         ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP</span>`
         : '',
-      (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) >= -1  ? 'hl-red'
-      : (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) > -20 ? 'hl-amber'
-      : (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) > -70 ? 'hl-green'
+      (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) > -2  ? 'hl-red'
+      : (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) >= -4 ? 'hl-green'
+      : (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) >= -20 ? 'hl-amber'
       : 'hl-purple'),
     dbBarHTML(a.plrPeakDb != null ? a.plrPeakDb : a.peakDb, 'peak'),
     mRow('RMS Level',      a.rmsDb.toFixed(1)+' dBFS', '',
