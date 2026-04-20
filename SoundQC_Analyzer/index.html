@@ -2538,6 +2538,148 @@ async function decodeFileSlice(file, maxSeconds) {
 
 // Full-file peak scan — reads raw WAV bytes in chunks, no full decode.
 // Returns { peakDb, ch0PeakDb, ch1PeakDb, rmsDb, ch0RmsDb, ch1RmsDb } or null on unsupported format.
+// Full-file click detection for Edit/Mixed bounces — chunked raw PCM, per channel.
+// Uses the same gate conditions as detectClicks() on RAW takes.
+// Carries pre-context buffer across chunk boundaries.
+async function scanFullFileClicks(file, nfDb) {
+  const headAB = await file.slice(0, 8192).arrayBuffer();
+  const hv = new DataView(headAB);
+  const riff = String.fromCharCode(hv.getUint8(0),hv.getUint8(1),hv.getUint8(2),hv.getUint8(3));
+  const wave = String.fromCharCode(hv.getUint8(8),hv.getUint8(9),hv.getUint8(10),hv.getUint8(11));
+  if (riff !== 'RIFF' || wave !== 'WAVE') return null;
+  let pos = 12, numChannels = 2, bitsPerSample = 24, audioFormat = 1, sampleRate = 48000, dataStart = -1, dataSize = -1;
+  while (pos < headAB.byteLength - 8) {
+    const id   = String.fromCharCode(hv.getUint8(pos),hv.getUint8(pos+1),hv.getUint8(pos+2),hv.getUint8(pos+3));
+    const size = hv.getUint32(pos+4, true);
+    if (id === 'fmt ') { audioFormat = hv.getUint16(pos+8,true); numChannels = hv.getUint16(pos+10,true); sampleRate = hv.getUint32(pos+12,true); bitsPerSample = hv.getUint16(pos+22,true); }
+    if (id === 'data') { dataStart = pos + 8; dataSize = hv.getUint32(pos+4, true); break; }
+    pos += 8 + size + (size & 1);
+  }
+  if (dataStart < 0 || (audioFormat !== 1 && audioFormat !== 3)) return null;
+  const sr  = sampleRate;
+  const nc  = Math.min(numChannels, 2);
+  const bps = Math.ceil(bitsPerSample / 8);
+  const bpf = numChannels * bps;
+  const dataEnd = dataSize > 0 ? Math.min(dataStart + dataSize, file.size) : file.size;
+
+  // Gate thresholds — same as detectClicks()
+  const nfLin       = Math.pow(10, nfDb / 20);
+  const silThresh    = nfLin * Math.pow(10, 10 / 20);  // NF+10dB pre-silence
+  const postSilThr   = nfLin * Math.pow(10, 14 / 20);  // NF+14dB post-silence
+  const pkThresh     = nfLin * Math.pow(10, 20 / 20);  // NF+20dB minimum peak
+  const CREST        = 25;
+  const INTRA_CREST  = 4.0;
+  const TOP5_FRAC    = 0.50;
+  const SPIKE_DB     = 10.0;
+  const winSz  = Math.floor(sr * 0.002);  // 2ms
+  const preSz  = Math.floor(sr * 0.010);  // 10ms pre-context
+  const postSz = Math.floor(sr * 0.020);  // 20ms post-context
+  const MERGE  = Math.floor(sr * 0.020);
+  const CTX    = preSz + postSz;          // context carried across chunks
+
+  // Per-channel state
+  const bufL = new Float32Array(CTX + 1024 * 128);
+  const bufR = new Float32Array(CTX + 1024 * 128);
+  let lenL = 0, lenR = 0;
+  let eventsL = 0, eventsR = 0;
+  let lastL = -1, lastR = -1;
+  const CHUNK = 8 * 1024 * 1024;
+  let offset = dataStart;
+
+  function processChannel(buf, len, lastEvent) {
+    let events = 0, last = lastEvent;
+    for (let i = preSz; i + winSz + postSz <= len; i += winSz) {
+      let preSq = 0;
+      for (let j = i - preSz; j < i; j++) preSq += buf[j] * buf[j];
+      const preRms = Math.sqrt(preSq / preSz);
+      if (preRms >= silThresh) continue;
+      let peak = 0, winSq = 0;
+      for (let j = i; j < i + winSz; j++) { const v = Math.abs(buf[j]); if (v > peak) peak = v; winSq += buf[j]*buf[j]; }
+      const winRms = Math.sqrt(winSq / winSz);
+      if (peak < pkThresh) continue;
+      if (peak / (preRms + 1e-12) < CREST) continue;
+      if (peak / (winRms + 1e-12) < INTRA_CREST) continue;
+      const sqArr = new Float32Array(winSz);
+      for (let j = 0; j < winSz; j++) sqArr[j] = buf[i+j] * buf[i+j];
+      sqArr.sort();
+      let top5 = 0; for (let j = winSz-1; j >= winSz-5; j--) top5 += sqArr[j];
+      if (top5 / (winSq + 1e-12) < TOP5_FRAC) continue;
+      let postSq = 0;
+      for (let j = i+winSz; j < i+winSz+postSz; j++) postSq += buf[j]*buf[j];
+      const postRms = Math.sqrt(postSq / postSz);
+      if (postRms >= postSilThr) continue;
+      if (20*Math.log10((peak+1e-12)/(postRms+1e-12)) < SPIKE_DB) continue;
+      if (last >= 0 && i - last < MERGE) continue;
+      events++; last = i;
+    }
+    return { events, last };
+  }
+
+  while (offset < dataEnd) {
+    const raw = Math.min(CHUNK, dataEnd - offset);
+    const aligned = Math.floor(raw / bpf) * bpf;
+    if (aligned === 0) break;
+    const ab = await file.slice(offset, offset + aligned).arrayBuffer();
+    const frames = aligned / bpf;
+    const sL = new Float32Array(frames);
+    const sR = nc >= 2 ? new Float32Array(frames) : null;
+
+    if (bitsPerSample === 24 && audioFormat === 1) {
+      const bytes = new Uint8Array(ab);
+      for (let f=0; f<frames; f++) {
+        const b = f*bpf;
+        let v = (bytes[b+2]<<16)|(bytes[b+1]<<8)|bytes[b]; if(v&0x800000) v|=~0xFFFFFF; sL[f]=v/8388608;
+        if(sR){let w=(bytes[b+5]<<16)|(bytes[b+4]<<8)|bytes[b+3]; if(w&0x800000) w|=~0xFFFFFF; sR[f]=w/8388608;}
+      }
+    } else if (bitsPerSample === 16 && audioFormat === 1) {
+      const dv = new DataView(ab);
+      for (let f=0; f<frames; f++) { sL[f]=dv.getInt16(f*bpf,true)/32768; if(sR) sR[f]=dv.getInt16(f*bpf+2,true)/32768; }
+    } else if (bitsPerSample === 32 && audioFormat === 3) {
+      const dv = new DataView(ab);
+      for (let f=0; f<frames; f++) { sL[f]=dv.getFloat32(f*bpf,true); if(sR) sR[f]=dv.getFloat32(f*bpf+4,true); }
+    } else if (bitsPerSample === 32 && audioFormat === 1) {
+      const dv = new DataView(ab);
+      for (let f=0; f<frames; f++) { sL[f]=dv.getInt32(f*bpf,true)/2147483648; if(sR) sR[f]=dv.getInt32(f*bpf+4,true)/2147483648; }
+    }
+
+    // Append new samples after context tail
+    function appendAndProcess(buf, len, newSamples, lastEvent) {
+      const need = len + newSamples.length;
+      const work = need <= buf.length ? buf : new Float32Array(need);
+      if (work !== buf) work.set(buf.subarray(0, len));
+      work.set(newSamples, len);
+      const workLen = len + newSamples.length;
+      const res = processChannel(work, workLen, lastEvent);
+      // Keep tail for next chunk
+      const keep = Math.min(CTX, workLen);
+      const newBuf = work.length >= keep ? work : new Float32Array(keep);
+      newBuf.set(work.subarray(workLen - keep, workLen), 0);
+      return { events: res.events, last: res.last, buf: newBuf, len: keep };
+    }
+
+    const rL = appendAndProcess(bufL, lenL, sL, lastL);
+    eventsL += rL.events; lastL = rL.last; bufL.set(rL.buf.subarray(0, rL.len)); lenL = rL.len;
+    if (sR) {
+      const rR = appendAndProcess(bufR, lenR, sR, lastR);
+      eventsR += rR.events; lastR = rR.last; bufR.set(rR.buf.subarray(0, rR.len)); lenR = rR.len;
+    }
+
+    offset += aligned;
+    await new Promise(r => setTimeout(r, 0));
+  }
+
+  // Final flush — process remaining tail with zero-padded lookahead
+  function flushChannel(buf, len, lastEvent) {
+    if (len <= preSz) return { events: 0, last: lastEvent };
+    const padded = new Float32Array(len + postSz); // zero pad = silence after file end
+    padded.set(buf.subarray(0, len));
+    return processChannel(padded, padded.length, lastEvent);
+  }
+  const fL = flushChannel(bufL, lenL, lastL); eventsL += fL.events;
+  if (nc >= 2) { const fR = flushChannel(bufR, lenR, lastR); eventsR += fR.events; }
+
+  return { eventsL, eventsR: nc >= 2 ? eventsR : eventsL };
+}
 async function scanFullFilePeak(file, nfDb) {
   const headAB = await file.slice(0, 8192).arrayBuffer();
   const hv = new DataView(headAB);
@@ -2666,12 +2808,57 @@ async function scanFullFilePeak(file, nfDb) {
   const fileDuration = totalFrames / sampleRate;
   const signalPct  = totWin > 0 ? sigWin / totWin * 100 : 0;
   const silencePct = 100 - signalPct;
+
+  // ── Start/end digital zero detection ─────────────────────────────────────
+  // Read 2s from start and end of data chunk, check for near-zero RMS windows.
+  const ZERO_THRESH_LIN = 1e-5; // −100 dBFS — catches float quantization floor
+  const zWsz = Math.floor(sampleRate * 0.1) * bytesPerFrame; // 100ms in bytes
+  const zChk = Math.floor(sampleRate * 2.0) * bytesPerFrame; // 2s in bytes
+
+  async function countZeroWindows(byteOffset, byteLen) {
+    const aligned = Math.floor(byteLen / bytesPerFrame) * bytesPerFrame;
+    if (aligned <= 0) return 0;
+    const ab = await file.slice(byteOffset, byteOffset + aligned).arrayBuffer();
+    const dv = new DataView(ab);
+    const frames = aligned / bytesPerFrame;
+    const winFrames = Math.floor(sampleRate * 0.1);
+    let zeros = 0, wins = 0;
+    for (let wi = 0; wi + winFrames <= frames; wi += winFrames) {
+      let sq0 = 0, sq1 = 0;
+      for (let f = wi; f < wi + winFrames; f++) {
+        let s0, s1;
+        if (bitsPerSample === 24 && audioFormat === 1) {
+          const bytes = new Uint8Array(ab, f * bytesPerFrame, bytesPerFrame);
+          let v0 = (bytes[2]<<16)|(bytes[1]<<8)|bytes[0]; if(v0&0x800000) v0|=~0xFFFFFF; s0=v0/8388608;
+          let v1 = numChannels>=2 ? ((bytes[5]<<16)|(bytes[4]<<8)|bytes[3]) : 0; if(v1&0x800000) v1|=~0xFFFFFF; s1=v1/8388608;
+        } else if (bitsPerSample === 16 && audioFormat === 1) {
+          s0 = dv.getInt16(f*bytesPerFrame, true)/32768;
+          s1 = numChannels>=2 ? dv.getInt16(f*bytesPerFrame+2, true)/32768 : 0;
+        } else if (bitsPerSample === 32 && audioFormat === 3) {
+          s0 = dv.getFloat32(f*bytesPerFrame, true);
+          s1 = numChannels>=2 ? dv.getFloat32(f*bytesPerFrame+4, true) : 0;
+        } else { s0 = 0; s1 = 0; }
+        sq0 += s0*s0; sq1 += s1*s1;
+      }
+      const rms0 = Math.sqrt(sq0/winFrames), rms1 = Math.sqrt(sq1/winFrames);
+      wins++;
+      if (rms0 < ZERO_THRESH_LIN && rms1 < ZERO_THRESH_LIN) zeros++;
+    }
+    return wins > 0 ? zeros / wins : 0;
+  }
+
+  const startZeroRatio = await countZeroWindows(dataStart, Math.min(zChk, dataEnd - dataStart));
+  const endZeroRatio   = await countZeroWindows(Math.max(dataStart, dataEnd - zChk), Math.min(zChk, dataEnd - dataStart));
+  const startsWithZero = startZeroRatio >= 0.5; // ≥50% of first 2s is zero
+  const endsWithZero   = endZeroRatio   >= 0.5; // ≥50% of last 2s is zero
+
   return {
     peakDb: Math.max(ch0PeakDb, ch1PeakDb), ch0PeakDb, ch1PeakDb, rmsDb, ch0RmsDb, ch1RmsDb,
     fileDuration,
     signalPct, silencePct,
     signalDur: fileDuration * signalPct / 100,
     silenceDur: fileDuration * silencePct / 100,
+    startsWithZero, endsWithZero,
   };
 }
 
@@ -3266,6 +3453,16 @@ async function runAnalysis() {
       setProgress('Scanning Edit WAV…', 70);
       await new Promise(r => setTimeout(r, 0));
       eA.editChecks = await computeEditChecks(eBuf);
+      eA.digitalZeros = detectDigitalZerosInBounce(eBuf);
+      // Click detection — full file, per channel
+      setProgress('Scanning Edit for clicks…', 72);
+      const eClicks = await scanFullFileClicks(eFile, eA.noiseFloorDb ?? -60);
+      if (eClicks) eA.clicksFullFile = eClicks;
+      // Override start/end flags with full-file scan results (eBuf is only 5-min slice)
+      if (ePeakFull) {
+        if (ePeakFull.startsWithZero) eA.digitalZeros = { ...(eA.digitalZeros||{}), detected: true, startsWithZero: true };
+        if (ePeakFull.endsWithZero)   eA.digitalZeros = { ...(eA.digitalZeros||{}), detected: true, endsWithZero: true };
+      }
       // Full-file overlap scan (chunked — safe for large files)
       if (eFile.size > 200 * 1024 * 1024) {
         const ovResult = await computeOverlapsFromFile(eFile);
@@ -3439,6 +3636,16 @@ async function runAnalysis() {
       }
       await new Promise(r => setTimeout(r, 0));
       const mss = computeSignalSilence(mBuf);
+      mA.digitalZeros = detectDigitalZerosInBounce(mBuf);
+      // Click detection — full file, per channel
+      setProgress('Scanning Mixed for clicks…', 90);
+      const mClicks = await scanFullFileClicks(mFile, mA.noiseFloorDb ?? -60);
+      if (mClicks) mA.clicksFullFile = mClicks;
+      // Override start/end flags with full-file scan results (mBuf is only 5-min slice)
+      if (mPeakFull) {
+        if (mPeakFull.startsWithZero) mA.digitalZeros = { ...(mA.digitalZeros||{}), detected: true, startsWithZero: true };
+        if (mPeakFull.endsWithZero)   mA.digitalZeros = { ...(mA.digitalZeros||{}), detected: true, endsWithZero: true };
+      }
       if (mA.signalPct == null) {
         mA.signalPct = mss.signalPct; mA.silencePct = mss.silencePct;
         mA.signalDur = mss.signalDur; mA.silenceDur = mss.silenceDur;
@@ -4378,6 +4585,34 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     }
   }
 
+  // Click alerts — Edit and Mixed, per channel
+  let clicksRow = '';
+  for (const [src, a] of [['Edit', editA], ['Mixed', mixA]]) {
+    if (!a || !a.clicksFullFile) continue;
+    const { eventsL, eventsR } = a.clicksFullFile;
+    const total = eventsL + eventsR;
+    if (total === 0) continue;
+    const parts = [];
+    if (eventsL > 0) parts.push(`L: ${eventsL}`);
+    if (eventsR > 0) parts.push(`R: ${eventsR}`);
+    clicksRow += `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
+      ⚠ Clicks in ${src} — ${total} event${total>1?'s':''} · ${parts.join(' · ')} · Check by ear
+    </div>`;
+  }
+  let digitalZeroRow = '';
+  const fmtTS2 = t => { const m = Math.floor(t/60), s = Math.floor(t%60).toString().padStart(2,'0'); return `${m}:${s}`; };
+  for (const [src, dz] of [['Edit', editA && editA.digitalZeros], ['Mixed', mixA && mixA.digitalZeros]]) {
+    if (!dz || !dz.detected) continue;
+    const parts = [];
+    if (dz.startsWithZero) parts.push('starts with digital silence');
+    if (dz.endsWithZero)   parts.push('ends with digital silence');
+    if (dz.timestamps && dz.timestamps.length && !dz.startsWithZero && !dz.endsWithZero)
+      parts.push(`${dz.timestamps.length} gap${dz.timestamps.length>1?'s':''} at ${dz.timestamps.slice(0,3).map(g=>fmtTS2(g.t)).join(', ')}`);
+    digitalZeroRow += `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
+      ⚠ Digital zeros in ${src} — ${parts.join(' · ')} · Verify room tone gaps
+    </div>`;
+  }
+
   return `<div style="border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:stretch;gap:0">
 
     <div style="padding:12px 16px;min-width:100px">
@@ -4399,6 +4634,8 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
   </div>
   ${editChecks ? buildEditChecksSection(editChecks) : ''}
   ${editInterfRow}
+  ${clicksRow}
+  ${digitalZeroRow}
   ${markersDurationFlag}`;
 }
 
@@ -4653,6 +4890,74 @@ function detectHPF(data, sr, nfDb) {
 // 1. Bleed: cross-channel correlation during speech windows
 // 2. Panning error: both channels contain same signal (not alternated)
 // 3. Digital zero gaps: silence windows erased to digital zero instead of room tone
+// Detect digital zero gaps in Edit or Mixed bounce.
+// Scans entire decoded buffer for windows where both channels read near −∞ dBFS
+// (true digital silence — not room tone). Also flags if the file starts or ends
+// with digital zeros rather than room tone.
+function detectDigitalZerosInBounce(buf) {
+  const sr  = buf.sampleRate;
+  const nc  = buf.numberOfChannels;
+  const ch0 = buf.getChannelData(0);
+  const ch1 = nc >= 2 ? buf.getChannelData(1) : ch0;
+  const dur = buf.duration;
+
+  const wsz = Math.floor(sr * 0.1); // 100ms windows
+  const n   = Math.floor(ch0.length / wsz);
+  const ZERO_THRESH = 1e-5; // −100 dBFS — catches float quantization floor (~-138 dBFS) as well as true zeros
+
+  let totalWindows = 0, zeroWindows = 0;
+  const zeroTimestamps = [];
+
+  for (let i = 0; i < n; i++) {
+    const s = i * wsz;
+    let sq0 = 0, sq1 = 0;
+    for (let j = s; j < s + wsz; j++) {
+      sq0 += ch0[j] * ch0[j];
+      sq1 += ch1[j] * ch1[j];
+    }
+    const rms0 = Math.sqrt(sq0 / wsz);
+    const rms1 = Math.sqrt(sq1 / wsz);
+    totalWindows++;
+    if (rms0 < ZERO_THRESH && rms1 < ZERO_THRESH) {
+      zeroWindows++;
+      zeroTimestamps.push(i * wsz / sr);
+    }
+  }
+
+  // Check start: first 2s — are they digital zero?
+  const startWindows = Math.floor(2.0 / 0.1);
+  let startZero = 0;
+  for (let i = 0; i < Math.min(startWindows, n); i++) {
+    const s = i * wsz; let sq0 = 0, sq1 = 0;
+    for (let j = s; j < s + wsz; j++) { sq0 += ch0[j]*ch0[j]; sq1 += ch1[j]*ch1[j]; }
+    if (Math.sqrt(sq0/wsz) < ZERO_THRESH && Math.sqrt(sq1/wsz) < ZERO_THRESH) startZero++;
+  }
+  const startsWithZero = startZero >= Math.min(3, startWindows); // ≥300ms of zeros at start
+
+  // Check end: last 2s
+  const endWindows = Math.floor(2.0 / 0.1);
+  let endZero = 0;
+  for (let i = Math.max(0, n - endWindows); i < n; i++) {
+    const s = i * wsz; let sq0 = 0, sq1 = 0;
+    for (let j = s; j < s + wsz; j++) { sq0 += ch0[j]*ch0[j]; sq1 += ch1[j]*ch1[j]; }
+    if (Math.sqrt(sq0/wsz) < ZERO_THRESH && Math.sqrt(sq1/wsz) < ZERO_THRESH) endZero++;
+  }
+  const endsWithZero = endZero >= Math.min(3, endWindows);
+
+  // Merge close timestamps (within 1s)
+  const merged = [];
+  for (const t of zeroTimestamps) {
+    const last = merged[merged.length - 1];
+    if (!last || t - last.end > 1.0) merged.push({ t, end: t + 0.1 });
+    else last.end = t + 0.1;
+  }
+
+  const zeroRatio = totalWindows > 0 ? zeroWindows / totalWindows : 0;
+  const detected  = zeroWindows > 0 && (startsWithZero || endsWithZero || zeroRatio > 0.02);
+
+  return { detected, zeroRatio, zeroWindows, totalWindows, startsWithZero, endsWithZero, timestamps: merged, dur };
+}
+
 async function computeEditChecks(buf) {
   if (buf.numberOfChannels < 2) return { bleedPct: 0, panningError: false, digitalZeroGaps: false };
 
