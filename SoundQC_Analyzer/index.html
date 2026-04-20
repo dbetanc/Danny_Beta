@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.7.4
+  SOBA — Audio QA & QC Checker v3.7.5
   Created by: Danny Beta
   Date: April 2026
 
@@ -27,7 +27,7 @@
   gtag('js', new Date());
   gtag('config', 'G-444D9CS8EE');
 </script>
-<title>SOBA — Audio QA & QC v3.7.4</title>
+<title>SOBA — Audio QA & QC v3.7.5</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -721,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.7.4</div>
+            <div class="version-badge">v3.7.5</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -3015,8 +3015,11 @@ async function runAnalysis() {
       // Pick the room tone take: lowest speech ratio (fewest frames above NF+24dB).
       // A pure room tone take has near 0% speech; a speech take has 30-70%+.
       // Falls back to lowest NF if speechRatio not available.
-      const _srFirst = rawLA.rtSpecDataFirst ? (rawLA.rtSpecDataFirst.speechRatio ?? 1) : 1;
-      const _srLast  = rawLA.rtSpecDataLast  ? (rawLA.rtSpecDataLast.speechRatio  ?? 1) : 1;
+      // Guard: if nfDb < -100 dBFS the take is a dead/muted mic — discard it.
+      const _validFirst = rawLA.rtSpecDataFirst && (rawLA.rtSpecDataFirst.nfDb ?? -200) > -100;
+      const _validLast  = rawLA.rtSpecDataLast  && (rawLA.rtSpecDataLast.nfDb  ?? -200) > -100;
+      const _srFirst = _validFirst ? (rawLA.rtSpecDataFirst.speechRatio ?? 1) : 2;
+      const _srLast  = _validLast  ? (rawLA.rtSpecDataLast.speechRatio  ?? 1) : 2;
       const _rtTakeL = (_srFirst <= _srLast) ? rawLA.rtSpecDataFirst : rawLA.rtSpecDataLast;
       if (_rtTakeL) {
         rawLA.noiseFloorDb = _rtTakeL.nfDb;
@@ -3033,8 +3036,10 @@ async function runAnalysis() {
       rawRA.rtSpecDataLast  = _sortedR.length > 1
         ? await rtSpecFromFile(_sortedR[_sortedR.length - 1])
         : rawRA.rtSpecDataFirst;
-      const _srFirstR = rawRA.rtSpecDataFirst ? (rawRA.rtSpecDataFirst.speechRatio ?? 1) : 1;
-      const _srLastR  = rawRA.rtSpecDataLast  ? (rawRA.rtSpecDataLast.speechRatio  ?? 1) : 1;
+      const _validFirstR = rawRA.rtSpecDataFirst && (rawRA.rtSpecDataFirst.nfDb ?? -200) > -100;
+      const _validLastR  = rawRA.rtSpecDataLast  && (rawRA.rtSpecDataLast.nfDb  ?? -200) > -100;
+      const _srFirstR = _validFirstR ? (rawRA.rtSpecDataFirst.speechRatio ?? 1) : 2;
+      const _srLastR  = _validLastR  ? (rawRA.rtSpecDataLast.speechRatio  ?? 1) : 2;
       const _rtTakeR = (_srFirstR <= _srLastR) ? rawRA.rtSpecDataFirst : rawRA.rtSpecDataLast;
       if (_rtTakeR) {
         rawRA.noiseFloorDb = _rtTakeR.nfDb;
