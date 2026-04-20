@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.7.5
+  SOBA — Audio QA & QC Checker v3.7.6
   Created by: Danny Beta
   Date: April 2026
 
@@ -27,7 +27,7 @@
   gtag('js', new Date());
   gtag('config', 'G-444D9CS8EE');
 </script>
-<title>SOBA — Audio QA & QC v3.7.5</title>
+<title>SOBA — Audio QA & QC v3.7.6</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -721,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.7.5</div>
+            <div class="version-badge">v3.7.6</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -2733,6 +2733,60 @@ async function scanFullFileLUFS(file, onProgress) {
     return out;
   }
 
+  // ── True Peak — cubic spline inter-sample peak detection ─────────────────
+  // For each consecutive sample pair, fits a cubic polynomial using Catmull-Rom
+  // spline and analytically solves for the maximum within that interval.
+  // More accurate than fixed-rate FIR oversampling — finds exact inter-sample peak.
+  // State: need 3 context samples carried across chunk boundaries.
+  const tpCtxL = new Float32Array(3);  // [n-2, n-1, n] history
+  const tpCtxR = new Float32Array(3);
+  let tpPeakL = 0, tpPeakR = 0;
+  let tpInitL = 0, tpInitR = 0; // how many history samples filled
+
+  function cubicTruePeak(samples, ctx, initCount) {
+    let pk = 0;
+    let count = initCount;
+    for (let i = 0; i < samples.length; i++) {
+      // Shift context and add new sample
+      ctx[0] = ctx[1]; ctx[1] = ctx[2]; ctx[2] = samples[i];
+      count = Math.min(count + 1, 3);
+      if (count < 3) { const a = Math.abs(samples[i]); if (a > pk) pk = a; continue; }
+      // We have ctx[0]=y[n-2], ctx[1]=y[n-1], ctx[2]=y[n]
+      // Look ahead: y[n+1] = samples[i+1] if available, else extrapolate
+      const yn1 = i + 1 < samples.length ? samples[i+1] : 2*ctx[2] - ctx[1];
+      // Catmull-Rom cubic through y[n-1], y[n] — interval [0,1]
+      // p(t) = 0.5 * [(2*y[n-1]) + (-y[n-2]+y[n])*t + (2*y[n-2]-5*y[n-1]+4*y[n]-yn1)*t² + (-y[n-2]+3*y[n-1]-3*y[n]+yn1)*t³]
+      const y0 = ctx[0], y1 = ctx[1], y2 = ctx[2];
+      const a =  0.5 * (-y0 + 3*y1 - 3*y2 + yn1);
+      const b =  0.5 * (2*y0 - 5*y1 + 4*y2 - yn1);
+      const c =  0.5 * (-y0 + y2);
+      const d =  y1;
+      // Check endpoints
+      if (Math.abs(d) > pk) pk = Math.abs(d);
+      if (Math.abs(a+b+c+d) > pk) pk = Math.abs(a+b+c+d);
+      // Find critical points: p'(t) = 3a*t² + 2b*t + c = 0
+      if (Math.abs(a) > 1e-12) {
+        const disc = 4*b*b - 12*a*c;
+        if (disc >= 0) {
+          const sqrtDisc = Math.sqrt(disc);
+          for (const t of [(-2*b - sqrtDisc)/(6*a), (-2*b + sqrtDisc)/(6*a)]) {
+            if (t > 0 && t < 1) {
+              const pv = Math.abs(((a*t + b)*t + c)*t + d);
+              if (pv > pk) pk = pv;
+            }
+          }
+        }
+      } else if (Math.abs(b) > 1e-12) {
+        const t = -c / (2*b);
+        if (t > 0 && t < 1) {
+          const pv = Math.abs(((a*t + b)*t + c)*t + d);
+          if (pv > pk) pk = pv;
+        }
+      }
+    }
+    return { pk, count };
+  }
+
   const blockSize = Math.round(sr * 0.4);
   const hopSize   = Math.round(sr * 0.1);
   const bmSt=[], bmL=[], bmR=[];        // block means: stereo, left, right
@@ -2771,6 +2825,10 @@ async function scanFullFileLUFS(file, onProgress) {
     const fL = filterChunk(sL, 0);
     const fR = sR ? filterChunk(sR, 1) : null;
 
+    // True peak — cubic spline inter-sample peak on raw (unfiltered) samples
+    const tpResL = cubicTruePeak(sL, tpCtxL, tpInitL); tpInitL = tpResL.count; if (tpResL.pk > tpPeakL) tpPeakL = tpResL.pk;
+    if (sR) { const tpResR = cubicTruePeak(sR, tpCtxR, tpInitR); tpInitR = tpResR.count; if (tpResR.pk > tpPeakR) tpPeakR = tpResR.pk; }
+
     // Prepend leftover
     const cL = new Float32Array(loL.length + fL.length); cL.set(loL,0); cL.set(fL,loL.length);
     let cR = null;
@@ -2802,8 +2860,12 @@ async function scanFullFileLUFS(file, onProgress) {
     return -0.691 + 10*Math.log10(g2.reduce((s,v)=>s+v,0)/g2.length);
   }
 
+  const toDB = v => v > 0 ? 20 * Math.log10(v) : -Infinity;
   const fileDuration = dataSize > 0 ? (dataSize / bpf) / sr : null;
-  return { lufs: integrate(bmSt), lufsL: integrate(bmL), lufsR: nc>=2 ? integrate(bmR) : integrate(bmL), fileDuration };
+  const truePeakDb = toDB(Math.max(tpPeakL, nc >= 2 ? tpPeakR : 0));
+  const truePeakLDb = toDB(tpPeakL);
+  const truePeakRDb = nc >= 2 ? toDB(tpPeakR) : truePeakLDb;
+  return { lufs: integrate(bmSt), lufsL: integrate(bmL), lufsR: nc>=2 ? integrate(bmR) : integrate(bmL), fileDuration, truePeakDb, truePeakLDb, truePeakRDb };
 }
 
 async function analyzeRawStereo(file) {
@@ -3185,6 +3247,11 @@ async function runAnalysis() {
           eA.lrDelta   = Math.abs(eFullLufs.lufsL - eFullLufs.lufsR);
         }
         if (eFullLufs.fileDuration != null) eA.fileDuration = eFullLufs.fileDuration;
+        if (eFullLufs.truePeakDb != null && isFinite(eFullLufs.truePeakDb)) {
+          eA.truePeakDb  = eFullLufs.truePeakDb;
+          eA.truePeakLDb = eFullLufs.truePeakLDb;
+          eA.truePeakRDb = eFullLufs.truePeakRDb;
+        }
       }
       await new Promise(r => setTimeout(r, 0));
       const ss = computeSignalSilence(eBuf);
@@ -3364,6 +3431,11 @@ async function runAnalysis() {
           mA.lrDelta   = Math.abs(mFullLufs.lufsL - mFullLufs.lufsR);
         }
         if (mFullLufs.fileDuration != null) mA.fileDuration = mFullLufs.fileDuration;
+        if (mFullLufs.truePeakDb != null && isFinite(mFullLufs.truePeakDb)) {
+          mA.truePeakDb  = mFullLufs.truePeakDb;
+          mA.truePeakLDb = mFullLufs.truePeakLDb;
+          mA.truePeakRDb = mFullLufs.truePeakRDb;
+        }
       }
       await new Promise(r => setTimeout(r, 0));
       const mss = computeSignalSilence(mBuf);
@@ -3968,15 +4040,16 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
       })(),
       lufsBarHTML(a.lufs, lufsTarget),
     ] : []),
-    mRow('Sample Peak',     (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb).toFixed(1)+' dBFS',
-      (a.maxPeakDb != null && a.maxPeakDb >= -0.1)
-        ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP</span>`
-        : '',
-      (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) > -2  ? 'hl-red'
-      : (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) >= -4 ? 'hl-green'
-      : (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb) >= -20 ? 'hl-amber'
-      : 'hl-purple'),
-    dbBarHTML(a.plrPeakDb != null ? a.plrPeakDb : a.peakDb, 'peak'),
+    (() => {
+      const useTrue = (lufsTarget === 'mixed' || lufsTarget === 'edit') && a.truePeakDb != null && isFinite(a.truePeakDb);
+      const peakVal = useTrue ? a.truePeakDb : (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb);
+      const peakLabel = useTrue ? 'True Peak' : 'Sample Peak';
+      const clipBadge = (a.maxPeakDb != null && a.maxPeakDb >= -0.1)
+        ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP</span>` : '';
+      const peakCls = peakVal > -3.5 ? 'hl-red' : peakVal >= -4 ? 'hl-green' : peakVal >= -20 ? 'hl-amber' : 'hl-purple';
+      return mRow(peakLabel, peakVal.toFixed(1)+' dBFS', clipBadge, peakCls);
+    })(),
+    dbBarHTML((lufsTarget === 'mixed' || lufsTarget === 'edit') && a.truePeakDb != null && isFinite(a.truePeakDb) ? a.truePeakDb : (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb), 'peak'),
     mRow('RMS Level',      a.rmsDb.toFixed(1)+' dBFS', '',
       a.rmsDb >= -1  ? 'hl-red'
       : a.rmsDb > -20 ? 'hl-amber'
@@ -3994,11 +4067,18 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
         mRow('L / R LUFS', a.lufsL.toFixed(1)+' / '+a.lufsR.toFixed(1)+' LUFS', '', ''),
       ] : []),
       (() => {
+        const useTrue = (lufsTarget === 'mixed' || lufsTarget === 'edit') && a.truePeakLDb != null && isFinite(a.truePeakLDb);
+        if (useTrue) {
+          const lp = a.truePeakLDb, rp = a.truePeakRDb;
+          const lClip = lp > -1, rClip = rp > -1;
+          const badge = (lClip || rClip)
+            ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP${lClip && rClip ? ' L+R' : lClip ? ' L' : ' R'}</span>` : '';
+          return mRow('L / R True Peak', lp.toFixed(1)+' / '+rp.toFixed(1)+' dBFS', badge, lClip || rClip ? 'hl-red' : '');
+        }
         const lp = a.ch0.peakDb, rp = a.ch1.peakDb;
         const lClip = lp >= -0.1, rClip = rp >= -0.1;
         const badge = (lClip || rClip)
-          ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP${lClip && rClip ? ' L+R' : lClip ? ' L' : ' R'}</span>`
-          : '';
+          ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP${lClip && rClip ? ' L+R' : lClip ? ' L' : ' R'}</span>` : '';
         return mRow('L / R Sample Peak', lp.toFixed(1)+' / '+rp.toFixed(1)+' dBFS', badge, lClip || rClip ? 'hl-red' : '');
       })(),
       mRow('L / R RMS', (a.ch0.rmsDbRaw ?? a.ch0.rmsDb).toFixed(1)+' / '+(a.ch1.rmsDbRaw ?? a.ch1.rmsDb).toFixed(1)+' dBFS', '', ''),
@@ -7024,7 +7104,7 @@ function buildQCQuestionnaire() {
   const fmt1 = v => v != null ? v.toFixed(1) : na;
 
   // ── Helper: question row ──────────────────────────────────
-  function qRow(num, label, value, isScore, copyOverride, refScore) {
+  function qRow(num, label, value, isScore, copyOverride, refScore, valueColor) {
     const valStr = value != null && value !== '' ? String(value) : '';
     const scoreRaw  = isScore && valStr ? parseInt(valStr) : null;
     const scoreDisp = isScore && scoreRaw ? `${6 - scoreRaw} / 5` : valStr;
@@ -7033,7 +7113,7 @@ function buildQCQuestionnaire() {
     const scoreColor = isScore && scoreRaw ? (
       (6 - scoreRaw) >= 4 ? 'var(--green)' :
       (6 - scoreRaw) >= 3 ? 'var(--amber)' : 'var(--red)'
-    ) : 'var(--text)';
+    ) : (valueColor || 'var(--text)');
     const hasVal = valStr !== '' && valStr !== na;
 
     // Visual-only reference score badge (not copied)
@@ -7055,27 +7135,40 @@ function buildQCQuestionnaire() {
 
   // ── Derive values ─────────────────────────────────────────
 
-  // 1. Edit Room Tone (NF) + LUFS
-  const editNF   = e ? fmt1(e.noiseFloorDb) + ' dBFS' : na;
-  const editLUFS = e && e.lufs != null ? fmt1(e.lufs) + ' LUFS' : na;
-  const q1 = editNF !== na || editLUFS !== na ? `RT: ${editNF} | LUFS: ${editLUFS}` : na;
+  // 1. Edit Room Tone (NF) + LUFS with L/R
+  const editNF    = e ? fmt1(e.noiseFloorDb) + ' dBFS' : na;
+  const editNFLR  = e && e.ch0 && e.ch1 ? `L / R  ${fmt1(e.ch0.noiseFloorDb)} / ${fmt1(e.ch1.noiseFloorDb)} dBFS` : '';
+  const editLUFS  = e && e.lufs  != null ? fmt1(e.lufs)  + ' LUFS' : na;
+  const editLUFSLR = e && e.lufsL != null && e.lufsR != null ? `L / R  ${fmt1(e.lufsL)} / ${fmt1(e.lufsR)} LUFS` : '';
+  const q1 = editNF !== na || editLUFS !== na
+    ? `NF: ${editNF}${editNFLR ? '   ' + editNFLR : ''}<br>LUFS: ${editLUFS}${editLUFSLR ? '   ' + editLUFSLR : ''}` : na;
 
-  // 2. Mixed Room Tone (NF) + LUFS
-  const mixNF   = m ? fmt1(m.noiseFloorDb) + ' dBFS' : na;
-  const mixLUFS = m && m.lufs != null ? fmt1(m.lufs) + ' LUFS' : na;
-  const q2 = mixNF !== na || mixLUFS !== na ? `RT: ${mixNF} | LUFS: ${mixLUFS}` : na;
+  // 2. Mixed Room Tone (NF) + LUFS with L/R
+  const mixNF    = m ? fmt1(m.noiseFloorDb) + ' dBFS' : na;
+  const mixNFLR  = m && m.ch0 && m.ch1 ? `L / R  ${fmt1(m.ch0.noiseFloorDb)} / ${fmt1(m.ch1.noiseFloorDb)} dBFS` : '';
+  const mixLUFS  = m && m.lufs  != null ? fmt1(m.lufs)  + ' LUFS' : na;
+  const mixLUFSLR = m && m.lufsL != null && m.lufsR != null ? `L / R  ${fmt1(m.lufsL)} / ${fmt1(m.lufsR)} LUFS` : '';
+  const q2 = mixNF !== na || mixLUFS !== na
+    ? `NF: ${mixNF}${mixNFLR ? '   ' + mixNFLR : ''}<br>LUFS: ${mixLUFS}${mixLUFSLR ? '   ' + mixLUFSLR : ''}` : na;
 
   // 3. L/R Acoustic Delta + RMS diff Edit and Mixed
   const eDelta = e && e.lrDelta != null ? fmt1(e.lrDelta) + ' dB' : na;
   const eRmsLR = e && e.ch0 && e.ch1 ? `L ${fmt1(e.ch0.rmsDb)} / R ${fmt1(e.ch1.rmsDb)} dBFS` : na;
   const mDelta = m && m.lrDelta != null ? fmt1(m.lrDelta) + ' dB' : na;
   const mRmsLR = m && m.ch0 && m.ch1 ? `L ${fmt1(m.ch0.rmsDb)} / R ${fmt1(m.ch1.rmsDb)} dBFS` : na;
-  const q3 = `Edit Δ: ${eDelta} | Edit RMS: ${eRmsLR} | Mix Δ: ${mDelta} | Mix RMS: ${mRmsLR}`;
+  const q3 = `Edit Δ: ${eDelta} | Edit RMS: ${eRmsLR}<br>Mix Δ: ${mDelta} | Mix RMS: ${mRmsLR}`;
 
-  // 4. Peak Level Edit L/R and Mixed L/R
-  const ePeakLR = e && e.ch0 && e.ch1 ? `L ${fmt1(e.ch0.peakDb)} / R ${fmt1(e.ch1.peakDb)} dBFS` : (e ? fmt1(e.peakDb) + ' dBFS' : na);
-  const mPeakLR = m && m.ch0 && m.ch1 ? `L ${fmt1(m.ch0.peakDb)} / R ${fmt1(m.ch1.peakDb)} dBFS` : (m ? fmt1(m.peakDb) + ' dBFS' : na);
-  const q4 = `Edit: ${ePeakLR} | Mix: ${mPeakLR}`;
+  // 4. True Peak Edit + Mixed with L/R — red above -3.5 dBFS
+  const tpColor = (db) => (db != null && isFinite(db) && db > -3.5) ? 'var(--red)' : '';
+  const eTP    = e && e.truePeakDb  != null && isFinite(e.truePeakDb)  ? fmt1(e.truePeakDb)  + ' dBFS' : (e ? fmt1(e.peakDb) + ' dBFS' : na);
+  const eTPLR  = e && e.truePeakLDb != null && isFinite(e.truePeakLDb) ? `L / R  ${fmt1(e.truePeakLDb)} / ${fmt1(e.truePeakRDb)} dBFS` : '';
+  const eTPLabel = e && e.truePeakDb != null ? 'Edit True Peak' : 'Edit Peak';
+  const mTP    = m && m.truePeakDb  != null && isFinite(m.truePeakDb)  ? fmt1(m.truePeakDb)  + ' dBFS' : (m ? fmt1(m.peakDb) + ' dBFS' : na);
+  const mTPLR  = m && m.truePeakLDb != null && isFinite(m.truePeakLDb) ? `L / R  ${fmt1(m.truePeakLDb)} / ${fmt1(m.truePeakRDb)} dBFS` : '';
+  const eTPVal = e && e.truePeakDb != null ? e.truePeakDb : (e ? e.peakDb : null);
+  const mTPVal = m && m.truePeakDb != null ? m.truePeakDb : (m ? m.peakDb : null);
+  const q4 = `${eTPLabel}: ${eTP}${eTPLR ? '   ' + eTPLR : ''}<br>Mixed True Peak: ${mTP}${mTPLR ? '   ' + mTPLR : ''}`;
+  const q4Color = (eTPVal != null && eTPVal > -3.5) || (mTPVal != null && mTPVal > -3.5) ? 'var(--red)' : '';
 
   // 5. Headphone Bleed — Edit score (delivered file), RAW as fallback
   let bleedScore = na;
@@ -7478,7 +7571,7 @@ function buildQCQuestionnaire() {
       ${qRow(1,  'Edit RT + LUFS',                                        q1,          false)}
       ${qRow(2,  'Mixed RT + LUFS',                                       q2,          false)}
       ${qRow(3,  'Acoustic Delta + L/R RMS',   q3,  false, q3)}
-      ${qRow(4,  'Sample Peak',            q4,  false, `Sample Peak: ${q4}`)}
+      ${qRow(4,  'True Peak',              q4,  false, `True Peak: ${q4}`, null, q4Color)}
       ${qRow(5,  'Headphone Bleed',              q5,  false, q5,  bleedScore)}
       ${qRow(6,  'HVAC / Hum / Interference',    q6,  false, q6,  humScore)}
       ${qRow(7,  'Physical Noises',               q7,  false, q7,  noisesScore)}
