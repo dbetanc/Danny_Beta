@@ -7583,8 +7583,10 @@ function buildQCQuestionnaire() {
   // 10. Mouth Clicks score — prefer Edit full-file scan over RAW takes
   let clicksScore = na;
   if (e && e.clicksFullFile) {
-    const total = (e.clicksFullFile.eventsL || 0) + (e.clicksFullFile.eventsR || 0);
-    clicksScore = total === 0 ? 1 : total <= 3 ? 2 : total <= 8 ? 3 : total <= 15 ? 4 : 5;
+    const total   = (e.clicksFullFile.eventsL || 0) + (e.clicksFullFile.eventsR || 0);
+    const durMin  = (e.fileDuration || 300) / 60;  // fallback 5 min if not scanned
+    const rate    = total / durMin;  // clicks per minute
+    clicksScore = total === 0 ? 1 : rate <= 0.15 ? 2 : rate <= 0.5 ? 3 : rate <= 1.0 ? 4 : 5;
   } else if (a) {
     const clickTotal = a.clicks.left + a.clicks.right;
     const clickAvg   = a.takesAnalyzed > 0 ? clickTotal / a.takesAnalyzed : clickTotal;
