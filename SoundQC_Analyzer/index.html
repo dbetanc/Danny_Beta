@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.7.6
+  SOBA — Audio QA & QC Checker v3.7.7
   Created by: Danny Beta
   Date: April 2026
 
@@ -27,7 +27,7 @@
   gtag('js', new Date());
   gtag('config', 'G-444D9CS8EE');
 </script>
-<title>SOBA — Audio QA & QC v3.7.6</title>
+<title>SOBA — Audio QA & QC v3.7.7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -721,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.7.6</div>
+            <div class="version-badge">v3.7.7</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -2721,6 +2721,15 @@ async function scanFullFilePeak(file, nfDb) {
   let winSumSq0 = 0, winSumSq1 = 0, winFrameCount = 0;
   let sigWin = 0, totWin = 0;
 
+  // Per-channel digital zero gap tracking — full file
+  const ZERO_WIN_SZ = Math.floor(sampleRate * 0.1); // 100ms windows
+  const ZERO_THRESH_PF = 1e-5; // −100 dBFS
+  let zWin0Sq = 0, zWin1Sq = 0, zWinCount = 0;
+  let zConsec0 = 0, zConsec1 = 0, zMax0 = 0, zMax1 = 0;
+  let zTotal0 = 0, zTotal1 = 0, zTotalWins = 0;
+  const zTs0 = [], zTs1 = [];
+  let zAbsFrame = 0; // absolute frame counter for timestamps
+
   let offset = dataStart;
   while (offset < dataEnd) {
     const raw = Math.min(CHUNK, dataEnd - offset);
@@ -2732,14 +2741,17 @@ async function scanFullFilePeak(file, nfDb) {
     totalFrames += frames;
     if (bitsPerSample === 16 && audioFormat === 1) {
       for (let f = 0; f < frames; f++) {
+        let _s0=0,_s1=0;
         for (let c = 0; c < numChannels; c++) {
           const s = dv.getInt16((f * numChannels + c) * 2, true) / 32768;
           const a = Math.abs(s);
           if (a > chPeaks[c]) chPeaks[c] = a;
           chSumSq[c] += s * s;
-          if (c === 0) winSumSq0 += s * s;
-          else if (c === 1) winSumSq1 += s * s;
+          if (c === 0){winSumSq0+=s*s;_s0=s;}
+          else if (c === 1){winSumSq1+=s*s;_s1=s;}
         }
+        zWin0Sq+=_s0*_s0;zWin1Sq+=_s1*_s1;zWinCount++;
+        if(zWinCount>=ZERO_WIN_SZ){const _r0=Math.sqrt(zWin0Sq/ZERO_WIN_SZ),_r1=Math.sqrt(zWin1Sq/ZERO_WIN_SZ);const _wt=(zAbsFrame+f-ZERO_WIN_SZ+1)/sampleRate;const _z0=_r0<ZERO_THRESH_PF,_z1=_r1<ZERO_THRESH_PF;zTotalWins++;if(_z0){zTotal0++;zConsec0++;if(zConsec0>zMax0)zMax0=zConsec0;zTs0.push(_wt);}else zConsec0=0;if(_z1){zTotal1++;zConsec1++;if(zConsec1>zMax1)zMax1=zConsec1;zTs1.push(_wt);}else zConsec1=0;zWin0Sq=0;zWin1Sq=0;zWinCount=0;}
         winFrameCount++;
         if (winFrameCount >= winSz) {
           const rms0 = Math.sqrt(winSumSq0 / winSz), rms1 = Math.sqrt(winSumSq1 / winSz);
@@ -2750,6 +2762,7 @@ async function scanFullFilePeak(file, nfDb) {
     } else if (bitsPerSample === 24 && audioFormat === 1) {
       const bytes = new Uint8Array(ab);
       for (let f = 0; f < frames; f++) {
+        let _s0=0,_s1=0;
         for (let c = 0; c < numChannels; c++) {
           const bp = (f * numChannels + c) * 3;
           let v = (bytes[bp+2] << 16) | (bytes[bp+1] << 8) | bytes[bp];
@@ -2758,9 +2771,11 @@ async function scanFullFilePeak(file, nfDb) {
           const a = Math.abs(s);
           if (a > chPeaks[c]) chPeaks[c] = a;
           chSumSq[c] += s * s;
-          if (c === 0) winSumSq0 += s * s;
-          else if (c === 1) winSumSq1 += s * s;
+          if (c === 0){winSumSq0+=s*s;_s0=s;}
+          else if (c === 1){winSumSq1+=s*s;_s1=s;}
         }
+        zWin0Sq+=_s0*_s0;zWin1Sq+=_s1*_s1;zWinCount++;
+        if(zWinCount>=ZERO_WIN_SZ){const _r0=Math.sqrt(zWin0Sq/ZERO_WIN_SZ),_r1=Math.sqrt(zWin1Sq/ZERO_WIN_SZ);const _wt=(zAbsFrame+f-ZERO_WIN_SZ+1)/sampleRate;const _z0=_r0<ZERO_THRESH_PF,_z1=_r1<ZERO_THRESH_PF;zTotalWins++;if(_z0){zTotal0++;zConsec0++;if(zConsec0>zMax0)zMax0=zConsec0;zTs0.push(_wt);}else zConsec0=0;if(_z1){zTotal1++;zConsec1++;if(zConsec1>zMax1)zMax1=zConsec1;zTs1.push(_wt);}else zConsec1=0;zWin0Sq=0;zWin1Sq=0;zWinCount=0;}
         winFrameCount++;
         if (winFrameCount >= winSz) {
           const rms0 = Math.sqrt(winSumSq0 / winSz), rms1 = Math.sqrt(winSumSq1 / winSz);
@@ -2770,14 +2785,17 @@ async function scanFullFilePeak(file, nfDb) {
       }
     } else if (bitsPerSample === 32 && audioFormat === 3) {
       for (let f = 0; f < frames; f++) {
+        let _s0=0,_s1=0;
         for (let c = 0; c < numChannels; c++) {
           const s = dv.getFloat32((f * numChannels + c) * 4, true);
           const a = Math.abs(s);
           if (a > chPeaks[c]) chPeaks[c] = a;
           chSumSq[c] += s * s;
-          if (c === 0) winSumSq0 += s * s;
-          else if (c === 1) winSumSq1 += s * s;
+          if (c === 0){winSumSq0+=s*s;_s0=s;}
+          else if (c === 1){winSumSq1+=s*s;_s1=s;}
         }
+        zWin0Sq+=_s0*_s0;zWin1Sq+=_s1*_s1;zWinCount++;
+        if(zWinCount>=ZERO_WIN_SZ){const _r0=Math.sqrt(zWin0Sq/ZERO_WIN_SZ),_r1=Math.sqrt(zWin1Sq/ZERO_WIN_SZ);const _wt=(zAbsFrame+f-ZERO_WIN_SZ+1)/sampleRate;const _z0=_r0<ZERO_THRESH_PF,_z1=_r1<ZERO_THRESH_PF;zTotalWins++;if(_z0){zTotal0++;zConsec0++;if(zConsec0>zMax0)zMax0=zConsec0;zTs0.push(_wt);}else zConsec0=0;if(_z1){zTotal1++;zConsec1++;if(zConsec1>zMax1)zMax1=zConsec1;zTs1.push(_wt);}else zConsec1=0;zWin0Sq=0;zWin1Sq=0;zWinCount=0;}
         winFrameCount++;
         if (winFrameCount >= winSz) {
           const rms0 = Math.sqrt(winSumSq0 / winSz), rms1 = Math.sqrt(winSumSq1 / winSz);
@@ -2787,14 +2805,17 @@ async function scanFullFilePeak(file, nfDb) {
       }
     } else if (bitsPerSample === 32 && audioFormat === 1) {
       for (let f = 0; f < frames; f++) {
+        let _s0=0,_s1=0;
         for (let c = 0; c < numChannels; c++) {
           const s = dv.getInt32((f * numChannels + c) * 4, true) / 2147483648;
           const a = Math.abs(s);
           if (a > chPeaks[c]) chPeaks[c] = a;
           chSumSq[c] += s * s;
-          if (c === 0) winSumSq0 += s * s;
-          else if (c === 1) winSumSq1 += s * s;
+          if (c === 0){winSumSq0+=s*s;_s0=s;}
+          else if (c === 1){winSumSq1+=s*s;_s1=s;}
         }
+        zWin0Sq+=_s0*_s0;zWin1Sq+=_s1*_s1;zWinCount++;
+        if(zWinCount>=ZERO_WIN_SZ){const _r0=Math.sqrt(zWin0Sq/ZERO_WIN_SZ),_r1=Math.sqrt(zWin1Sq/ZERO_WIN_SZ);const _wt=(zAbsFrame+f-ZERO_WIN_SZ+1)/sampleRate;const _z0=_r0<ZERO_THRESH_PF,_z1=_r1<ZERO_THRESH_PF;zTotalWins++;if(_z0){zTotal0++;zConsec0++;if(zConsec0>zMax0)zMax0=zConsec0;zTs0.push(_wt);}else zConsec0=0;if(_z1){zTotal1++;zConsec1++;if(zConsec1>zMax1)zMax1=zConsec1;zTs1.push(_wt);}else zConsec1=0;zWin0Sq=0;zWin1Sq=0;zWinCount=0;}
         winFrameCount++;
         if (winFrameCount >= winSz) {
           const rms0 = Math.sqrt(winSumSq0 / winSz), rms1 = Math.sqrt(winSumSq1 / winSz);
@@ -2804,9 +2825,37 @@ async function scanFullFilePeak(file, nfDb) {
       }
     }
     offset += aligned;
+    totalFrames += frames;
+    zAbsFrame += frames;
     await new Promise(r => setTimeout(r, 0));
   }
-  const toDB = v => v > 0 ? 20 * Math.log10(v) : -Infinity;
+
+  // ── Full-file per-channel zero gap results ───────────────────────────────
+  // Process remaining partial zero window
+  if (zWinCount > 0) {
+    const rms0 = Math.sqrt(zWin0Sq / zWinCount), rms1 = Math.sqrt(zWin1Sq / zWinCount);
+    const z0 = rms0 < ZERO_THRESH_PF, z1 = rms1 < ZERO_THRESH_PF;
+    zTotalWins++;
+    if (z0) { zTotal0++; zConsec0++; if (zConsec0 > zMax0) zMax0 = zConsec0; zTs0.push((zAbsFrame - zWinCount) / sampleRate); } else zConsec0 = 0;
+    if (z1) { zTotal1++; zConsec1++; if (zConsec1 > zMax1) zMax1 = zConsec1; zTs1.push((zAbsFrame - zWinCount) / sampleRate); } else zConsec1 = 0;
+  }
+  // Merge zero timestamps into gap spans
+  function mergeZeroTs(ts) {
+    const merged = [];
+    for (const t of ts) {
+      const last = merged[merged.length - 1];
+      if (!last || t - last.end > 1.0) merged.push({ t, end: t + 0.1 });
+      else last.end = t + 0.1;
+    }
+    return merged;
+  }
+  const zMerged0 = mergeZeroTs(zTs0), zMerged1 = mergeZeroTs(zTs1);
+  const fullFileZeros = {
+    L: { detected: zMax0 >= 5 || (zTotalWins > 0 && zTotal0/zTotalWins > 0.02), zeroWins: zTotal0, maxConsec: zMax0, timestamps: zMerged0,
+         startsWithZero: zTs0.length > 0 && zTs0[0] < 2.0, endsWithZero: zTs0.length > 0 && zTs0[zTs0.length-1] > (zAbsFrame/sampleRate - 2.0) },
+    R: { detected: zMax1 >= 5 || (zTotalWins > 0 && zTotal1/zTotalWins > 0.02), zeroWins: zTotal1, maxConsec: zMax1, timestamps: zMerged1,
+         startsWithZero: zTs1.length > 0 && zTs1[0] < 2.0, endsWithZero: zTs1.length > 0 && zTs1[zTs1.length-1] > (zAbsFrame/sampleRate - 2.0) },
+  };
   const ch0PeakDb = toDB(chPeaks[0]);
   const ch1PeakDb = numChannels >= 2 ? toDB(chPeaks[1]) : ch0PeakDb;
   const ch0RmsDb  = toDB(Math.sqrt(chSumSq[0] / totalFrames));
@@ -2872,6 +2921,7 @@ async function scanFullFilePeak(file, nfDb) {
     silenceDur: fileDuration * silencePct / 100,
     startsWithZero, endsWithZero,
     startsWithZeroL, startsWithZeroR, endsWithZeroL, endsWithZeroR,
+    fullFileZeros,
   };
 }
 
@@ -3450,7 +3500,7 @@ async function runAnalysis() {
       setProgress('Scanning Edit WAV…', 70);
       await new Promise(r => setTimeout(r, 0));
       eA.editChecks = await computeEditChecks(eBuf);
-      eA.digitalZeros = detectDigitalZerosInBounce(eBuf);
+      // Digital zeros detected via scanFullFilePeak full-file scan (set below)
       // Click detection — full file, per channel
       setProgress('Scanning Edit for clicks…', 72);
       const eClicks = await scanFullFileClicks(eFile,
@@ -3468,7 +3518,14 @@ async function runAnalysis() {
         if (ePeakFull.startsWithZero && !ePeakFull.startsWithZeroL && !ePeakFull.startsWithZeroR) eA.digitalZeros.startsWithZero = true;
         if (ePeakFull.endsWithZero   && !ePeakFull.endsWithZeroL   && !ePeakFull.endsWithZeroR)   eA.digitalZeros.endsWithZero = true;
       }
+      // Full-file per-channel zero gap detection — overrides 5-min slice
+      if (ePeakFull.fullFileZeros) {
+        const ffz = ePeakFull.fullFileZeros;
+        if (ffz.L.detected || ffz.R.detected) {
+          eA.digitalZeros = { detected: true, L: ffz.L, R: ffz.R, both: eA.digitalZeros && eA.digitalZeros.both || { detected: false, timestamps: [] } };
+        }
       }
+      } // end if (ePeakFull)
       // Full-file overlap scan (chunked — safe for large files)
       if (eFile.size > 200 * 1024 * 1024) {
         const ovResult = await computeOverlapsFromFile(eFile);
@@ -3642,7 +3699,7 @@ async function runAnalysis() {
       }
       await new Promise(r => setTimeout(r, 0));
       const mss = computeSignalSilence(mBuf);
-      mA.digitalZeros = detectDigitalZerosInBounce(mBuf);
+      // Digital zeros detected via scanFullFilePeak full-file scan (set below)
       // Click detection — full file, per channel
       setProgress('Scanning Mixed for clicks…', 90);
       const mClicks = await scanFullFileClicks(mFile,
@@ -3660,7 +3717,14 @@ async function runAnalysis() {
         if (mPeakFull.startsWithZero && !mPeakFull.startsWithZeroL && !mPeakFull.startsWithZeroR) mA.digitalZeros.startsWithZero = true;
         if (mPeakFull.endsWithZero   && !mPeakFull.endsWithZeroL   && !mPeakFull.endsWithZeroR)   mA.digitalZeros.endsWithZero = true;
       }
+      // Full-file per-channel zero gap detection — overrides 5-min slice
+      if (mPeakFull.fullFileZeros) {
+        const ffz = mPeakFull.fullFileZeros;
+        if (ffz.L.detected || ffz.R.detected) {
+          mA.digitalZeros = { detected: true, L: ffz.L, R: ffz.R, both: mA.digitalZeros && mA.digitalZeros.both || { detected: false, timestamps: [] } };
+        }
       }
+      } // end if (mPeakFull)
       if (mA.signalPct == null) {
         mA.signalPct = mss.signalPct; mA.silencePct = mss.silencePct;
         mA.signalDur = mss.signalDur; mA.silenceDur = mss.silenceDur;
@@ -4626,24 +4690,29 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     </div>`;
   }
   let digitalZeroRow = '';
-  const fmtTS2 = t => { const m = Math.floor(t/60), s = Math.floor(t%60).toString().padStart(2,'0'); return `${m}:${s}`; };
+  const _fmtDZ = t => { const h=Math.floor(t/3600).toString().padStart(2,'0'); const m=Math.floor((t%3600)/60).toString().padStart(2,'0'); const s=Math.floor(t%60).toString().padStart(2,'0'); const ms=Math.round((t%1)*1000).toString().padStart(3,'0'); return `${h}:${m}:${s}.${ms}`; };
   for (const [src, dz] of [['Edit', editA && editA.digitalZeros], ['Mixed', mixA && mixA.digitalZeros]]) {
     if (!dz || !dz.detected) continue;
-    const rows = [];
+    const chRows = [];
     for (const [ch, res] of [['L', dz.L], ['R', dz.R]]) {
       if (!res || !res.detected) continue;
       const parts = [];
       if (res.startsWithZero) parts.push('starts with digital silence');
       if (res.endsWithZero)   parts.push('ends with digital silence');
-      if (res.timestamps && res.timestamps.length && !res.startsWithZero && !res.endsWithZero)
-        parts.push(`${res.timestamps.length} gap${res.timestamps.length>1?'s':''} at ${res.timestamps.slice(0,3).map(g=>fmtTS2(g.t)).join(', ')}`);
-      rows.push(`${ch}: ${parts.join(' · ')}`);
+      // Collapsible timestamp chips for mid-session gaps
+      if (res.timestamps && res.timestamps.length) {
+        const id = `dz_${src}_${ch}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const chips = res.timestamps.map(g => `<span onclick="copyTS(this,this.dataset.ts)" data-ts="${_fmtDZ(g.t)}" style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px;cursor:pointer" title="Click to copy">${_fmtDZ(g.t)}</span>`).join(' ');
+        const label = res.timestamps.length + ' gap' + (res.timestamps.length>1?'s':'');
+        parts.push(`<div style="margin-top:4px"><div onclick="const el=document.getElementById('${id}');const arr=this.querySelector('.arr');el.style.display=el.style.display==='none'?'flex':'none';arr.textContent=el.style.display==='none'?'&#9658;':'&#9660';" style="cursor:pointer;font-family:'Chivo Mono',monospace;font-size:10px;color:var(--red);display:flex;align-items:center;gap:5px;user-select:none"><span class="arr">&#9658;</span> ${label}</div><div id="${id}" style="display:none;flex-wrap:wrap;gap:4px;margin-top:4px">${chips}</div></div>`);
+      }
+      chRows.push(`<div><strong>${ch}:</strong> ${parts.join(' · ')}</div>`);
     }
-    if (dz.both && dz.both.detected)
-      rows.push(`Both channels: ${dz.both.timestamps.length} gap${dz.both.timestamps.length>1?'s':''}`);
-    if (!rows.length) continue;
+    if (dz.both && dz.both.detected) chRows.push(`<div>Both channels: ${dz.both.timestamps.length} gap${dz.both.timestamps.length>1?'s':''}</div>`);
+    if (!chRows.length) continue;
     digitalZeroRow += `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
-      ⚠ Digital zeros in ${src} — ${rows.join(' · ')} · Verify room tone gaps
+      ⚠ Digital zeros in ${src} · Verify room tone gaps
+      ${chRows.join('')}
     </div>`;
   }
 
@@ -6820,9 +6889,8 @@ function renderQualityCard(rawLA, rawRA, artifactData) {
     const clipClips = [];
     if (clipL) rawLA.clipFiles.forEach(f => clipClips.push({ label: 'Left', file: f.replace(/\.wav$/i,''), count: null }));
     if (clipR) rawRA.clipFiles.forEach(f => clipClips.push({ label: 'Right', file: f.replace(/\.wav$/i,''), count: null }));
-    const clipDetail = `Reduce input gain and re-record · `
-      + [clipL ? `Left: ${rawLA.clipFiles.length} file${rawLA.clipFiles.length>1?'s':''}` : null,
-         clipR ? `Right: ${rawRA.clipFiles.length} file${rawRA.clipFiles.length>1?'s':''}` : null]
+    const clipDetail = [clipL ? `Left: ${rawLA.clipFiles.map(f=>f.replace(/\.wav$/i,'')).join(', ')}` : null,
+         clipR ? `Right: ${rawRA.clipFiles.map(f=>f.replace(/\.wav$/i,'')).join(', ')}` : null]
         .filter(Boolean).join(' · ');
     rows.push(aRow('Peak Clipping', `<span class="nf-chip nf-fail">CLIP</span>`, clipDetail, 'fail', clipClips, true));
   }
