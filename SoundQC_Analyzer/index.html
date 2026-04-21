@@ -2824,12 +2824,12 @@ async function scanFullFilePeak(file, nfDb) {
 
   async function countZeroWindows(byteOffset, byteLen) {
     const aligned = Math.floor(byteLen / bytesPerFrame) * bytesPerFrame;
-    if (aligned <= 0) return 0;
+    if (aligned <= 0) return { both: 0, L: 0, R: 0 };
     const ab = await file.slice(byteOffset, byteOffset + aligned).arrayBuffer();
     const dv = new DataView(ab);
     const frames = aligned / bytesPerFrame;
     const winFrames = Math.floor(sampleRate * 0.1);
-    let zeros = 0, wins = 0;
+    let zerosB = 0, zerosL = 0, zerosR = 0, wins = 0;
     for (let wi = 0; wi + winFrames <= frames; wi += winFrames) {
       let sq0 = 0, sq1 = 0;
       for (let f = wi; f < wi + winFrames; f++) {
@@ -2849,15 +2849,20 @@ async function scanFullFilePeak(file, nfDb) {
       }
       const rms0 = Math.sqrt(sq0/winFrames), rms1 = Math.sqrt(sq1/winFrames);
       wins++;
-      if (rms0 < ZERO_THRESH_LIN && rms1 < ZERO_THRESH_LIN) zeros++;
+      const zL = rms0 < ZERO_THRESH_LIN, zR = rms1 < ZERO_THRESH_LIN;
+      if (zL && zR) zerosB++;
+      if (zL) zerosL++;
+      if (zR) zerosR++;
     }
-    return wins > 0 ? zeros / wins : 0;
+    return wins > 0 ? { both: zerosB/wins, L: zerosL/wins, R: zerosR/wins } : { both: 0, L: 0, R: 0 };
   }
 
-  const startZeroRatio = await countZeroWindows(dataStart, Math.min(zChk, dataEnd - dataStart));
-  const endZeroRatio   = await countZeroWindows(Math.max(dataStart, dataEnd - zChk), Math.min(zChk, dataEnd - dataStart));
-  const startsWithZero = startZeroRatio >= 0.5; // ≥50% of first 2s is zero
-  const endsWithZero   = endZeroRatio   >= 0.5; // ≥50% of last 2s is zero
+  const startZ = await countZeroWindows(dataStart, Math.min(zChk, dataEnd - dataStart));
+  const endZ   = await countZeroWindows(Math.max(dataStart, dataEnd - zChk), Math.min(zChk, dataEnd - dataStart));
+  const startsWithZero = startZ.both >= 0.5 || startZ.L >= 0.5 || startZ.R >= 0.5;
+  const endsWithZero   = endZ.both   >= 0.5 || endZ.L   >= 0.5 || endZ.R   >= 0.5;
+  const startsWithZeroL = startZ.L >= 0.5, startsWithZeroR = startZ.R >= 0.5;
+  const endsWithZeroL   = endZ.L   >= 0.5, endsWithZeroR   = endZ.R   >= 0.5;
 
   return {
     peakDb: Math.max(ch0PeakDb, ch1PeakDb), ch0PeakDb, ch1PeakDb, rmsDb, ch0RmsDb, ch1RmsDb,
@@ -2866,6 +2871,7 @@ async function scanFullFilePeak(file, nfDb) {
     signalDur: fileDuration * signalPct / 100,
     silenceDur: fileDuration * silencePct / 100,
     startsWithZero, endsWithZero,
+    startsWithZeroL, startsWithZeroR, endsWithZeroL, endsWithZeroR,
   };
 }
 
@@ -3453,8 +3459,15 @@ async function runAnalysis() {
       if (eClicks) eA.clicksFullFile = eClicks;
       // Override start/end flags with full-file scan results (eBuf is only 5-min slice)
       if (ePeakFull) {
-        if (ePeakFull.startsWithZero) eA.digitalZeros = { ...(eA.digitalZeros||{}), detected: true, startsWithZero: true };
-        if (ePeakFull.endsWithZero)   eA.digitalZeros = { ...(eA.digitalZeros||{}), detected: true, endsWithZero: true };
+      if (ePeakFull.startsWithZero || ePeakFull.endsWithZero) {
+        if (!eA.digitalZeros) eA.digitalZeros = { detected: false, L: { detected:false, startsWithZero:false, endsWithZero:false, timestamps:[] }, R: { detected:false, startsWithZero:false, endsWithZero:false, timestamps:[] }, both: { detected:false, timestamps:[] } };
+        if (ePeakFull.startsWithZeroL) { eA.digitalZeros.detected = true; eA.digitalZeros.L.detected = true; eA.digitalZeros.L.startsWithZero = true; }
+        if (ePeakFull.startsWithZeroR) { eA.digitalZeros.detected = true; eA.digitalZeros.R.detected = true; eA.digitalZeros.R.startsWithZero = true; }
+        if (ePeakFull.endsWithZeroL)   { eA.digitalZeros.detected = true; eA.digitalZeros.L.detected = true; eA.digitalZeros.L.endsWithZero = true; }
+        if (ePeakFull.endsWithZeroR)   { eA.digitalZeros.detected = true; eA.digitalZeros.R.detected = true; eA.digitalZeros.R.endsWithZero = true; }
+        if (ePeakFull.startsWithZero && !ePeakFull.startsWithZeroL && !ePeakFull.startsWithZeroR) eA.digitalZeros.startsWithZero = true;
+        if (ePeakFull.endsWithZero   && !ePeakFull.endsWithZeroL   && !ePeakFull.endsWithZeroR)   eA.digitalZeros.endsWithZero = true;
+      }
       }
       // Full-file overlap scan (chunked — safe for large files)
       if (eFile.size > 200 * 1024 * 1024) {
@@ -3638,8 +3651,15 @@ async function runAnalysis() {
       if (mClicks) mA.clicksFullFile = mClicks;
       // Override start/end flags with full-file scan results (mBuf is only 5-min slice)
       if (mPeakFull) {
-        if (mPeakFull.startsWithZero) mA.digitalZeros = { ...(mA.digitalZeros||{}), detected: true, startsWithZero: true };
-        if (mPeakFull.endsWithZero)   mA.digitalZeros = { ...(mA.digitalZeros||{}), detected: true, endsWithZero: true };
+      if (mPeakFull.startsWithZero || mPeakFull.endsWithZero) {
+        if (!mA.digitalZeros) mA.digitalZeros = { detected: false, L: { detected:false, startsWithZero:false, endsWithZero:false, timestamps:[] }, R: { detected:false, startsWithZero:false, endsWithZero:false, timestamps:[] }, both: { detected:false, timestamps:[] } };
+        if (mPeakFull.startsWithZeroL) { mA.digitalZeros.detected = true; mA.digitalZeros.L.detected = true; mA.digitalZeros.L.startsWithZero = true; }
+        if (mPeakFull.startsWithZeroR) { mA.digitalZeros.detected = true; mA.digitalZeros.R.detected = true; mA.digitalZeros.R.startsWithZero = true; }
+        if (mPeakFull.endsWithZeroL)   { mA.digitalZeros.detected = true; mA.digitalZeros.L.detected = true; mA.digitalZeros.L.endsWithZero = true; }
+        if (mPeakFull.endsWithZeroR)   { mA.digitalZeros.detected = true; mA.digitalZeros.R.detected = true; mA.digitalZeros.R.endsWithZero = true; }
+        if (mPeakFull.startsWithZero && !mPeakFull.startsWithZeroL && !mPeakFull.startsWithZeroR) mA.digitalZeros.startsWithZero = true;
+        if (mPeakFull.endsWithZero   && !mPeakFull.endsWithZeroL   && !mPeakFull.endsWithZeroR)   mA.digitalZeros.endsWithZero = true;
+      }
       }
       if (mA.signalPct == null) {
         mA.signalPct = mss.signalPct; mA.silencePct = mss.silencePct;
@@ -4609,13 +4629,21 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
   const fmtTS2 = t => { const m = Math.floor(t/60), s = Math.floor(t%60).toString().padStart(2,'0'); return `${m}:${s}`; };
   for (const [src, dz] of [['Edit', editA && editA.digitalZeros], ['Mixed', mixA && mixA.digitalZeros]]) {
     if (!dz || !dz.detected) continue;
-    const parts = [];
-    if (dz.startsWithZero) parts.push('starts with digital silence');
-    if (dz.endsWithZero)   parts.push('ends with digital silence');
-    if (dz.timestamps && dz.timestamps.length && !dz.startsWithZero && !dz.endsWithZero)
-      parts.push(`${dz.timestamps.length} gap${dz.timestamps.length>1?'s':''} at ${dz.timestamps.slice(0,3).map(g=>fmtTS2(g.t)).join(', ')}`);
+    const rows = [];
+    for (const [ch, res] of [['L', dz.L], ['R', dz.R]]) {
+      if (!res || !res.detected) continue;
+      const parts = [];
+      if (res.startsWithZero) parts.push('starts with digital silence');
+      if (res.endsWithZero)   parts.push('ends with digital silence');
+      if (res.timestamps && res.timestamps.length && !res.startsWithZero && !res.endsWithZero)
+        parts.push(`${res.timestamps.length} gap${res.timestamps.length>1?'s':''} at ${res.timestamps.slice(0,3).map(g=>fmtTS2(g.t)).join(', ')}`);
+      rows.push(`${ch}: ${parts.join(' · ')}`);
+    }
+    if (dz.both && dz.both.detected)
+      rows.push(`Both channels: ${dz.both.timestamps.length} gap${dz.both.timestamps.length>1?'s':''}`);
+    if (!rows.length) continue;
     digitalZeroRow += `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
-      ⚠ Digital zeros in ${src} — ${parts.join(' · ')} · Verify room tone gaps
+      ⚠ Digital zeros in ${src} — ${rows.join(' · ')} · Verify room tone gaps
     </div>`;
   }
 
@@ -4904,64 +4932,85 @@ function detectDigitalZerosInBounce(buf) {
   const sr  = buf.sampleRate;
   const nc  = buf.numberOfChannels;
   const ch0 = buf.getChannelData(0);
-  const ch1 = nc >= 2 ? buf.getChannelData(1) : ch0;
-  const dur = buf.duration;
+  const ch1 = nc >= 2 ? buf.getChannelData(1) : null;
+  const ZERO_THRESH = 1e-5; // −100 dBFS
 
   const wsz = Math.floor(sr * 0.1); // 100ms windows
   const n   = Math.floor(ch0.length / wsz);
-  const ZERO_THRESH = 1e-5; // −100 dBFS — catches float quantization floor (~-138 dBFS) as well as true zeros
 
-  let totalWindows = 0, zeroWindows = 0;
-  const zeroTimestamps = [];
-
-  for (let i = 0; i < n; i++) {
-    const s = i * wsz;
-    let sq0 = 0, sq1 = 0;
-    for (let j = s; j < s + wsz; j++) {
-      sq0 += ch0[j] * ch0[j];
-      sq1 += ch1[j] * ch1[j];
+  function scanChannel(ch) {
+    let zeroWins = 0, totalWins = 0;
+    const timestamps = [];
+    let maxConsecZero = 0, curConsec = 0;
+    for (let i = 0; i < n; i++) {
+      const s = i * wsz; let sq = 0;
+      for (let j = s; j < s + wsz; j++) sq += ch[j] * ch[j];
+      totalWins++;
+      if (Math.sqrt(sq / wsz) < ZERO_THRESH) {
+        zeroWins++; timestamps.push(i * wsz / sr);
+        curConsec++; if (curConsec > maxConsecZero) maxConsecZero = curConsec;
+      } else { curConsec = 0; }
     }
-    const rms0 = Math.sqrt(sq0 / wsz);
-    const rms1 = Math.sqrt(sq1 / wsz);
-    totalWindows++;
-    if (rms0 < ZERO_THRESH && rms1 < ZERO_THRESH) {
-      zeroWindows++;
-      zeroTimestamps.push(i * wsz / sr);
+    // Start check: first 2s
+    let startZero = 0;
+    for (let i = 0; i < Math.min(20, n); i++) {
+      const s = i * wsz; let sq = 0;
+      for (let j = s; j < s + wsz; j++) sq += ch[j] * ch[j];
+      if (Math.sqrt(sq / wsz) < ZERO_THRESH) startZero++;
+    }
+    // End check: last 2s
+    let endZero = 0;
+    for (let i = Math.max(0, n - 20); i < n; i++) {
+      const s = i * wsz; let sq = 0;
+      for (let j = s; j < s + wsz; j++) sq += ch[j] * ch[j];
+      if (Math.sqrt(sq / wsz) < ZERO_THRESH) endZero++;
+    }
+    // Merge timestamps into gap spans
+    const merged = [];
+    for (const t of timestamps) {
+      const last = merged[merged.length - 1];
+      if (!last || t - last.end > 1.0) merged.push({ t, end: t + 0.1 });
+      else last.end = t + 0.1;
+    }
+    const startsWithZero = startZero >= 3;
+    const endsWithZero   = endZero   >= 3;
+    const zeroRatio      = totalWins > 0 ? zeroWins / totalWins : 0;
+    // Flag if: start/end zeros, OR >2% of file, OR any single run ≥5 windows (500ms)
+    const detected       = zeroWins > 0 && (startsWithZero || endsWithZero || zeroRatio > 0.02 || maxConsecZero >= 5);
+    return { detected, zeroWins, totalWins, zeroRatio, startsWithZero, endsWithZero, timestamps: merged, maxConsecZero };
+  }
+
+  const resL = scanChannel(ch0);
+  const resR = ch1 ? scanChannel(ch1) : { detected: false, zeroWins: 0, totalWins: n, zeroRatio: 0, startsWithZero: false, endsWithZero: false, timestamps: [] };
+
+  // Also check for both-channel simultaneous zeros
+  let bothZeroWins = 0;
+  const bothTimestamps = [];
+  if (ch1) {
+    for (let i = 0; i < n; i++) {
+      const s = i * wsz; let sq0 = 0, sq1 = 0;
+      for (let j = s; j < s + wsz; j++) { sq0 += ch0[j]*ch0[j]; sq1 += ch1[j]*ch1[j]; }
+      if (Math.sqrt(sq0/wsz) < ZERO_THRESH && Math.sqrt(sq1/wsz) < ZERO_THRESH) {
+        bothZeroWins++; bothTimestamps.push(i * wsz / sr);
+      }
     }
   }
-
-  // Check start: first 2s — are they digital zero?
-  const startWindows = Math.floor(2.0 / 0.1);
-  let startZero = 0;
-  for (let i = 0; i < Math.min(startWindows, n); i++) {
-    const s = i * wsz; let sq0 = 0, sq1 = 0;
-    for (let j = s; j < s + wsz; j++) { sq0 += ch0[j]*ch0[j]; sq1 += ch1[j]*ch1[j]; }
-    if (Math.sqrt(sq0/wsz) < ZERO_THRESH && Math.sqrt(sq1/wsz) < ZERO_THRESH) startZero++;
-  }
-  const startsWithZero = startZero >= Math.min(3, startWindows); // ≥300ms of zeros at start
-
-  // Check end: last 2s
-  const endWindows = Math.floor(2.0 / 0.1);
-  let endZero = 0;
-  for (let i = Math.max(0, n - endWindows); i < n; i++) {
-    const s = i * wsz; let sq0 = 0, sq1 = 0;
-    for (let j = s; j < s + wsz; j++) { sq0 += ch0[j]*ch0[j]; sq1 += ch1[j]*ch1[j]; }
-    if (Math.sqrt(sq0/wsz) < ZERO_THRESH && Math.sqrt(sq1/wsz) < ZERO_THRESH) endZero++;
-  }
-  const endsWithZero = endZero >= Math.min(3, endWindows);
-
-  // Merge close timestamps (within 1s)
-  const merged = [];
-  for (const t of zeroTimestamps) {
-    const last = merged[merged.length - 1];
-    if (!last || t - last.end > 1.0) merged.push({ t, end: t + 0.1 });
+  const bothMerged = [];
+  for (const t of bothTimestamps) {
+    const last = bothMerged[bothMerged.length - 1];
+    if (!last || t - last.end > 1.0) bothMerged.push({ t, end: t + 0.1 });
     else last.end = t + 0.1;
   }
 
-  const zeroRatio = totalWindows > 0 ? zeroWindows / totalWindows : 0;
-  const detected  = zeroWindows > 0 && (startsWithZero || endsWithZero || zeroRatio > 0.02);
-
-  return { detected, zeroRatio, zeroWindows, totalWindows, startsWithZero, endsWithZero, timestamps: merged, dur };
+  const detected = resL.detected || resR.detected || bothZeroWins > 0;
+  return {
+    detected,
+    L: resL, R: resR,
+    both: { detected: bothZeroWins > 0, zeroWins: bothZeroWins, timestamps: bothMerged },
+    // Legacy fields for existing code
+    startsWithZero: resL.startsWithZero || resR.startsWithZero,
+    endsWithZero:   resL.endsWithZero   || resR.endsWithZero,
+  };
 }
 
 async function computeEditChecks(buf) {
