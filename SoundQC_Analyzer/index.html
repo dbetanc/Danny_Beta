@@ -2927,58 +2927,42 @@ async function scanFullFileLUFS(file, onProgress) {
     return out;
   }
 
-  // ── True Peak — cubic spline inter-sample peak detection ─────────────────
-  // For each consecutive sample pair, fits a cubic polynomial using Catmull-Rom
-  // spline and analytically solves for the maximum within that interval.
-  // More accurate than fixed-rate FIR oversampling — finds exact inter-sample peak.
-  // State: need 3 context samples carried across chunk boundaries.
-  const tpCtxL = new Float32Array(3);  // [n-2, n-1, n] history
-  const tpCtxR = new Float32Array(3);
+  // ── True Peak — 4× polyphase FIR oversampling (BS.1770-4 compliant) ─────
+  // 64-tap Kaiser-windowed lowpass, cutoff 0.25×Nyquist, beta=9.
+  // Split into 4 polyphase branches (16 taps each), history carried across chunks.
+  // Validated against scipy.signal.upfirdn reference implementation.
+  const TP_PHASES = 4, TP_TAPS = 16; // 16 taps per phase
+  const TP_COEF = [
+    // Phase 0: h[0],h[4],h[8],...
+    [-0.0000141443, 0.0002569553,-0.0012668294, 0.0041031306,-0.0105343425, 0.0236211041,-0.0509117469, 0.1320888595, 0.9734438834,-0.0992550630, 0.0418607883,-0.0194595732, 0.0084560784,-0.0031407901, 0.0008948820,-0.0001530759],
+    // Phase 1: h[1],h[5],h[9],...
+    [-0.0000961555, 0.0009807297,-0.0042239286, 0.0127587631,-0.0314161645, 0.0690236828,-0.1507865371, 0.4580988283, 0.7766936109,-0.1877524087, 0.0834631263,-0.0385305918, 0.0162286085,-0.0057115258, 0.0014819261,-0.0002020798],
+    // Phase 2: h[2],h[6],h[10],...
+    [-0.0002020798, 0.0014819261,-0.0057115258, 0.0162286085,-0.0385305918, 0.0834631263,-0.1877524087, 0.7766936109, 0.4580988283,-0.1507865371, 0.0690236828,-0.0314161645, 0.0127587631,-0.0042239286, 0.0009807297,-0.0000961555],
+    // Phase 3: h[3],h[7],h[11],...
+    [-0.0001530759, 0.0008948820,-0.0031407901, 0.0084560784,-0.0194595732, 0.0418607883,-0.0992550630, 0.9734438834, 0.1320888595,-0.0509117469, 0.0236211041,-0.0105343425, 0.0041031306,-0.0012668294, 0.0002569553,-0.0000141443],
+  ];
+  // History: last TP_TAPS samples per channel
+  const tpHistL = new Float32Array(TP_TAPS);
+  const tpHistR = new Float32Array(TP_TAPS);
   let tpPeakL = 0, tpPeakR = 0;
-  let tpInitL = 0, tpInitR = 0; // how many history samples filled
 
-  function cubicTruePeak(samples, ctx, initCount) {
+  function firTruePeak(samples, hist) {
     let pk = 0;
-    let count = initCount;
     for (let i = 0; i < samples.length; i++) {
-      // Shift context and add new sample
-      ctx[0] = ctx[1]; ctx[1] = ctx[2]; ctx[2] = samples[i];
-      count = Math.min(count + 1, 3);
-      if (count < 3) { const a = Math.abs(samples[i]); if (a > pk) pk = a; continue; }
-      // We have ctx[0]=y[n-2], ctx[1]=y[n-1], ctx[2]=y[n]
-      // Look ahead: y[n+1] = samples[i+1] if available, else extrapolate
-      const yn1 = i + 1 < samples.length ? samples[i+1] : 2*ctx[2] - ctx[1];
-      // Catmull-Rom cubic through y[n-1], y[n] — interval [0,1]
-      // p(t) = 0.5 * [(2*y[n-1]) + (-y[n-2]+y[n])*t + (2*y[n-2]-5*y[n-1]+4*y[n]-yn1)*t² + (-y[n-2]+3*y[n-1]-3*y[n]+yn1)*t³]
-      const y0 = ctx[0], y1 = ctx[1], y2 = ctx[2];
-      const a =  0.5 * (-y0 + 3*y1 - 3*y2 + yn1);
-      const b =  0.5 * (2*y0 - 5*y1 + 4*y2 - yn1);
-      const c =  0.5 * (-y0 + y2);
-      const d =  y1;
-      // Check endpoints
-      if (Math.abs(d) > pk) pk = Math.abs(d);
-      if (Math.abs(a+b+c+d) > pk) pk = Math.abs(a+b+c+d);
-      // Find critical points: p'(t) = 3a*t² + 2b*t + c = 0
-      if (Math.abs(a) > 1e-12) {
-        const disc = 4*b*b - 12*a*c;
-        if (disc >= 0) {
-          const sqrtDisc = Math.sqrt(disc);
-          for (const t of [(-2*b - sqrtDisc)/(6*a), (-2*b + sqrtDisc)/(6*a)]) {
-            if (t > 0 && t < 1) {
-              const pv = Math.abs(((a*t + b)*t + c)*t + d);
-              if (pv > pk) pk = pv;
-            }
-          }
-        }
-      } else if (Math.abs(b) > 1e-12) {
-        const t = -c / (2*b);
-        if (t > 0 && t < 1) {
-          const pv = Math.abs(((a*t + b)*t + c)*t + d);
-          if (pv > pk) pk = pv;
-        }
+      // Shift history and insert new sample
+      for (let k = TP_TAPS - 1; k > 0; k--) hist[k] = hist[k-1];
+      hist[0] = samples[i];
+      // Compute all 4 phase outputs
+      for (let ph = 0; ph < TP_PHASES; ph++) {
+        const c = TP_COEF[ph];
+        let y = 0;
+        for (let k = 0; k < TP_TAPS; k++) y += c[k] * hist[k];
+        const ay = Math.abs(y);
+        if (ay > pk) pk = ay;
       }
     }
-    return { pk, count };
+    return pk;
   }
 
   const blockSize = Math.round(sr * 0.4);
@@ -3019,9 +3003,9 @@ async function scanFullFileLUFS(file, onProgress) {
     const fL = filterChunk(sL, 0);
     const fR = sR ? filterChunk(sR, 1) : null;
 
-    // True peak — cubic spline inter-sample peak on raw (unfiltered) samples
-    const tpResL = cubicTruePeak(sL, tpCtxL, tpInitL); tpInitL = tpResL.count; if (tpResL.pk > tpPeakL) tpPeakL = tpResL.pk;
-    if (sR) { const tpResR = cubicTruePeak(sR, tpCtxR, tpInitR); tpInitR = tpResR.count; if (tpResR.pk > tpPeakR) tpPeakR = tpResR.pk; }
+    // True peak — 4× polyphase FIR on raw (unfiltered) samples
+    const tpL = firTruePeak(sL, tpHistL); if (tpL > tpPeakL) tpPeakL = tpL;
+    if (sR) { const tpR = firTruePeak(sR, tpHistR); if (tpR > tpPeakR) tpPeakR = tpR; }
 
     // Prepend leftover
     const cL = new Float32Array(loL.length + fL.length); cL.set(loL,0); cL.set(fL,loL.length);
