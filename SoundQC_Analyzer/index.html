@@ -2541,7 +2541,8 @@ async function decodeFileSlice(file, maxSeconds) {
 // Full-file click detection for Edit/Mixed bounces — chunked raw PCM, per channel.
 // Uses the same gate conditions as detectClicks() on RAW takes.
 // Carries pre-context buffer across chunk boundaries.
-async function scanFullFileClicks(file, nfDb) {
+// nfDbL / nfDbR: per-channel noise floor for independent silence gating.
+async function scanFullFileClicks(file, nfDbL, nfDbR) {
   const headAB = await file.slice(0, 8192).arrayBuffer();
   const hv = new DataView(headAB);
   const riff = String.fromCharCode(hv.getUint8(0),hv.getUint8(1),hv.getUint8(2),hv.getUint8(3));
@@ -2562,32 +2563,37 @@ async function scanFullFileClicks(file, nfDb) {
   const bpf = numChannels * bps;
   const dataEnd = dataSize > 0 ? Math.min(dataStart + dataSize, file.size) : file.size;
 
-  // Gate thresholds — same as detectClicks()
-  const nfLin       = Math.pow(10, nfDb / 20);
-  const silThresh    = nfLin * Math.pow(10, 10 / 20);  // NF+10dB pre-silence
-  const postSilThr   = nfLin * Math.pow(10, 14 / 20);  // NF+14dB post-silence
-  const pkThresh     = nfLin * Math.pow(10, 20 / 20);  // NF+20dB minimum peak
-  const CREST        = 25;
-  const INTRA_CREST  = 4.0;
-  const TOP5_FRAC    = 0.50;
-  const SPIKE_DB     = 10.0;
   const winSz  = Math.floor(sr * 0.002);  // 2ms
   const preSz  = Math.floor(sr * 0.010);  // 10ms pre-context
   const postSz = Math.floor(sr * 0.020);  // 20ms post-context
   const MERGE  = Math.floor(sr * 0.020);
-  const CTX    = preSz + postSz;          // context carried across chunks
+  const CTX    = preSz + postSz;
+  const CREST = 25, INTRA_CREST = 4.0, TOP5_FRAC = 0.50, SPIKE_DB = 10.0;
 
-  // Per-channel state
+  // Per-channel thresholds using independent NF
+  function makeThresholds(nfDb) {
+    const nfLin = Math.pow(10, nfDb / 20);
+    return {
+      silThresh:   nfLin * Math.pow(10, 10 / 20),
+      postSilThr:  nfLin * Math.pow(10, 14 / 20),
+      pkThresh:    nfLin * Math.pow(10, 20 / 20),
+    };
+  }
+  const thL = makeThresholds(nfDbL);
+  const thR = makeThresholds(nfDbR ?? nfDbL);
+
   const bufL = new Float32Array(CTX + 1024 * 128);
   const bufR = new Float32Array(CTX + 1024 * 128);
   let lenL = 0, lenR = 0;
-  let eventsL = 0, eventsR = 0;
+  let tsL = [], tsR = [];  // absolute timestamps in seconds
   let lastL = -1, lastR = -1;
+  let sampleOffsetL = 0, sampleOffsetR = 0; // track absolute position per channel
   const CHUNK = 8 * 1024 * 1024;
   let offset = dataStart;
 
-  function processChannel(buf, len, lastEvent) {
-    let events = 0, last = lastEvent;
+  function processChannel(buf, len, th, lastEvent, sampleBase) {
+    const { silThresh, postSilThr, pkThresh } = th;
+    const events = [], last_ref = { v: lastEvent };
     for (let i = preSz; i + winSz + postSz <= len; i += winSz) {
       let preSq = 0;
       for (let j = i - preSz; j < i; j++) preSq += buf[j] * buf[j];
@@ -2609,10 +2615,12 @@ async function scanFullFileClicks(file, nfDb) {
       const postRms = Math.sqrt(postSq / postSz);
       if (postRms >= postSilThr) continue;
       if (20*Math.log10((peak+1e-12)/(postRms+1e-12)) < SPIKE_DB) continue;
-      if (last >= 0 && i - last < MERGE) continue;
-      events++; last = i;
+      if (last_ref.v >= 0 && i - last_ref.v < MERGE) continue;
+      const absSample = sampleBase + i - CTX; // absolute position in file
+      events.push(Math.max(0, absSample) / sr);
+      last_ref.v = i;
     }
-    return { events, last };
+    return { events, last: last_ref.v };
   }
 
   while (offset < dataEnd) {
@@ -2642,26 +2650,24 @@ async function scanFullFileClicks(file, nfDb) {
       for (let f=0; f<frames; f++) { sL[f]=dv.getInt32(f*bpf,true)/2147483648; if(sR) sR[f]=dv.getInt32(f*bpf+4,true)/2147483648; }
     }
 
-    // Append new samples after context tail
-    function appendAndProcess(buf, len, newSamples, lastEvent) {
-      const need = len + newSamples.length;
-      const work = need <= buf.length ? buf : new Float32Array(need);
-      if (work !== buf) work.set(buf.subarray(0, len));
-      work.set(newSamples, len);
+    function appendAndProcess(buf, len, newSamples, th, lastEvent, sampleBase) {
       const workLen = len + newSamples.length;
-      const res = processChannel(work, workLen, lastEvent);
-      // Keep tail for next chunk
+      const work = new Float32Array(workLen);
+      work.set(buf.subarray(0, len)); work.set(newSamples, len);
+      const res = processChannel(work, workLen, th, lastEvent, sampleBase);
       const keep = Math.min(CTX, workLen);
-      const newBuf = work.length >= keep ? work : new Float32Array(keep);
-      newBuf.set(work.subarray(workLen - keep, workLen), 0);
+      const newBuf = new Float32Array(keep);
+      newBuf.set(work.subarray(workLen - keep, workLen));
       return { events: res.events, last: res.last, buf: newBuf, len: keep };
     }
 
-    const rL = appendAndProcess(bufL, lenL, sL, lastL);
-    eventsL += rL.events; lastL = rL.last; bufL.set(rL.buf.subarray(0, rL.len)); lenL = rL.len;
+    const rL = appendAndProcess(bufL, lenL, sL, thL, lastL, sampleOffsetL);
+    tsL.push(...rL.events); lastL = rL.last; bufL.set(rL.buf); lenL = rL.len;
+    sampleOffsetL += sL.length;
     if (sR) {
-      const rR = appendAndProcess(bufR, lenR, sR, lastR);
-      eventsR += rR.events; lastR = rR.last; bufR.set(rR.buf.subarray(0, rR.len)); lenR = rR.len;
+      const rR = appendAndProcess(bufR, lenR, sR, thR, lastR, sampleOffsetR);
+      tsR.push(...rR.events); lastR = rR.last; bufR.set(rR.buf); lenR = rR.len;
+      sampleOffsetR += sR.length;
     }
 
     offset += aligned;
@@ -2669,17 +2675,18 @@ async function scanFullFileClicks(file, nfDb) {
   }
 
   // Final flush — process remaining tail with zero-padded lookahead
-  function flushChannel(buf, len, lastEvent) {
-    if (len <= preSz) return { events: 0, last: lastEvent };
-    const padded = new Float32Array(len + postSz); // zero pad = silence after file end
+  function flushChannel(buf, len, th, lastEvent, sampleBase) {
+    if (len <= preSz) return { events: [], last: lastEvent };
+    const padded = new Float32Array(len + postSz);
     padded.set(buf.subarray(0, len));
-    return processChannel(padded, padded.length, lastEvent);
+    return processChannel(padded, padded.length, th, lastEvent, sampleBase);
   }
-  const fL = flushChannel(bufL, lenL, lastL); eventsL += fL.events;
-  if (nc >= 2) { const fR = flushChannel(bufR, lenR, lastR); eventsR += fR.events; }
+  const fL = flushChannel(bufL, lenL, thL, lastL, sampleOffsetL); tsL.push(...fL.events);
+  if (nc >= 2) { const fR = flushChannel(bufR, lenR, thR, lastR, sampleOffsetR); tsR.push(...fR.events); }
 
-  return { eventsL, eventsR: nc >= 2 ? eventsR : eventsL };
+  return { eventsL: tsL.length, eventsR: nc >= 2 ? tsR.length : tsL.length, tsL, tsR: nc >= 2 ? tsR : tsL };
 }
+
 async function scanFullFilePeak(file, nfDb) {
   const headAB = await file.slice(0, 8192).arrayBuffer();
   const hv = new DataView(headAB);
@@ -3456,7 +3463,9 @@ async function runAnalysis() {
       eA.digitalZeros = detectDigitalZerosInBounce(eBuf);
       // Click detection — full file, per channel
       setProgress('Scanning Edit for clicks…', 72);
-      const eClicks = await scanFullFileClicks(eFile, eA.noiseFloorDb ?? -60);
+      const eClicks = await scanFullFileClicks(eFile,
+        eA.ch0 ? eA.ch0.noiseFloorDb : (eA.noiseFloorDb ?? -60),
+        eA.ch1 ? eA.ch1.noiseFloorDb : (eA.noiseFloorDb ?? -60));
       if (eClicks) eA.clicksFullFile = eClicks;
       // Override start/end flags with full-file scan results (eBuf is only 5-min slice)
       if (ePeakFull) {
@@ -3639,7 +3648,9 @@ async function runAnalysis() {
       mA.digitalZeros = detectDigitalZerosInBounce(mBuf);
       // Click detection — full file, per channel
       setProgress('Scanning Mixed for clicks…', 90);
-      const mClicks = await scanFullFileClicks(mFile, mA.noiseFloorDb ?? -60);
+      const mClicks = await scanFullFileClicks(mFile,
+        mA.ch0 ? mA.ch0.noiseFloorDb : (mA.noiseFloorDb ?? -60),
+        mA.ch1 ? mA.ch1.noiseFloorDb : (mA.noiseFloorDb ?? -60));
       if (mClicks) mA.clicksFullFile = mClicks;
       // Override start/end flags with full-file scan results (mBuf is only 5-min slice)
       if (mPeakFull) {
@@ -4253,7 +4264,7 @@ function buildMetrics(a, showSignal, hideDeltas, lufsTarget, hpf) {
       const peakLabel = useTrue ? 'True Peak' : 'Sample Peak';
       const clipBadge = (a.maxPeakDb != null && a.maxPeakDb >= -0.1)
         ? `<span class="nf-badge nf-fail" style="font-size:10px;padding:2px 7px">CLIP</span>` : '';
-      const peakCls = peakVal > -3.5 ? 'hl-red' : peakVal >= -4 ? 'hl-green' : peakVal >= -20 ? 'hl-amber' : 'hl-purple';
+      const peakCls = peakVal >= -3.45 ? 'hl-red' : peakVal >= -4 ? 'hl-green' : peakVal >= -20 ? 'hl-amber' : 'hl-purple';
       return mRow(peakLabel, peakVal.toFixed(1)+' dBFS', clipBadge, peakCls);
     })(),
     dbBarHTML((lufsTarget === 'mixed' || lufsTarget === 'edit') && a.truePeakDb != null && isFinite(a.truePeakDb) ? a.truePeakDb : (a.plrPeakDb != null ? a.plrPeakDb : a.peakDb), 'peak'),
@@ -4585,18 +4596,29 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     }
   }
 
-  // Click alerts — Edit and Mixed, per channel
+  // Click alerts — Edit and Mixed, per channel with timestamps
   let clicksRow = '';
+  const _fmtTS = t => { const h = Math.floor(t/3600).toString().padStart(2,'0'); const m = Math.floor((t%3600)/60).toString().padStart(2,'0'); const s = Math.floor(t%60).toString().padStart(2,'0'); const ms = Math.round((t%1)*1000).toString().padStart(3,'0'); return `${h}:${m}:${s}.${ms}`; };
   for (const [src, a] of [['Edit', editA], ['Mixed', mixA]]) {
     if (!a || !a.clicksFullFile) continue;
-    const { eventsL, eventsR } = a.clicksFullFile;
+    const { eventsL, eventsR, tsL, tsR } = a.clicksFullFile;
     const total = eventsL + eventsR;
     if (total === 0) continue;
-    const parts = [];
-    if (eventsL > 0) parts.push(`L: ${eventsL}`);
-    if (eventsR > 0) parts.push(`R: ${eventsR}`);
+    const makeChips = (ts, ch) => {
+      if (!ts || ts.length === 0) return '';
+      const id = `clicks_${src}_${ch}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const chips = ts.map(t => `<span onclick="copyTS(this,this.dataset.ts)" data-ts="${_fmtTS(t)}" style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px;cursor:pointer" title="Click to copy">${_fmtTS(t)}</span>`).join(' ');
+      return `<div style="margin-top:4px">
+        <div onclick="const el=document.getElementById('${id}');const arr=this.querySelector('.arr');el.style.display=el.style.display==='none'?'flex':'none';arr.textContent=el.style.display==='none'?'&#9658;':'&#9660';" style="cursor:pointer;font-family:'Chivo Mono',monospace;font-size:10px;color:var(--red);display:flex;align-items:center;gap:5px;user-select:none">
+          <span class="arr">&#9658;</span> ${ch}: ${ts.length} event${ts.length>1?'s':''}
+        </div>
+        <div id="${id}" style="display:none;flex-wrap:wrap;gap:4px;margin-top:4px">${chips}</div>
+      </div>`;
+    };
     clicksRow += `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
-      ⚠ Clicks in ${src} — ${total} event${total>1?'s':''} · ${parts.join(' · ')} · Check by ear
+      ⚠ Clicks in ${src} — ${total} event${total>1?'s':''} · Check by ear
+      ${makeChips(tsL, 'L')}
+      ${makeChips(tsR, 'R')}
     </div>`;
   }
   let digitalZeroRow = '';
@@ -7359,7 +7381,8 @@ function hideQCQuestionnaire() {
 }
 
 function copyQField(btn) {
-  const text = btn.getAttribute('data-val') || '';
+  const raw = btn.getAttribute('data-val') || '';
+  const text = raw.replace(/\{\{NL\}\}/g, '\n');
   const ta = document.createElement('textarea');
   ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
   document.body.appendChild(ta); ta.select();
@@ -7376,7 +7399,8 @@ function copyAllQFields(btn) {
   const copyBtns = page.querySelectorAll('button[data-val]');
   const lines = [];
   copyBtns.forEach(b => {
-    const v = b.getAttribute('data-val');
+    const raw = b.getAttribute('data-val');
+    const v = raw ? raw.replace(/\{\{NL\}\}/g, '\n') : '';
     const n = b.getAttribute('data-num');
     const l = b.getAttribute('data-label') || '';
     const s = b.getAttribute('data-score');
@@ -7414,7 +7438,7 @@ function buildQCQuestionnaire() {
     const scoreRaw  = isScore && valStr ? parseInt(valStr) : null;
     const scoreDisp = isScore && scoreRaw ? `${6 - scoreRaw} / 5` : valStr;
     // copyVal = just the answer (no label prefix) — label added by copyAllQFields
-    const copyVal   = copyOverride || (isScore && scoreRaw ? `${6 - scoreRaw}/5` : valStr);
+    const copyVal   = (copyOverride || (isScore && scoreRaw ? `${6 - scoreRaw}/5` : valStr)).replace(/<br\s*\/?>/gi, '{{NL}}');
     const scoreColor = isScore && scoreRaw ? (
       (6 - scoreRaw) >= 4 ? 'var(--green)' :
       (6 - scoreRaw) >= 3 ? 'var(--amber)' : 'var(--red)'
@@ -7446,7 +7470,7 @@ function buildQCQuestionnaire() {
   const editLUFS  = e && e.lufs  != null ? fmt1(e.lufs)  + ' LUFS' : na;
   const editLUFSLR = e && e.lufsL != null && e.lufsR != null ? `L / R  ${fmt1(e.lufsL)} / ${fmt1(e.lufsR)} LUFS` : '';
   const q1 = editNF !== na || editLUFS !== na
-    ? `NF: ${editNF}${editNFLR ? '   ' + editNFLR : ''}<br>LUFS: ${editLUFS}${editLUFSLR ? '   ' + editLUFSLR : ''}` : na;
+    ? `NF: ${editNF}${editNFLR ? '   ' + editNFLR : ''} | LUFS: ${editLUFS}${editLUFSLR ? '   ' + editLUFSLR : ''}` : na;
 
   // 2. Mixed Room Tone (NF) + LUFS with L/R
   const mixNF    = m ? fmt1(m.noiseFloorDb) + ' dBFS' : na;
@@ -7454,14 +7478,14 @@ function buildQCQuestionnaire() {
   const mixLUFS  = m && m.lufs  != null ? fmt1(m.lufs)  + ' LUFS' : na;
   const mixLUFSLR = m && m.lufsL != null && m.lufsR != null ? `L / R  ${fmt1(m.lufsL)} / ${fmt1(m.lufsR)} LUFS` : '';
   const q2 = mixNF !== na || mixLUFS !== na
-    ? `NF: ${mixNF}${mixNFLR ? '   ' + mixNFLR : ''}<br>LUFS: ${mixLUFS}${mixLUFSLR ? '   ' + mixLUFSLR : ''}` : na;
+    ? `NF: ${mixNF}${mixNFLR ? '   ' + mixNFLR : ''} | LUFS: ${mixLUFS}${mixLUFSLR ? '   ' + mixLUFSLR : ''}` : na;
 
   // 3. L/R Acoustic Delta + RMS diff Edit and Mixed
   const eDelta = e && e.lrDelta != null ? fmt1(e.lrDelta) + ' dB' : na;
   const eRmsLR = e && e.ch0 && e.ch1 ? `L ${fmt1(e.ch0.rmsDb)} / R ${fmt1(e.ch1.rmsDb)} dBFS` : na;
   const mDelta = m && m.lrDelta != null ? fmt1(m.lrDelta) + ' dB' : na;
   const mRmsLR = m && m.ch0 && m.ch1 ? `L ${fmt1(m.ch0.rmsDb)} / R ${fmt1(m.ch1.rmsDb)} dBFS` : na;
-  const q3 = `Edit Δ: ${eDelta} | Edit RMS: ${eRmsLR}<br>Mix Δ: ${mDelta} | Mix RMS: ${mRmsLR}`;
+  const q3 = `Edit Δ: ${eDelta} | Edit RMS: ${eRmsLR} | Mix Δ: ${mDelta} | Mix RMS: ${mRmsLR}`;
 
   // 4. True Peak Edit + Mixed with L/R — red above -3.5 dBFS
   const tpColor = (db) => (db != null && isFinite(db) && db > -3.5) ? 'var(--red)' : '';
@@ -7472,8 +7496,11 @@ function buildQCQuestionnaire() {
   const mTPLR  = m && m.truePeakLDb != null && isFinite(m.truePeakLDb) ? `L / R  ${fmt1(m.truePeakLDb)} / ${fmt1(m.truePeakRDb)} dBFS` : '';
   const eTPVal = e && e.truePeakDb != null ? e.truePeakDb : (e ? e.peakDb : null);
   const mTPVal = m && m.truePeakDb != null ? m.truePeakDb : (m ? m.peakDb : null);
-  const q4 = `${eTPLabel}: ${eTP}${eTPLR ? '   ' + eTPLR : ''}<br>Mixed True Peak: ${mTP}${mTPLR ? '   ' + mTPLR : ''}`;
-  const q4Color = (eTPVal != null && eTPVal > -3.5) || (mTPVal != null && mTPVal > -3.5) ? 'var(--red)' : '';
+  const eTPLine  = `${eTPLabel}: ${eTP}${eTPLR ? '   ' + eTPLR : ''}`;
+  const mTPLine  = `Mixed True Peak: ${mTP}${mTPLR ? '   ' + mTPLR : ''}`;
+  const q4       = `${eTPLine} | ${mTPLine}`;
+  const q4Copy   = `${eTPLine} | ${mTPLine}`;
+  const q4Color = (eTPVal != null && eTPVal >= -3.45) || (mTPVal != null && mTPVal >= -3.45) ? 'var(--red)' : '';
 
   // 5. Headphone Bleed — Edit score (delivered file), RAW as fallback
   let bleedScore = na;
@@ -7553,9 +7580,12 @@ function buildQCQuestionnaire() {
     popsScore = popAvg === 0 ? 1 : popAvg < 0.5 ? 2 : popAvg < 1.5 ? 3 : popAvg < 3 ? 4 : 5;
   }
 
-  // 10. Mouth Clicks score
+  // 10. Mouth Clicks score — prefer Edit full-file scan over RAW takes
   let clicksScore = na;
-  if (a) {
+  if (e && e.clicksFullFile) {
+    const total = (e.clicksFullFile.eventsL || 0) + (e.clicksFullFile.eventsR || 0);
+    clicksScore = total === 0 ? 1 : total <= 3 ? 2 : total <= 8 ? 3 : total <= 15 ? 4 : 5;
+  } else if (a) {
     const clickTotal = a.clicks.left + a.clicks.right;
     const clickAvg   = a.takesAnalyzed > 0 ? clickTotal / a.takesAnalyzed : clickTotal;
     clicksScore = clickAvg === 0 ? 1 : clickAvg < 1 ? 2 : clickAvg < 3 ? 3 : clickAvg < 6 ? 4 : 5;
@@ -7876,7 +7906,7 @@ function buildQCQuestionnaire() {
       ${qRow(1,  'Edit RT + LUFS',                                        q1,          false)}
       ${qRow(2,  'Mixed RT + LUFS',                                       q2,          false)}
       ${qRow(3,  'Acoustic Delta + L/R RMS',   q3,  false, q3)}
-      ${qRow(4,  'True Peak',              q4,  false, `True Peak: ${q4}`, null, q4Color)}
+      ${qRow(4,  'True Peak',              q4,  false, q4Copy, null, q4Color)}
       ${qRow(5,  'Headphone Bleed',              q5,  false, q5,  bleedScore)}
       ${qRow(6,  'HVAC / Hum / Interference',    q6,  false, q6,  humScore)}
       ${qRow(7,  'Physical Noises',               q7,  false, q7,  noisesScore)}
