@@ -1253,6 +1253,39 @@ input[type=file] {
           esc(found.substring(j));
       }
 
+      // Validate date format in track names (should be MMDD, not DDMM)
+      function validateDateFormat(dateStr) {
+        if (!dateStr || dateStr.length !== 4) return { valid: false, error: 'Invalid date length' };
+        
+        const month = parseInt(dateStr.substring(0, 2), 10);
+        const day = parseInt(dateStr.substring(2, 4), 10);
+        
+        // Check if month is valid (01-12)
+        if (month < 1 || month > 12) {
+          // Likely DDMM format - suggest correction
+          const correctedDate = dateStr.substring(2, 4) + dateStr.substring(0, 2);
+          const correctedMonth = parseInt(correctedDate.substring(0, 2), 10);
+          const correctedDay = parseInt(correctedDate.substring(2, 4), 10);
+          
+          if (correctedMonth >= 1 && correctedMonth <= 12 && correctedDay >= 1 && correctedDay <= 31) {
+            return { 
+              valid: false, 
+              error: `Date "${dateStr}" appears to be in DDMM format. Should be "${correctedDate}" (MMDD)`,
+              suggestion: correctedDate
+            };
+          }
+          return { valid: false, error: `Invalid month "${dateStr.substring(0, 2)}" in date "${dateStr}"` };
+        }
+        
+        // Check if day is valid for the month
+        const daysInMonth = [0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        if (day < 1 || day > daysInMonth[month]) {
+          return { valid: false, error: `Invalid day "${day}" for month "${month}" in date "${dateStr}"` };
+        }
+        
+        return { valid: true };
+      }
+
       function validateTracks(tracks, sessionInfo){
         if (!sessionInfo) return tracks.map(() => null);
 
@@ -1418,10 +1451,23 @@ input[type=file] {
           return html;
         }
 
+        // Check date format in track names
+        const dateErrors = [];
+        tracks.forEach((track, i) => {
+          const dateMatch = track.match(/_(\d{4})_/);
+          if (dateMatch) {
+            const dateValidation = validateDateFormat(dateMatch[1]);
+            if (!dateValidation.valid) {
+              dateErrors.push({ trackNum: i + 1, track, error: dateValidation.error, suggestion: dateValidation.suggestion });
+            }
+          }
+        });
+
         const hasErrors = expectedList.some(e => e !== null);
+        const hasDateErrors = dateErrors.length > 0;
 
         // All tracks are correct → show PASSED badge with collapsible details
-        if (!hasErrors) {
+        if (!hasErrors && !hasDateErrors) {
           const detailsId = 'tracks-details-' + Date.now();
           html += `<div class="badge ok" style="cursor:pointer;" onclick="togglePassedDetails('${detailsId}', this)">
             PASSED <span class="expand-arrow">▶</span>
@@ -1435,8 +1481,20 @@ input[type=file] {
         }
 
         // There are errors → show FAIL badge + full visual detail
-        const errorCount = expectedList.filter(e => e !== null).length;
-        html += `<div class="badge fail">FAIL — ${errorCount} issue${errorCount > 1 ? 's' : ''}</div>`;
+        const totalErrors = expectedList.filter(e => e !== null).length + dateErrors.length;
+        html += `<div class="badge fail">FAIL — ${totalErrors} issue${totalErrors > 1 ? 's' : ''}</div>`;
+        
+        // Show date format errors first
+        if (hasDateErrors) {
+          html += `<div class="error-list" style="margin-bottom:12px;">`;
+          dateErrors.forEach(err => {
+            html += `<div class="error-item" style="color:var(--red);">
+              <strong>Track ${err.trackNum}:</strong> ${esc(err.error)}
+            </div>`;
+          });
+          html += `</div>`;
+        }
+        
         html += `<div class="tracks-list">`;
 
         tracks.forEach((t, i) => {
@@ -1883,7 +1941,21 @@ if (!['line','lout','scene'].includes(m.token)) {
             }
           });
 
-          return {pass:errors.length===0, errors};
+          // Check date format in audio file names for single character
+          const dateErrors = [];
+          rows.forEach(r => {
+            if (!isInAudioFiles(r.location)) return;
+            const file = (r.file||'').trim(); if (!file) return;
+            const dateMatch = file.match(/_(\d{4})_/);
+            if (dateMatch) {
+              const dateValidation = validateDateFormat(dateMatch[1]);
+              if (!dateValidation.valid) {
+                dateErrors.push({ file, error: dateValidation.error, suggestion: dateValidation.suggestion });
+              }
+            }
+          });
+
+          return {pass: errors.length === 0 && dateErrors.length === 0, errors, dateErrors};
         }
 
         // DUALCHARACTER
@@ -1944,7 +2016,21 @@ if (!['line','lout','scene'].includes(m.token)) {
           }
         });
 
-        return {pass:errors.length===0, errors};
+        // Check date format in audio file names
+        const dateErrors = [];
+        rows.forEach(r => {
+          if (!isInAudioFiles(r.location)) return;
+          const file = (r.file||'').trim(); if (!file) return;
+          const dateMatch = file.match(/_(\d{4})_/);
+          if (dateMatch) {
+            const dateValidation = validateDateFormat(dateMatch[1]);
+            if (!dateValidation.valid) {
+              dateErrors.push({ file, error: dateValidation.error, suggestion: dateValidation.suggestion });
+            }
+          }
+        });
+
+        return {pass: errors.length === 0 && dateErrors.length === 0, errors, dateErrors};
       }function renderMarkersReport(errors){
         let html = `<div class="section"><h2>Markers</h2><div class="section-body">`;
         if (!errors.length) {
@@ -2075,29 +2161,47 @@ if (!['line','lout','scene'].includes(m.token)) {
         }
 
         const errors = audioCheck.errors || [];
+        const dateErrors = audioCheck.dateErrors || [];
+        const totalErrors = errors.length + dateErrors.length;
 
-        if (!errors.length) {
+        if (totalErrors === 0) {
           html += `<div class="badge ok">PASSED</div>`;
         } else {
-          html += `<div class="badge fail">FAIL — ${errors.length} issue${errors.length > 1 ? 's' : ''}</div>`;
-          html += `<div class="error-list">`;
-          errors.forEach((err, idx) => {
-            const copyId = `copy-audio-${idx}`;
-            // Get the corrected filename (with prefix and suffix preserved)
-            const correctedName = getCorrectedAudioFileName(err.base, err.expectedBase);
-            html += `<div class="error-item">
-              <div><strong>File:</strong> ${esc(err.file)}</div>
-              <div>Prefix: ${highlightAudioFileName(err.base, err.expectedBase)}</div>
-              <div class="should-be">Should Be:</div>
-              <div class="should-be-container">
-                <div class="should-be-box">
-                  <code id="text-${copyId}">${esc(correctedName)}</code>
+          html += `<div class="badge fail">FAIL — ${totalErrors} issue${totalErrors > 1 ? 's' : ''}</div>`;
+          
+          // Show date format errors first
+          if (dateErrors.length > 0) {
+            html += `<div class="error-list" style="margin-bottom:12px;">`;
+            dateErrors.forEach(err => {
+              html += `<div class="error-item" style="color:var(--red);">
+                <strong>File:</strong> ${esc(err.file)}<br>
+                ${esc(err.error)}
+              </div>`;
+            });
+            html += `</div>`;
+          }
+          
+          // Show other errors
+          if (errors.length > 0) {
+            html += `<div class="error-list">`;
+            errors.forEach((err, idx) => {
+              const copyId = `copy-audio-${idx}`;
+              // Get the corrected filename (with prefix and suffix preserved)
+              const correctedName = getCorrectedAudioFileName(err.base, err.expectedBase);
+              html += `<div class="error-item">
+                <div><strong>File:</strong> ${esc(err.file)}</div>
+                <div>Prefix: ${highlightAudioFileName(err.base, err.expectedBase)}</div>
+                <div class="should-be">Should Be:</div>
+                <div class="should-be-container">
+                  <div class="should-be-box">
+                    <code id="text-${copyId}">${esc(correctedName)}</code>
+                  </div>
+                  <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
                 </div>
-                <button class="copy-btn" id="btn-${copyId}" onclick="copyToClipboard('text-${copyId}', 'btn-${copyId}')" title="Copy to clipboard"></button>
-              </div>
-            </div>`;
-          });
-          html += `</div>`;
+              </div>`;
+            });
+            html += `</div>`;
+          }
         }
 
         html += `</div></div>`;
