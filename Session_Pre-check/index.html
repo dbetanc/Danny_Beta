@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================
-  SOBA - Session Pre-checker v2.9.1
+  SOBA - Session Pre-checker v2.9.2
   Created by: Danny Beta
   Date: March 2026
   
@@ -14,7 +14,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="author" content="Danny Beta"/>
-<title>SOBA - Session Pre-checker v2.9.1</title>
+<title>SOBA - Session Pre-checker v2.9.2</title>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-444D9CS8EE"></script>
 <script>
@@ -781,7 +781,7 @@ input[type=file] {
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.9.1</div>
+      <div class="version-badge">v2.9.2</div>
       <button class="theme-toggle" id="themeToggle" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">LIGHT</span>
@@ -1098,9 +1098,10 @@ input[type=file] {
           .replace(/t2llt1r/gi, 't2lt1r')
           .replace(/t1l2tr/gi, 't1lt2r')
           .replace(/t2l1tr/gi, 't2lt1r')
-          // Fix separator issues
-          .replace(/([a-z]+)-([a-z]+)(\d{4})-t1lt2r/i, '$1-$2$3_t1lt2r')
-          .replace(/([a-z]+)-([a-z]+)(\d{4})-t2lt1r/i, '$1-$2$3_t2lt1r')
+          // Fix separators in dual format: speakers joined by -, turn code preceded by _
+          // Handles: speaker1_speaker2NNNN_turncode, speaker1-speaker2NNNN-turncode,
+          //          speaker1_speaker2NNNN-turncode (compound), and no-op on already-correct names
+          .replace(/^([a-z]+)[-_]([a-z]+)(\d{4})[-_](t1lt2r|t2lt1r)/i, '$1-$2$3_$4')
           .replace(/_t1lt2r_/i, '_t1lt2r-')
           .replace(/_t2lt1r_/i, '_t2lt1r-')
           .toLowerCase();
