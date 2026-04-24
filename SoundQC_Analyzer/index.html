@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.7.7
+  SOBA — Audio QA & QC Checker v3.7.8
   Created by: Danny Beta
   Date: April 2026
 
@@ -27,7 +27,7 @@
   gtag('js', new Date());
   gtag('config', 'G-444D9CS8EE');
 </script>
-<title>SOBA — Audio QA & QC v3.7.7</title>
+<title>SOBA — Audio QA & QC v3.7.8</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -721,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.7.7</div>
+            <div class="version-badge">v3.7.8</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -2850,11 +2850,14 @@ async function scanFullFilePeak(file, nfDb) {
     return merged;
   }
   const zMerged0 = mergeZeroTs(zTs0), zMerged1 = mergeZeroTs(zTs1);
+  const _noChannel = { detected: false, zeroWins: 0, maxConsec: 0, timestamps: [], startsWithZero: false, endsWithZero: false };
   const fullFileZeros = {
     L: { detected: zMax0 >= 5 || (zTotalWins > 0 && zTotal0/zTotalWins > 0.02), zeroWins: zTotal0, maxConsec: zMax0, timestamps: zMerged0,
          startsWithZero: zTs0.length > 0 && zTs0[0] < 2.0, endsWithZero: zTs0.length > 0 && zTs0[zTs0.length-1] > (zAbsFrame/sampleRate - 2.0) },
-    R: { detected: zMax1 >= 5 || (zTotalWins > 0 && zTotal1/zTotalWins > 0.02), zeroWins: zTotal1, maxConsec: zMax1, timestamps: zMerged1,
-         startsWithZero: zTs1.length > 0 && zTs1[0] < 2.0, endsWithZero: zTs1.length > 0 && zTs1[zTs1.length-1] > (zAbsFrame/sampleRate - 2.0) },
+    R: numChannels >= 2
+      ? { detected: zMax1 >= 5 || (zTotalWins > 0 && zTotal1/zTotalWins > 0.02), zeroWins: zTotal1, maxConsec: zMax1, timestamps: zMerged1,
+          startsWithZero: zTs1.length > 0 && zTs1[0] < 2.0, endsWithZero: zTs1.length > 0 && zTs1[zTs1.length-1] > (zAbsFrame/sampleRate - 2.0) }
+      : _noChannel,
   };
   const ch0PeakDb = toDB(chPeaks[0]);
   const ch1PeakDb = numChannels >= 2 ? toDB(chPeaks[1]) : ch0PeakDb;
@@ -2908,10 +2911,10 @@ async function scanFullFilePeak(file, nfDb) {
 
   const startZ = await countZeroWindows(dataStart, Math.min(zChk, dataEnd - dataStart));
   const endZ   = await countZeroWindows(Math.max(dataStart, dataEnd - zChk), Math.min(zChk, dataEnd - dataStart));
-  const startsWithZero = startZ.both >= 0.5 || startZ.L >= 0.5 || startZ.R >= 0.5;
-  const endsWithZero   = endZ.both   >= 0.5 || endZ.L   >= 0.5 || endZ.R   >= 0.5;
-  const startsWithZeroL = startZ.L >= 0.5, startsWithZeroR = startZ.R >= 0.5;
-  const endsWithZeroL   = endZ.L   >= 0.5, endsWithZeroR   = endZ.R   >= 0.5;
+  const startsWithZero = startZ.both >= 0.5 || startZ.L >= 0.5 || (numChannels >= 2 && startZ.R >= 0.5);
+  const endsWithZero   = endZ.both   >= 0.5 || endZ.L   >= 0.5 || (numChannels >= 2 && endZ.R   >= 0.5);
+  const startsWithZeroL = startZ.L >= 0.5, startsWithZeroR = numChannels >= 2 && startZ.R >= 0.5;
+  const endsWithZeroL   = endZ.L   >= 0.5, endsWithZeroR   = numChannels >= 2 && endZ.R   >= 0.5;
 
   return {
     peakDb: Math.max(ch0PeakDb, ch1PeakDb), ch0PeakDb, ch1PeakDb, rmsDb, ch0RmsDb, ch1RmsDb,
@@ -3436,7 +3439,7 @@ async function runAnalysis() {
           const eNf1 = analyzeChannel(eSlice1, eBuf.sampleRate).noiseFloorDb;
           eA.noiseFloorDb = (eNf0 + eNf1) / 2;
         } else {
-          eA.noiseFloorDb = Math.min(eA.ch0.noiseFloorDb, eA.ch1.noiseFloorDb);
+          eA.noiseFloorDb = eA.ch1 ? Math.min(eA.ch0.noiseFloorDb, eA.ch1.noiseFloorDb) : eA.ch0.noiseFloorDb;
         }
       }
       await new Promise(r => setTimeout(r, 0));
@@ -3462,9 +3465,9 @@ async function runAnalysis() {
         if (eA.lufsL != null && eA.lufsR != null && isFinite(eA.lufsL) && isFinite(eA.lufsR)) {
           // Preserve original RMS for display before overwriting with LUFS
           eA.ch0.rmsDbRaw = eA.ch0.rmsDb;
-          eA.ch1.rmsDbRaw = eA.ch1.rmsDb;
+          if (eA.ch1) eA.ch1.rmsDbRaw = eA.ch1.rmsDb;
           eA.ch0.rmsDb = eA.lufsL;
-          eA.ch1.rmsDb = eA.lufsR;
+          if (eA.ch1) eA.ch1.rmsDb = eA.lufsR;
           eA.lrDelta   = Math.abs(eA.lufsL - eA.lufsR);
         }
       }
@@ -3477,7 +3480,7 @@ async function runAnalysis() {
           eA.lufsL = eFullLufs.lufsL;
           eA.lufsR = eFullLufs.lufsR;
           eA.ch0.rmsDb = eFullLufs.lufsL;
-          eA.ch1.rmsDb = eFullLufs.lufsR;
+          if (eA.ch1) eA.ch1.rmsDb = eFullLufs.lufsR;
           eA.lrDelta   = Math.abs(eFullLufs.lufsL - eFullLufs.lufsR);
         }
         if (eFullLufs.fileDuration != null) eA.fileDuration = eFullLufs.fileDuration;
@@ -3648,7 +3651,7 @@ async function runAnalysis() {
           const mNf1 = analyzeChannel(mSlice1, mBuf.sampleRate).noiseFloorDb;
           mA.noiseFloorDb = (mNf0 + mNf1) / 2;
         } else {
-          mA.noiseFloorDb = Math.min(mA.ch0.noiseFloorDb, mA.ch1.noiseFloorDb);
+          mA.noiseFloorDb = mA.ch1 ? Math.min(mA.ch0.noiseFloorDb, mA.ch1.noiseFloorDb) : mA.ch0.noiseFloorDb;
         }
       }
       await new Promise(r => setTimeout(r, 0));
@@ -3672,9 +3675,9 @@ async function runAnalysis() {
         if (mA.lufsL != null && mA.lufsR != null && isFinite(mA.lufsL) && isFinite(mA.lufsR)) {
           // Preserve original RMS for display before overwriting with LUFS
           mA.ch0.rmsDbRaw = mA.ch0.rmsDb;
-          mA.ch1.rmsDbRaw = mA.ch1.rmsDb;
+          if (mA.ch1) mA.ch1.rmsDbRaw = mA.ch1.rmsDb;
           mA.ch0.rmsDb = mA.lufsL;
-          mA.ch1.rmsDb = mA.lufsR;
+          if (mA.ch1) mA.ch1.rmsDb = mA.lufsR;
           mA.lrDelta   = Math.abs(mA.lufsL - mA.lufsR);
         }
       }
@@ -3687,7 +3690,7 @@ async function runAnalysis() {
           mA.lufsL = mFullLufs.lufsL;
           mA.lufsR = mFullLufs.lufsR;
           mA.ch0.rmsDb = mFullLufs.lufsL;
-          mA.ch1.rmsDb = mFullLufs.lufsR;
+          if (mA.ch1) mA.ch1.rmsDb = mFullLufs.lufsR;
           mA.lrDelta   = Math.abs(mFullLufs.lufsL - mFullLufs.lufsR);
         }
         if (mFullLufs.fileDuration != null) mA.fileDuration = mFullLufs.fileDuration;
@@ -7078,14 +7081,14 @@ function buildRecommendations(rawLA, rawRA, eA, mA, artifactData) {
 
   // ── Acoustic Δ > 2 dB ────────────────────────────────────
   if (eA && eA.lrDelta !== null && eA.lrDelta > 2) {
-    const louder  = eA.ch0.rmsDb > eA.ch1.rmsDb ? 'Left' : 'Right';
+    const louder  = eA.ch1 ? (eA.ch0.rmsDb > eA.ch1.rmsDb ? 'Left' : 'Right') : 'Left';
     const quieter = louder === 'Left' ? 'Right' : 'Left';
     const half    = (eA.lrDelta / 2).toFixed(1);
     rec('warn', 'Edit — Channel Imbalance',
       `${eA.lrDelta.toFixed(1)} dB · ${louder} is heavier · ↓ Lower ${louder} by ${half} dB · ↑ Raise ${quieter} by ${half} dB`);
   }
   if (mA && mA.lrDelta !== null && mA.lrDelta > 2) {
-    const louder  = mA.ch0.rmsDb > mA.ch1.rmsDb ? 'Left' : 'Right';
+    const louder  = mA.ch1 ? (mA.ch0.rmsDb > mA.ch1.rmsDb ? 'Left' : 'Right') : 'Left';
     const quieter = louder === 'Left' ? 'Right' : 'Left';
     const half    = (mA.lrDelta / 2).toFixed(1);
     rec('warn', 'Mixed — Channel Imbalance',
