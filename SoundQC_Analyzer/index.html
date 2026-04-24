@@ -1227,6 +1227,7 @@ dz.addEventListener('drop', async e => {
 document.getElementById('fileInput').addEventListener('change', e => processFiles([...e.target.files], false));
 
 async function readDir(dir) {
+  const ALLOWED = ['audio files', 'bounced files'];
   return new Promise(res => {
     const reader = dir.createReader(), all = [];
     function batch() {
@@ -1234,7 +1235,9 @@ async function readDir(dir) {
         if (!entries.length) { res(all); return; }
         const ps = entries.map(entry => {
           if (entry.isFile) return new Promise(r => entry.file(f => { f._folder = dir.name; r(f); }));
-          return readDir(entry);
+          // Only recurse into allowed folder names — skip all others
+          if (ALLOWED.includes(entry.name.toLowerCase())) return readDir(entry);
+          return Promise.resolve([]);
         });
         const rs = await Promise.all(ps);
         rs.forEach(r => Array.isArray(r) ? all.push(...r) : all.push(r));
