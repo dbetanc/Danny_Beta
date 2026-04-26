@@ -3309,11 +3309,17 @@ function loadJsonSceneCount() {
       try {
         const json = JSON.parse(e.target.result);
         let scenes = [];
-        if (Array.isArray(json) && json[1] && json[1].scenes) {
+        if (Array.isArray(json) && json.length && json[0].scene !== undefined && json[0].turns !== undefined) {
+          // SOBA format: flat array of scene objects [{scene, labels, turns}, ...]
+          scenes = json;
+        } else if (Array.isArray(json) && json[1] && json[1].scenes) {
+          // MOCHI standard format: [0].voice_attributes, [1].scenes
           scenes = json[1].scenes;
         } else if (Array.isArray(json) && json[0] && json[0].scenes) {
+          // MOCHI dualreasoning format
           scenes = json[0].scenes;
         } else if (json.scenes) {
+          // Direct scenes object
           scenes = json.scenes;
         }
         resolve(scenes.length > 0 ? scenes.length : null);
@@ -4703,31 +4709,8 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     }
   }
 
-  // Click alerts — Edit and Mixed, per channel with timestamps
+  // Click alerts hidden — pending calibration to reduce false positives
   let clicksRow = '';
-  const _fmtTS = t => { const h = Math.floor(t/3600).toString().padStart(2,'0'); const m = Math.floor((t%3600)/60).toString().padStart(2,'0'); const s = Math.floor(t%60).toString().padStart(2,'0'); const ms = Math.round((t%1)*1000).toString().padStart(3,'0'); return `${h}:${m}:${s}.${ms}`; };
-  for (const [src, a] of [['Edit', editA], ['Mixed', mixA]]) {
-    if (!a || !a.clicksFullFile) continue;
-    const { eventsL, eventsR, tsL, tsR } = a.clicksFullFile;
-    const total = eventsL + eventsR;
-    if (total === 0) continue;
-    const makeChips = (ts, ch) => {
-      if (!ts || ts.length === 0) return '';
-      const id = `clicks_${src}_${ch}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      const chips = ts.map(t => `<span onclick="copyTS(this,this.dataset.ts)" data-ts="${_fmtTS(t)}" style="font-family:'Chivo Mono',monospace;font-size:10px;color:var(--text2);background:var(--bg3);padding:2px 6px;border-radius:4px;cursor:pointer" title="Click to copy">${_fmtTS(t)}</span>`).join(' ');
-      return `<div style="margin-top:4px">
-        <div onclick="const el=document.getElementById('${id}');const arr=this.querySelector('.arr');el.style.display=el.style.display==='none'?'flex':'none';arr.textContent=el.style.display==='none'?'&#9658;':'&#9660';" style="cursor:pointer;font-family:'Chivo Mono',monospace;font-size:10px;color:var(--red);display:flex;align-items:center;gap:5px;user-select:none">
-          <span class="arr">&#9658;</span> ${ch}: ${ts.length} event${ts.length>1?'s':''}
-        </div>
-        <div id="${id}" style="display:none;flex-wrap:wrap;gap:4px;margin-top:4px">${chips}</div>
-      </div>`;
-    };
-    clicksRow += `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
-      ⚠ Clicks in ${src} — ${total} event${total>1?'s':''} · Check by ear
-      ${makeChips(tsL, 'L')}
-      ${makeChips(tsR, 'R')}
-    </div>`;
-  }
   let digitalZeroRow = '';
   const _fmtDZ = t => { const h=Math.floor(t/3600).toString().padStart(2,'0'); const m=Math.floor((t%3600)/60).toString().padStart(2,'0'); const s=Math.floor(t%60).toString().padStart(2,'0'); const ms=Math.round((t%1)*1000).toString().padStart(3,'0'); return `${h}:${m}:${s}.${ms}`; };
   for (const [src, dz] of [['Edit', editA && editA.digitalZeros], ['Mixed', mixA && mixA.digitalZeros]]) {
