@@ -1,6 +1,6 @@
 <!--
   ============================================================
-  SOBA — Audio QA & QC Checker v3.7.8
+  SOBA — Audio QA & QC Checker v3.7.9
   Created by: Danny Beta
   Date: April 2026
 
@@ -27,7 +27,7 @@
   gtag('js', new Date());
   gtag('config', 'G-444D9CS8EE');
 </script>
-<title>SOBA — Audio QA & QC v3.7.8</title>
+<title>SOBA — Audio QA & QC v3.7.9</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,400;0,500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -721,7 +721,7 @@ h1 span { color: var(--green); }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
           <div class="header-sub" style="margin-top:0">Waveform Quality Control Analyzer</div>
           <div style="display:flex;align-items:center;gap:10px">
-            <div class="version-badge">v3.7.8</div>
+            <div class="version-badge">v3.7.9</div>
             <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark mode">
               <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
               <span id="themeLabel">DARK</span>
@@ -1205,6 +1205,7 @@ let _rawLA = null, _rawRA = null, _eA = null, _mA = null, _rawStereoA = null, _a
 let eFile = null, mFile = null;
 let rawLeftFiles = [], rawRightFiles = [];
 let markersFile = null, markersData = null;
+let jsonScriptFile = null, jsonSceneCount = null;
 let rawStereoFile = null;
 
 // ── Drag & Drop ──────────────────────────────────────────────
@@ -1227,7 +1228,7 @@ dz.addEventListener('drop', async e => {
 document.getElementById('fileInput').addEventListener('change', e => processFiles([...e.target.files], false));
 
 async function readDir(dir) {
-  const ALLOWED = ['audio files', 'bounced files'];
+  const ALLOWED = ['audio files', 'bounced files', 'scripts'];
   return new Promise(res => {
     const reader = dir.createReader(), all = [];
     function batch() {
@@ -1294,6 +1295,10 @@ function classifyFiles(files) {
   // Detect markers .txt file (in Bounced Files or same folder as audio)
   const txts = files.filter(f => f.name.toLowerCase().endsWith('.txt'));
   if (txts.length) markersFile = txts[0];
+
+  // Detect JSON script file (in Scripts folder or any .json dropped)
+  const jsons = files.filter(f => f.name.toLowerCase().endsWith('.json'));
+  if (jsons.length) jsonScriptFile = jsons[0];
 
   wavs.forEach(f => {
     // Skip: handled separately as stereo RAW QA file
@@ -1362,6 +1367,7 @@ function processFiles(files, autoRun) {
   eFile = null; mFile = null;
   rawLeftFiles = []; rawRightFiles = [];
   markersFile = null; markersData = null;
+  jsonScriptFile = null; jsonSceneCount = null;
   rawStereoFile = null;
 
   const { rawL, rawR, edits, mixes } = classifyFiles(files);
@@ -3245,7 +3251,7 @@ function computeStereoRawAnalysis(buf, simultaneousOnly) {
 }
 function parseMarkersFile(text) {
   const linesMap = {}, loutsMap = {};
-  let sessionName = 'Unknown Session', sampleRate = 48000;
+  let sessionName = 'Unknown Session', sampleRate = 48000, ptSceneCount = 0;
   for (const raw of text.split('\n')) {
     const cols = raw.split('\t').map(c => c.trim());
     const snM = raw.match(/^SESSION NAME:\s+(.+)/);
@@ -3257,8 +3263,10 @@ function parseMarkersFile(text) {
     if (isNaN(samples)) continue;
     const lineM = name.match(/^line(\d+)$/i);
     const loutM = name.match(/^lout(\d+)$/i);
+    const sceneM = /^scene\d+$/i.test(name.trim());
     if (lineM) linesMap[parseInt(lineM[1])] = samples;
     if (loutM) loutsMap[parseInt(loutM[1])] = samples;
+    if (sceneM) ptSceneCount++;
   }
   const paired = Object.keys(linesMap).map(Number).filter(n => loutsMap[n] !== undefined);
   let netSamples = 0;
@@ -3274,6 +3282,7 @@ function parseMarkersFile(text) {
     pairs:        paired.length,
     netSeconds:   netSamples / sampleRate,
     grossSeconds: lastLoutSample / sampleRate,
+    ptSceneCount,
   };
 }
 
@@ -3289,6 +3298,29 @@ function loadMarkersFile() {
     };
     reader.onerror = () => resolve(null);
     reader.readAsText(markersFile);
+  });
+}
+
+function loadJsonSceneCount() {
+  if (!jsonScriptFile) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const json = JSON.parse(e.target.result);
+        let scenes = [];
+        if (Array.isArray(json) && json[1] && json[1].scenes) {
+          scenes = json[1].scenes;
+        } else if (Array.isArray(json) && json[0] && json[0].scenes) {
+          scenes = json[0].scenes;
+        } else if (json.scenes) {
+          scenes = json.scenes;
+        }
+        resolve(scenes.length > 0 ? scenes.length : null);
+      } catch(_) { resolve(null); }
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsText(jsonScriptFile);
   });
 }
 
@@ -3754,6 +3786,7 @@ async function runAnalysis() {
 
     // Load markers .txt if present
     if (markersFile) { setProgress('Reading markers…', 92); markersData = await loadMarkersFile(); }
+    if (jsonScriptFile) jsonSceneCount = await loadJsonSceneCount();
 
     setProgress('Building report…', 95);
     await new Promise(r=>setTimeout(r,100));
@@ -4722,8 +4755,17 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
     </div>`;
   }
 
-  return `<div style="border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:stretch;gap:0">
+  // Scene count mismatch — JSON script vs Pro Tools markers
+  let sceneMatchRow = '';
+  if (markersData && markersData.ptSceneCount != null && jsonSceneCount != null) {
+    if (markersData.ptSceneCount !== jsonSceneCount) {
+      sceneMatchRow = `<div style="margin:8px 20px;padding:8px 12px;background:var(--red-dim);border:1px solid var(--red);border-radius:6px;font-family:'Chivo Mono',monospace;font-size:11px;color:var(--red)">
+        ⚠ Scene count mismatch — Pro Tools: ${markersData.ptSceneCount} scene${markersData.ptSceneCount!==1?'s':''} · JSON script: ${jsonSceneCount} scene${jsonSceneCount!==1?'s':''}
+      </div>`;
+    }
+  }
 
+  return `<div style="border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:stretch;gap:0">
     <div style="padding:12px 16px;min-width:100px">
       <div style="font-family:'Chivo Mono',monospace;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">Speech</div>
       <div style="font-family:'Chivo Mono',monospace;font-size:16px;font-weight:700;color:var(--green)">${a.signalPct.toFixed(1)}%</div>
@@ -4743,6 +4785,7 @@ function buildSpeechBlock(a, editChecks, editA, mixA) {
   </div>
   ${editChecks ? buildEditChecksSection(editChecks) : ''}
   ${editInterfRow}
+  ${sceneMatchRow}
   ${clicksRow}
   ${digitalZeroRow}
   ${markersDurationFlag}`;
