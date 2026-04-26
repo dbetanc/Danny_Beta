@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================
-  SOBA - Session Pre-checker v2.9.2
+  SOBA - Session Pre-checker v2.10
   Created by: Danny Beta
   Date: March 2026
   
@@ -14,7 +14,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="author" content="Danny Beta"/>
-<title>SOBA - Session Pre-checker v2.9.2</title>
+<title>SOBA - Session Pre-checker v2.10</title>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-444D9CS8EE"></script>
 <script>
@@ -235,6 +235,64 @@ h1 span { color: var(--green); }
   background: var(--green-dim);
   padding: 1px 6px; border-radius: 3px;
   font-family: 'Chivo Mono', monospace;
+}
+
+/* ── JSON DROP ZONE (OPTIONAL) ───────────────────── */
+.json-drop-section {
+  margin-top: 1rem;
+  animation: fadeUp .5s .08s ease both;
+}
+
+.json-drop-zone {
+  border: 2px dashed var(--blue);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: transparent;
+}
+
+.json-drop-zone:hover, .json-drop-zone.over {
+  border-color: var(--green);
+  background: var(--green-dim);
+}
+
+.json-drop-zone.loaded {
+  border-color: var(--green);
+  border-style: solid;
+  background: var(--green-dim);
+}
+
+.json-drop-icon {
+  opacity: 0.7;
+  display: flex;
+}
+
+.json-drop-text {
+  font-family: 'Chivo Mono', monospace;
+  font-size: 11px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.json-status {
+  margin-top: 6px;
+  font-family: 'Chivo Mono', monospace;
+  font-size: 11px;
+  text-align: center;
+}
+
+.json-status.success {
+  color: var(--green);
+}
+
+.json-status.error {
+  color: var(--red);
 }
 
 /* ── REQUIREMENTS ACCORDION ───────────────────────── */
@@ -781,7 +839,7 @@ input[type=file] {
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.9.2</div>
+      <div class="version-badge">v2.10</div>
       <button class="theme-toggle" id="themeToggle" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">LIGHT</span>
@@ -805,6 +863,23 @@ input[type=file] {
       </div>
     </div>
     <input id="fileinput" type="file" accept=".txt,.markers.txt"/>
+  </div>
+
+  <!-- OPTIONAL JSON DROP ZONE -->
+  <div class="json-drop-section" id="jsonDropSection">
+    <div class="json-drop-zone" id="jsonDropArea">
+      <div class="json-drop-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="12" y1="18" x2="12" y2="12"/>
+          <line x1="9" y1="15" x2="15" y2="15"/>
+        </svg>
+      </div>
+      <div class="json-drop-text">Scene Match: Drop JSON (optional)</div>
+    </div>
+    <div id="jsonStatus" class="json-status"></div>
+    <input id="jsonFileInput" type="file" accept=".json" style="display:none;"/>
   </div>
 
   <!-- REQUIREMENTS ACCORDION -->
@@ -863,6 +938,122 @@ input[type=file] {
   const sessionText = document.getElementById('sessionText');
   const sessionError = document.getElementById('sessionError');
   const confettiCanvas = document.getElementById('confetti');
+
+  // JSON drop zone elements
+  const jsonDropArea = document.getElementById('jsonDropArea');
+  const jsonFileInput = document.getElementById('jsonFileInput');
+  const jsonStatus = document.getElementById('jsonStatus');
+  
+  // Store JSON scene count
+  let jsonSceneCount = null;
+  let jsonFileName = null;
+
+  // JSON drop zone handlers
+  jsonDropArea.addEventListener('click', () => jsonFileInput.click());
+  
+  jsonDropArea.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    jsonDropArea.classList.add('over');
+  });
+
+  jsonDropArea.addEventListener('dragleave', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    jsonDropArea.classList.remove('over');
+  });
+
+  jsonDropArea.addEventListener('drop', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    jsonDropArea.classList.remove('over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith('.json')) {
+      handleJsonFile(file);
+    } else {
+      jsonStatus.className = 'json-status error';
+      jsonStatus.textContent = 'Please drop a .json file';
+    }
+  });
+
+  jsonFileInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) handleJsonFile(file);
+  });
+
+  function handleJsonFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const json = JSON.parse(e.target.result);
+        // Count scenes - handle both standard and dualreasoning formats
+        let scenes = [];
+        if (Array.isArray(json) && json[1] && json[1].scenes) {
+          // Standard format: [0].voice_attributes, [1].scenes
+          scenes = json[1].scenes;
+        } else if (Array.isArray(json) && json[0] && json[0].scenes) {
+          // Dualreasoning format: flat array with scenes
+          scenes = json[0].scenes;
+        } else if (json.scenes) {
+          // Direct scenes object
+          scenes = json.scenes;
+        }
+        
+        if (scenes.length > 0) {
+          jsonSceneCount = scenes.length;
+          jsonFileName = file.name;
+          jsonDropArea.classList.add('loaded');
+          jsonStatus.className = 'json-status success';
+          jsonStatus.textContent = `✓ ${file.name}: ${jsonSceneCount} scenes found`;
+          
+          // Re-run validation if we already have results
+          if (output.innerHTML.trim()) {
+            updateSceneMatchSection();
+          }
+        } else {
+          jsonStatus.className = 'json-status error';
+          jsonStatus.textContent = 'No scenes found in JSON file';
+        }
+      } catch (err) {
+        jsonStatus.className = 'json-status error';
+        jsonStatus.textContent = 'Error parsing JSON: ' + err.message;
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function updateSceneMatchSection() {
+    // Find or create the scene match section in output
+    const existingSection = document.getElementById('sceneMatchSection');
+    if (existingSection && jsonSceneCount !== null) {
+      // Get the Pro Tools scene count from the stored value
+      const ptSceneCount = parseInt(existingSection.dataset.ptSceneCount) || 0;
+      existingSection.innerHTML = renderSceneMatchContent(ptSceneCount, jsonSceneCount);
+    }
+  }
+
+  function renderSceneMatchContent(ptCount, jsonCount) {
+    if (jsonCount === null) {
+      return `<div class="badge" style="background:var(--blue-dim);color:var(--blue);">PENDING — Drop JSON file to compare</div>
+              <div class="note" style="margin-top:8px;color:var(--text2);font-size:12px;">
+                Pro Tools scene markers found: <strong>${ptCount}</strong>
+              </div>`;
+    }
+    
+    const match = ptCount === jsonCount;
+    if (match) {
+      return `<div class="badge ok">PASSED — ${ptCount} scenes match</div>`;
+    } else {
+      return `<div class="badge fail">FAIL — Count mismatch</div>
+              <div class="error-list">
+                <div class="error-item">
+                  <strong>JSON:</strong> ${jsonCount} scenes<br>
+                  <strong>Pro Tools:</strong> ${ptCount} scene markers<br>
+                  <strong>Difference:</strong> ${Math.abs(jsonCount - ptCount)} ${jsonCount > ptCount ? 'missing in Pro Tools' : 'extra in Pro Tools'}
+                </div>
+              </div>`;
+    }
+  }
 
   // Accordion toggle
   const requirementsToggle = document.getElementById('requirementsToggle');
@@ -1098,10 +1289,9 @@ input[type=file] {
           .replace(/t2llt1r/gi, 't2lt1r')
           .replace(/t1l2tr/gi, 't1lt2r')
           .replace(/t2l1tr/gi, 't2lt1r')
-          // Fix separators in dual format: speakers joined by -, turn code preceded by _
-          // Handles: speaker1_speaker2NNNN_turncode, speaker1-speaker2NNNN-turncode,
-          //          speaker1_speaker2NNNN-turncode (compound), and no-op on already-correct names
-          .replace(/^([a-z]+)[-_]([a-z]+)(\d{4})[-_](t1lt2r|t2lt1r)/i, '$1-$2$3_$4')
+          // Fix separator issues
+          .replace(/([a-z]+)-([a-z]+)(\d{4})-t1lt2r/i, '$1-$2$3_t1lt2r')
+          .replace(/([a-z]+)-([a-z]+)(\d{4})-t2lt1r/i, '$1-$2$3_t2lt1r')
           .replace(/_t1lt2r_/i, '_t1lt2r-')
           .replace(/_t2lt1r_/i, '_t2lt1r-')
           .toLowerCase();
@@ -2047,6 +2237,13 @@ if (!['line','lout','scene'].includes(m.token)) {
         return html;
       }
 
+      function renderSceneMatchSection(ptCount) {
+        let html = `<div class="section"><h2>Scene Match</h2><div class="section-body" id="sceneMatchSection" data-pt-scene-count="${ptCount}">`;
+        html += renderSceneMatchContent(ptCount, jsonSceneCount);
+        html += `</div></div>`;
+        return html;
+      }
+
       function highlightAudioFileName(found, expectedBase){
         // For dual character, expectedBase might contain " OR " - use first option for comparison
         const expectedCore = expectedBase.split(' OR ')[0];
@@ -2658,6 +2855,12 @@ const tracks = parseTracks(lines);
             );
         const markersPass = markerErrors.length === 0;
 
+        // Count scene markers (sceneXX pattern)
+        const sceneMarkers = parsedMarkers.data 
+          ? parsedMarkers.data.filter(d => /^scene\d+$/i.test((d.name || '').trim()))
+          : [];
+        const ptSceneCount = sceneMarkers.length;
+
         const bounced = online.err ? {pass:false, errors:[online.err]} : checkBouncedFiles(sessionName, online.rows);
         const bouncedPass = !online.err && bounced.pass;
 
@@ -2669,6 +2872,7 @@ const tracks = parseTracks(lines);
           renderTracksSection(tracks, expectedList, missingTrackListing, trackNamesFromMarkersErrors) +
           renderAudioFilesSection(online, audioCheck, missingOnlineFiles) +
           renderMarkersReport(markerErrors) +
+          renderSceneMatchSection(ptSceneCount) +
           renderBouncedSection(sessionName, online, bounced);
 
         if (tracksPass && markersPass && bouncedPass && audioPass && folderPass) {
