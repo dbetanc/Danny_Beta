@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   ============================================
-  SOBA - Session Pre-checker v2.10
+  SOBA - Session Pre-checker v2.10.1
   Created by: Danny Beta
   Date: March 2026
   
@@ -14,7 +14,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="author" content="Danny Beta"/>
-<title>SOBA - Session Pre-checker v2.10</title>
+<title>SOBA - Session Pre-checker v2.10.1</title>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-444D9CS8EE"></script>
 <script>
@@ -839,7 +839,7 @@ input[type=file] {
       </div>
     </div>
     <div class="header-right">
-      <div class="version-badge">v2.10</div>
+      <div class="version-badge">v2.10.1</div>
       <button class="theme-toggle" id="themeToggle" title="Toggle light / dark mode">
         <div class="toggle-knob"><div class="toggle-thumb" id="toggleThumb"></div></div>
         <span id="themeLabel">LIGHT</span>
@@ -986,17 +986,23 @@ input[type=file] {
     reader.onload = e => {
       try {
         const json = JSON.parse(e.target.result);
-        // Count scenes - handle both standard and dualreasoning formats
         let scenes = [];
+        
+        // MOCHI format: [0].voice_attributes, [1].scenes
         if (Array.isArray(json) && json[1] && json[1].scenes) {
-          // Standard format: [0].voice_attributes, [1].scenes
           scenes = json[1].scenes;
-        } else if (Array.isArray(json) && json[0] && json[0].scenes) {
-          // Dualreasoning format: flat array with scenes
+        } 
+        // MOCHI dualreasoning format
+        else if (Array.isArray(json) && json[0] && json[0].scenes) {
           scenes = json[0].scenes;
-        } else if (json.scenes) {
-          // Direct scenes object
+        } 
+        // Direct scenes object
+        else if (json.scenes) {
           scenes = json.scenes;
+        }
+        // SOBA format: flat array of scene objects at root
+        else if (Array.isArray(json) && json[0] && json[0].scene) {
+          scenes = json;
         }
         
         if (scenes.length > 0) {
